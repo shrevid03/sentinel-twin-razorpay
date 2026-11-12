@@ -4,7 +4,7 @@ import json
 import httpx
 
 from app import agents
-from app.paypal import PayPal
+from app.razorpay import Razorpay
 from app.twin import Twin
 
 
@@ -20,7 +20,7 @@ def test_openai_compatible_agent_checks_out(monkeypatch):
     script = [
         _reply(calls=[("get_mandate", {}), ("search_catalog", {"query": "coffee", "max_price": 40})]),
         _reply(calls=[("checkout", {"items": [{"sku": "SKU-COF-02", "qty": 1}]})]),
-        _reply(content="Done, approve with PayPal."),
+        _reply(content="Done, pay with Razorpay."),
     ]
     seen = []
 
@@ -33,10 +33,10 @@ def test_openai_compatible_agent_checks_out(monkeypatch):
 
     twin = Twin(seed=3)
     twin.train(40)
-    team = agents.Team(twin, PayPal())
+    team = agents.Team(twin, Razorpay())
     team.brain.provider, team.brain.model = "gemini", "test-model"
     team.brain.client = httpx.Client(base_url="http://x", transport=httpx.MockTransport(handler))
     out = team.concierge("t", "coffee gift under $40", "hi-IN")
-    assert out["reply"] == "Done, approve with PayPal."
+    assert out["reply"] == "Done, pay with Razorpay."
     assert out["checkout"]["total"] == 32.0
     assert seen[-1]["messages"][-1]["role"] == "tool"

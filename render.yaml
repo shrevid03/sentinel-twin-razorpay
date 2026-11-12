@@ -2,7 +2,7 @@
 # "/" serves the landing page and "/app" the live demo. Secrets are entered in the Render dashboard (sync: false).
 services:
   - type: web
-    name: sentinel-twin
+    name: sentinel-twin-razorpay
     runtime: python
     plan: free
     region: singapore
@@ -18,17 +18,21 @@ services:
         value: "3"
       - key: AUTO_TRAFFIC
         value: "1"
-      - key: PAYPAL_CLIENT_ID
+      - key: RAZORPAY_KEY_ID
         sync: false
-      - key: PAYPAL_CLIENT_SECRET
+      - key: RAZORPAY_KEY_SECRET
         sync: false
+      - key: RAZORPAY_CURRENCY
+        value: INR
+      - key: RAZORPAY_FX_RATE
+        value: "84"
       - key: GEMINI_API_KEY
         sync: false
       - key: CHANNEL3_API_KEY
         sync: false
       - key: ADMIN_TOKEN
         sync: false
-      - key: PAYPAL_WEBHOOK_ID
+      - key: RAZORPAY_WEBHOOK_SECRET
         sync: false
       - key: GROQ_API_KEY
         sync: false

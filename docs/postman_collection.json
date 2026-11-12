@@ -2,7 +2,7 @@
   "info": {
     "name": "Sentinel Twin API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "Digital twin + GAT risk engine + agent team on the PayPal developer platform. Set baseUrl to your local server or Render URL. If the server sets ADMIN_TOKEN, add the header X-Admin-Token to policy, retrain, reset and review requests."
+    "description": "Digital twin + GAT risk engine + agent team on Razorpay (Orders, Checkout, webhooks). Set baseUrl to your local server or Render URL. If the server sets ADMIN_TOKEN, add the header X-Admin-Token to policy, retrain, reset and review requests."
   },
   "variable": [
     {
@@ -616,7 +616,7 @@
       ]
     },
     {
-      "name": "PayPal",
+      "name": "Razorpay",
       "item": [
         {
           "name": "Capture",
@@ -629,13 +629,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/paypal/orders/{{order_id}}/capture",
+              "raw": "{{baseUrl}}/api/razorpay/orders/{{order_id}}/capture",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "paypal",
+                "razorpay",
                 "orders",
                 "{{order_id}}",
                 "capture"
@@ -643,12 +643,17 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{}"
+              "raw": "{\n  \"razorpay_payment_id\": \"pay_...\",\n  \"razorpay_order_id\": \"{{order_id}}\",\n  \"razorpay_signature\": \"<from Checkout handler; send {} in demo mode>\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             }
           }
         },
         {
-          "name": "Paypal Calls",
+          "name": "Razorpay Calls",
           "request": {
             "method": "GET",
             "header": [
@@ -658,13 +663,13 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/paypal/calls",
+              "raw": "{{baseUrl}}/api/razorpay/calls",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "paypal",
+                "razorpay",
                 "calls"
               ]
             }
@@ -700,23 +705,33 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Razorpay-Signature",
+                "value": "<HMAC-SHA256 of the raw body with RAZORPAY_WEBHOOK_SECRET>"
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/paypal/webhook",
+              "raw": "{{baseUrl}}/api/razorpay/webhook",
               "host": [
                 "{{baseUrl}}"
               ],
               "path": [
                 "api",
-                "paypal",
+                "razorpay",
                 "webhook"
               ]
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"event_type\": \"CUSTOMER.DISPUTE.CREATED\",\n  \"resource\": {\n    \"disputed_transactions\": [\n      {\n        \"seller_transaction_id\": \"CAPTURE_ID\"\n      }\n    ]\n  }\n}"
-            }
+              "raw": "{\n  \"event\": \"refund.processed\",\n  \"payload\": {\n    \"refund\": {\n      \"entity\": {\n        \"id\": \"rfnd_x\",\n        \"payment_id\": \"pay_x\"\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Razorpay webhook receiver. Unsigned events are ignored unless ALLOW_UNVERIFIED_WEBHOOKS=1 in demo mode."
           }
         },
         {

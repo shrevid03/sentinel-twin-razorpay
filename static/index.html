@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="/static/vendor/ag-grid.css">
 <link rel="stylesheet" href="/static/vendor/ag-theme-quartz.css">
-<link rel="stylesheet" href="/static/style.css?v=23">
+<link rel="stylesheet" href="/static/style.css?v=24">
 </head>
 <body>
 <div id="page-smoke" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -17,9 +17,9 @@
   <div class="brand"><svg class="logo" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="lg-sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0070E0"/><stop offset="1" stop-color="#003087"/></linearGradient></defs>
     <path d="M18 2.5 5 7.4v9.2C5 25 10.6 31.3 18 33.5 25.4 31.3 31 25 31 16.6V7.4Z" fill="url(#lg-sh)"/>
     <g stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"><path d="M12.5 13.5 18 20l5.5-7.5M18 20v5.5M12.5 13.5h11"/></g>
-    <g fill="#9FD8F5"><circle cx="12.5" cy="13.5" r="2.4"/><circle cx="23.5" cy="12.5" r="2.4"/><circle cx="18" cy="25.5" r="2"/></g><circle cx="18" cy="20" r="2.8" fill="#fff"/></svg><div><b>Sentinel Twin</b><small>Digital twin of your PayPal business, defended by AI agents</small></div></div>
+    <g fill="#9FD8F5"><circle cx="12.5" cy="13.5" r="2.4"/><circle cx="23.5" cy="12.5" r="2.4"/><circle cx="18" cy="25.5" r="2"/></g><circle cx="18" cy="20" r="2.8" fill="#fff"/></svg><div><b>Sentinel Twin</b><small>Digital twin of your Razorpay business, defended by AI agents</small></div></div>
   <div class="badges">
-    <span id="b-paypal" class="badge">PayPal …</span>
+    <span id="b-pay" class="badge">Razorpay …</span>
     <span id="b-brain" class="badge">Brain …</span>
     <span id="b-c3" class="badge" hidden>Channel3</span>
     <label class="toggle"><input type="checkbox" id="auto"> Live traffic</label>
@@ -147,7 +147,7 @@
 
 <!-- CONCIERGE -->
 <section id="tab-concierge" class="tab">
-  <div class="tabhero"><div><h2>Concierge · chat & voice</h2><p>Shop and pay with PayPal in ten Indian languages. Spending limits are enforced in code, not by the model.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Chat bubble with Indian language glyphs and a shopping bag">
+  <div class="tabhero"><div><h2>Concierge · chat & voice</h2><p>Shop and pay with Razorpay in ten Indian languages. Spending limits are enforced in code, not by the model.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Chat bubble with Indian language glyphs and a shopping bag">
 <path d="M12 14h96a12 12 0 0 1 12 12v34a12 12 0 0 1-12 12H48l-18 16v-16H12A12 12 0 0 1 0 60V26a12 12 0 0 1 12-12z" fill="#0070E0" transform="translate(4 0)"/>
 <text x="20" y="52" font-family="Noto Sans, sans-serif" font-size="22" font-weight="700" fill="#fff">अ த ক</text>
 <path d="M124 38h36l-4 46h-28z" fill="#003087"/><path d="M134 38v-6a8 8 0 0 1 16 0v6" fill="none" stroke="#003087" stroke-width="3.5"/><circle cx="142" cy="60" r="6" fill="#009CDE"/></svg></div>
@@ -157,7 +157,7 @@
         <div class="row"><select id="lang"></select>
         <label class="toggle"><input type="checkbox" id="speak" checked> Speak replies</label></div></div>
       <div id="messages"></div>
-      <div id="paypal-slot"></div>
+      <div id="pay-slot"></div>
       <div class="composer">
         <button id="mic" class="mic" title="Hold to talk">🎙</button>
         <input id="msg" placeholder="Try: buy a gift for a coffee lover under $40 · or · investigate the riskiest account · or · run the red team">
@@ -193,7 +193,7 @@
     <div class="side">
       <div class="card"><div class="cardhead"><h3>Review queue <small class="muted">human approval</small></h3>
         <label class="toggle">Reviewer <input id="reviewer" value="merchant" style="width:110px"></label></div>
-        <p class="muted">The investigator only proposes refunds and merchant-side restrictions (simulated in the twin, not a PayPal account freeze). Held agent checkouts wait here too. Nothing runs until you approve.</p>
+        <p class="muted">The investigator only proposes refunds and merchant-side restrictions (simulated in the twin, not a Razorpay account action). Held agent checkouts wait here too. Nothing runs until you approve.</p>
         <div id="review-queue"></div>
         <details><summary class="muted">Audit trail</summary><div id="review-audit"></div></details></div>
       <div class="card"><h3>Case reports</h3><div id="cases"></div></div>
@@ -246,7 +246,7 @@
 
 <!-- LEDGER -->
 <section id="tab-ledger" class="tab">
-  <div class="tabhero"><div><h2>Ledger</h2><p>Every order mirrored into the twin, every agent checkout and every PayPal API call.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="A stack of receipts">
+  <div class="tabhero"><div><h2>Ledger</h2><p>Every order mirrored into the twin, every agent checkout and every Razorpay API call.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="A stack of receipts">
 <g transform="translate(40 6)"><rect x="16" y="0" width="70" height="80" rx="8" fill="#EAF4FF" stroke="#009CDE" stroke-width="2" transform="rotate(8 50 40)"/>
 <rect x="8" y="4" width="70" height="80" rx="8" fill="#fff" stroke="#009CDE" stroke-width="2" transform="rotate(-5 43 44)"/>
 <rect x="12" y="6" width="70" height="82" rx="8" fill="#fff" stroke="#0070E0" stroke-width="2.5"/>
@@ -255,8 +255,8 @@
   <div class="card"><div class="cardhead"><h3>Orders mirrored in the twin</h3><input id="ord-filter" placeholder="Filter…"></div>
     <div id="ord-grid" class="ag-theme-quartz gridbox tall"></div></div>
   <div class="grid2">
-    <div class="card"><h3>PayPal checkouts created by the agent</h3><div id="co-grid" class="ag-theme-quartz gridbox small"></div></div>
-    <div class="card"><h3>PayPal API calls</h3><div id="api-grid" class="ag-theme-quartz gridbox small"></div></div>
+    <div class="card"><h3>Razorpay checkouts created by the agent</h3><div id="co-grid" class="ag-theme-quartz gridbox small"></div></div>
+    <div class="card"><h3>Razorpay API calls</h3><div id="api-grid" class="ag-theme-quartz gridbox small"></div></div>
   </div>
 </section>
 
@@ -268,9 +268,9 @@
       <canvas id="train-chart" height="200"></canvas></div>
     <div class="card"><h3>How it works</h3>
       <ol class="explain">
-        <li><b>Mirror.</b> Every buyer, device, IP and merchant becomes a node. Orders from PayPal checkout and webhooks add edges, so the twin is always a copy of the live business.</li>
+        <li><b>Mirror.</b> Every buyer, device, IP and merchant becomes a node. Orders from Razorpay checkout and webhooks add edges, so the twin is always a copy of the live business.</li>
         <li><b>Attend.</b> A 2-layer GAT (4 attention heads, then 1) learns how much each neighbour matters. A new account sharing a device with a known ring lights up even if it looks clean on its own.</li>
-        <li><b>Decide.</b> GAT risk is combined with transaction signals (new device, geo mismatch, spend spike, velocity) into approve, review or block before the PayPal order is created.</li>
+        <li><b>Decide.</b> GAT risk is combined with transaction signals (new device, geo mismatch, spend spike, velocity) into approve, review or block before the Razorpay order is created.</li>
         <li><b>Attack.</b> The red team forks the twin and adapts attacks until something gets through.</li>
         <li><b>Rehearse.</b> The what-if simulator replays traffic and attacks under a proposed policy, so you change the real one with evidence.</li>
       </ol>
@@ -286,10 +286,10 @@
 <script src="/static/vendor/chart.umd.min.js"></script>
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/purify.min.js"></script>
-<script src="/static/app.js?v=23"></script>
-<script src="/static/drill.js?v=23"></script>
-<script src="/static/receipts.js?v=23"></script>
-<script src="/static/review.js?v=23"></script>
-<script src="/static/fx.js?v=23"></script>
+<script src="/static/app.js?v=24"></script>
+<script src="/static/drill.js?v=24"></script>
+<script src="/static/receipts.js?v=24"></script>
+<script src="/static/review.js?v=24"></script>
+<script src="/static/fx.js?v=24"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 /* Review queue: a human approves or rejects investigator proposals and held agent checkouts. Loaded after app.js. */
-const ACTION_LABEL = { freeze: "Merchant-side restriction (simulated)", refund: "PayPal refund" };
+const ACTION_LABEL = { freeze: "Merchant-side restriction (simulated)", refund: "Razorpay refund" };
 
 async function loadReview() {
   const q = await api("/api/actions");
@@ -9,7 +9,7 @@ async function loadReview() {
     ...pendingH.map((h) => `<div class="case"><h4>${esc(h.id)} · Held agent checkout ${money(h.total)} <span class="tag">risk ${h.risk}</span></h4>
       <div class="muted">${esc(h.cart.map((c) => `${c.qty} × ${c.name}`).join(", "))}</div>
       <small class="muted">Why held: ${esc(h.factors.join("; ") || "risk above the review threshold")}</small>
-      <div class="row" style="margin-top:6px"><button data-rv="hold" data-id="${esc(h.id)}" data-ok="1">Release (create PayPal order)</button>
+      <div class="row" style="margin-top:6px"><button data-rv="hold" data-id="${esc(h.id)}" data-ok="1">Release (create Razorpay order)</button>
         <button class="ghost" data-rv="hold" data-id="${esc(h.id)}" data-ok="0">Reject</button>
         <a href="#" class="rcpt-link" data-rcpt="${esc(h.receipt_id)}">Receipt</a></div></div>`),
     ...pendingA.map((a) => `<div class="case"><h4>${esc(a.id)} · ${esc(ACTION_LABEL[a.type] || a.type)}: ${esc(a.target)}</h4>

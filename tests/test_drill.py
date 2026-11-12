@@ -63,8 +63,8 @@ def test_adaptations_explain_themselves():
 
 def test_red_team_records_who_decided():
     from app import agents
-    from app.paypal import PayPal
-    team = agents.Team(_twin(), PayPal())
+    from app.razorpay import Razorpay
+    team = agents.Team(_twin(), Razorpay())
     team.brain.client, team.brain.provider = None, "demo"  # never call a real LLM from tests
     run = team.red_team()
     adapted = [r for r in run["results"] if r.get("why_adapted")]

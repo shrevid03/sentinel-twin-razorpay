@@ -3,7 +3,7 @@ import httpx
 import pytest
 
 from app import agents, catalog, channel3
-from app.paypal import PayPal
+from app.razorpay import Razorpay
 from app.twin import Twin
 
 RESPONSE = {"products": [
@@ -38,7 +38,7 @@ def trained_twin():
 def team(trained_twin, monkeypatch):
     monkeypatch.setenv("CHANNEL3_API_KEY", "test-key")
     trained_twin.policy = {**trained_twin.policy, "review_threshold": 0.99, "block_threshold": 1.01}
-    return agents.Team(trained_twin, PayPal())
+    return agents.Team(trained_twin, Razorpay())
 
 
 def test_live_product_checks_out_and_gift_card_is_blocked(team, monkeypatch):
@@ -60,7 +60,7 @@ def test_live_product_checks_out_and_gift_card_is_blocked(team, monkeypatch):
 
     ok = team.guarded_checkout([{"sku": "C3-p1", "qty": 1}])
     assert ok["status"] == "awaiting_buyer_approval"
-    assert team.checkouts[ok["paypal_order_id"]]["cart"][0]["name"] == v60["name"]
+    assert team.checkouts[ok["pay_order_id"]]["cart"][0]["name"] == v60["name"]
 
     gc = team.guarded_checkout([{"sku": "C3-p2", "qty": 1}])
     assert live[1]["category"] == "gift_cards"

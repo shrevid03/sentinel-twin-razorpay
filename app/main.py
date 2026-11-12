@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hmac
+import json
 import os
 import threading
 import time
@@ -20,7 +21,7 @@ from . import integrations  # noqa: E402
 from . import channel3  # noqa: E402
 from .agents import LANGS, CaptureRefused, Team  # noqa: E402
 from .drill import defense_drill  # noqa: E402
-from .paypal import PayPal, PayPalError  # noqa: E402
+from .razorpay import Razorpay, RazorpayError  # noqa: E402
 from .redteam import ATTACKS, run_attack  # noqa: E402
 from .twin import Twin, _public  # noqa: E402
 
@@ -29,8 +30,8 @@ STATIC = Path(__file__).resolve().parent.parent / "static"
 twin = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
 twin.on_event = integrations.publish
 twin.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
-paypal = PayPal()
-team = Team(twin, paypal)
+razorpay = Razorpay()
+team = Team(twin, razorpay)
 
 
 def require_admin(x_admin_token: str | None = Header(default=None)):
@@ -45,7 +46,7 @@ _reset_lock = threading.Lock()
 auto = {"on": os.getenv("AUTO_TRAFFIC", "1") == "1", "n": 3}
 
 app = FastAPI(title="Sentinel Twin API", version="1.0.0",
-              description="Digital twin + GAT risk engine + agent team on the PayPal developer platform.")
+              description="Digital twin + GAT risk engine + agent team on Razorpay (Orders, Checkout, webhooks).")
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
@@ -80,7 +81,9 @@ def health():
 # ------------------------------------------------------------------ config
 @app.get("/api/config")
 def config():
-    return {"paypal_mode": paypal.mode, "paypal_client_id": paypal.client_id if paypal.live else "",
+    # the key id is public by design (Razorpay Checkout needs it in the browser); the secret never leaves the server
+    return {"pay_mode": razorpay.mode, "razorpay_key_id": razorpay.key_id if razorpay.live else "",
+            "currency": razorpay.currency, "fx_rate": razorpay.fx, "live_key_refused": razorpay.refused_live_key,
             "brain": team.brain.label, "model": team.brain.model,
             "languages": LANGS, "integrations": {**integrations.status, "channel3": channel3.enabled()}, "auto_traffic": auto["on"],
             "buyer": team.buyer, "attacks": ATTACKS}
@@ -298,8 +301,8 @@ def reset():
         t = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
         t.on_event = integrations.publish
         t.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
-        paypal.calls.clear()
-        twin, team = t, Team(t, paypal)
+        razorpay.calls.clear()
+        twin, team = t, Team(t, razorpay)
         LAST_DRILL.clear()
         twin._event("system", "Demo reset: fresh twin, default policy, empty queues", level="info")
     return {"ok": True, "seed": int(os.getenv("TWIN_SEED", "3")), "policy": twin.policy}
@@ -348,16 +351,28 @@ def set_mandate(body: MandateIn):
     return team.mandate
 
 
-# ------------------------------------------------------------------ paypal
-@app.post("/api/paypal/orders/{order_id}/capture")
-def capture(order_id: str):
+# ---------------------------------------------------------------- razorpay
+class CheckoutResult(BaseModel):
+    """What Razorpay Checkout's success handler returns. Empty in demo mode (the server simulates Checkout)."""
+    razorpay_payment_id: str | None = None
+    razorpay_order_id: str | None = None
+    razorpay_signature: str | None = None
+
+
+@app.post("/api/razorpay/orders/{order_id}/capture")
+def capture(order_id: str, body: CheckoutResult | None = None):
+    body = body or CheckoutResult()
+    if body.razorpay_order_id and body.razorpay_order_id != order_id:
+        raise HTTPException(400, "razorpay_order_id does not match the order being captured")
     try:
-        res = team.capture(order_id)
+        res = team.capture(order_id, body.razorpay_payment_id, body.razorpay_signature)
     except CaptureRefused as e:
         raise HTTPException(e.status, e.detail)
-    except PayPalError as e:
-        raise HTTPException(502, str(e))
-    return {"status": res.get("status"), "id": res.get("id"), "mode": paypal.mode,
+    except RazorpayError as e:
+        status = 400 if "signature" in str(e) or "does not belong" in str(e) else 502
+        raise HTTPException(status, str(e))
+    return {"status": res.get("status"), "id": res.get("id"), "payment_id": res.get("payment_id"),
+            "mode": razorpay.mode,
             "duplicate": bool(res.get("duplicate"))}
 
 
@@ -410,7 +425,7 @@ def receipts():
 
 @app.get("/api/receipts/{receipt_id}")
 def receipt(receipt_id: str):
-    """A decision receipt by receipt id, PayPal order id or hold id."""
+    """A decision receipt by receipt id, Razorpay order id or hold id."""
     r = team.receipts.get(receipt_id)
     if not r:
         co = team.checkouts.get(receipt_id) or team.holds.get(receipt_id)
@@ -420,9 +435,9 @@ def receipt(receipt_id: str):
     return r
 
 
-@app.get("/api/paypal/calls")
-def paypal_calls():
-    return paypal.calls[::-1]
+@app.get("/api/razorpay/calls")
+def razorpay_calls():
+    return razorpay.calls[::-1]
 
 
 @app.get("/api/checkouts")
@@ -430,29 +445,40 @@ def checkouts():
     return list(team.checkouts.values())[::-1]
 
 
-@app.post("/api/paypal/webhook")
+@app.post("/api/razorpay/webhook")
 async def webhook(request: Request, bg: BackgroundTasks):
-    event = await request.json()
-    verified = paypal.verify_webhook({k.lower(): v for k, v in request.headers.items()}, event)
-    etype = event.get("event_type", "UNKNOWN")
-    res = event.get("resource", {}) or {}
-    # Only a PayPal-verified webhook may change state. ALLOW_UNVERIFIED_WEBHOOKS=1 is a local testing switch
-    # that works only in demo mode (no PayPal keys), so a live deployment can never be driven by forged events.
-    trusted = verified or (not paypal.live and os.getenv("ALLOW_UNVERIFIED_WEBHOOKS", "0") == "1")
+    raw = await request.body()  # the signature covers the exact raw bytes, so verify before parsing
+    verified = razorpay.verify_webhook(raw, request.headers.get("x-razorpay-signature"))
+    try:
+        event = json.loads(raw or b"{}")
+    except ValueError:
+        raise HTTPException(400, "invalid JSON")
+    etype = event.get("event", "unknown")
+    payload = event.get("payload", {}) or {}
+    ent = lambda k: ((payload.get(k) or {}).get("entity") or {})  # noqa: E731
+    # Only a Razorpay-signed webhook may change state. ALLOW_UNVERIFIED_WEBHOOKS=1 is a local testing switch
+    # that works only in demo mode (no Razorpay keys), so a live deployment can never be driven by forged events.
+    trusted = verified or (not razorpay.live and os.getenv("ALLOW_UNVERIFIED_WEBHOOKS", "0") == "1")
     if not trusted:
-        twin._event("paypal", f"Webhook {etype} ignored: signature not verified", level="warn")
+        twin._event("razorpay", f"Webhook {etype} ignored: signature not verified", level="warn")
         return {"received": True, "verified": False, "processed": False}
-    twin._event("paypal", f"Webhook {etype} ({'verified' if verified else 'unverified, demo testing'})",
-                level="bad" if "DISPUTE" in etype else "info")
-    if "DISPUTE" in etype:
-        # a buyer dispute is ground truth arriving from PayPal: label it and open an investigation
-        ids = {t.get("seller_transaction_id") for t in res.get("disputed_transactions", [])}
+    twin._event("razorpay", f"Webhook {etype} ({'verified' if verified else 'unverified, demo testing'})",
+                level="bad" if etype.startswith("payment.dispute") else "info")
+    if etype.startswith("payment.dispute.created"):
+        # a chargeback is ground truth arriving from Razorpay: label the order and open an investigation
+        pid = ent("dispute").get("payment_id") or ent("payment").get("id")
         for o in twin.orders:
-            if o.get("capture_id") in ids:
+            if pid and o.get("capture_id") == pid:
                 o["fraud"] = True
                 bg.add_task(team.investigate, o["account"])
-    if etype == "PAYMENT.CAPTURE.REFUNDED":
+    if etype in ("refund.processed", "payment.refunded"):
+        pid = ent("refund").get("payment_id") or ent("payment").get("id")
         for o in twin.orders:
-            if o.get("capture_id") == res.get("id"):
+            if pid and o.get("capture_id") == pid:
                 o["status"] = "refunded"
+    if etype == "payment.failed":
+        oid = ent("payment").get("order_id")
+        for o in twin.orders:
+            if oid and o.get("pay_order_id") == oid and o["status"] == "awaiting_payment":
+                o["status"] = "payment_failed"
     return {"received": True, "verified": verified, "processed": True}

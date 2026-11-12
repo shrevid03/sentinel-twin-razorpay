@@ -1,16 +1,16 @@
 /* Decision receipts: why an agent checkout was created, held, blocked or rejected. Loaded after app.js. */
 const OUTCOME = {
-  paypal_order_created: ["PayPal order created", "pass"], held_for_review: ["Held for human review, no PayPal order", "fail"],
-  blocked_by_risk_engine: ["Blocked by the risk engine, no PayPal order", "fail"],
-  rejected_by_mandate_guard: ["Rejected by the mandate guard, no PayPal order", "fail"],
-  released_by_reviewer: ["Released by a reviewer, PayPal order created", "pass"], rejected_by_reviewer: ["Rejected by a reviewer", "fail"],
+  razorpay_order_created: ["Razorpay order created", "pass"], held_for_review: ["Held for human review, no Razorpay order", "fail"],
+  blocked_by_risk_engine: ["Blocked by the risk engine, no Razorpay order", "fail"],
+  rejected_by_mandate_guard: ["Rejected by the mandate guard, no Razorpay order", "fail"],
+  released_by_reviewer: ["Released by a reviewer, Razorpay order created", "pass"], rejected_by_reviewer: ["Rejected by a reviewer", "fail"],
 };
 const yes = (b) => (b ? '<span class="pass">pass</span>' : '<span class="fail">fail</span>');
 
 async function openReceipt(id) {
   const r = await api("/api/receipts/" + encodeURIComponent(id));
   const [label, cls] = OUTCOME[r.outcome] || [r.outcome, ""];
-  const m = r.mandate, k = r.risk, pp = r.paypal, rv = r.review;
+  const m = r.mandate, k = r.risk, pp = r.payment, rv = r.review;
   $("#modal-title").textContent = `Decision receipt ${r.id}`;
   $("#modal-body").innerHTML = `
     <p><b class="${cls}">${esc(label)}</b> · ${money(r.total)} · created ${esc(r.created_at)} · buyer ${esc(r.buyer)}</p>
@@ -22,8 +22,8 @@ async function openReceipt(id) {
       Risk <b>${k.score}</b> = GAT part ${k.gat_part} combined with rules part ${k.rules_part} · decision <b>${esc(k.decision)}</b>
       · policy version <code>${esc(k.policy_version.hash)}</code> (applied ${esc(k.policy_version.applied_at)})
       <div class="muted">Reason codes: ${esc(k.factors.join("; ") || "none, normal for this buyer")}</div></div>` : ""}
-    ${pp ? `<div class="rc-sec"><h4>PayPal (${esc(pp.mode === "sandbox" ? "Real PayPal sandbox" : "Demo mode")})</h4>
-      Order <code>${esc(pp.order_id)}</code> · status ${esc(pp.status)} · ${esc(pp.approval)} · capture ${esc(pp.capture_id || "not yet")}</div>` : ""}
+    ${pp ? `<div class="rc-sec"><h4>Razorpay (${esc(pp.mode !== "demo" ? "Real Razorpay test mode" : "Demo mode")})</h4>
+      Order <code>${esc(pp.order_id)}</code> · status ${esc(pp.status)} · ${esc(pp.approval)} · payment ${esc(pp.capture_id || "not yet captured")}</div>` : ""}
     ${rv ? `<div class="rc-sec"><h4>Human review</h4>${esc(rv.hold_id)} · ${esc(rv.status)}${rv.reviewer ? ` by ${esc(rv.reviewer)}` : ""}${rv.note ? ` · "${esc(rv.note)}"` : ""}</div>` : ""}
     <div class="rc-sec"><h4>Timeline</h4>${r.timeline.map((t) => `<div><span class="muted">${esc(t.at)}</span> ${esc(t.event)}</div>`).join("")}</div>`;
   $("#modal").hidden = false;

@@ -2,7 +2,7 @@
 import pytest
 
 from app import agents
-from app.paypal import PayPal
+from app.razorpay import Razorpay
 from app.twin import Twin
 
 CART = [{"sku": "SKU-COF-02", "qty": 1}]  # $32 pour-over set
@@ -18,20 +18,20 @@ def trained_twin():
 @pytest.fixture
 def team(trained_twin):
     trained_twin.policy = {**trained_twin.policy}
-    return agents.Team(trained_twin, PayPal())
+    return agents.Team(trained_twin, Razorpay())
 
 
-def test_review_decision_never_creates_a_paypal_order(team):
+def test_review_decision_never_creates_a_razorpay_order(team):
     team.twin.policy = {**team.twin.policy, "review_threshold": 0.0, "block_threshold": 1.01}
     calls_before = len(team.pp.calls)
     out = team.guarded_checkout(CART)
     assert out["status"] == "held_for_review"
-    assert "paypal_order_id" not in out
+    assert "pay_order_id" not in out
     assert team.checkouts == {}
-    assert len(team.pp.calls) == calls_before  # PayPal was never called
+    assert len(team.pp.calls) == calls_before  # Razorpay was never called
 
 
-def test_block_decision_never_creates_a_paypal_order(team):
+def test_block_decision_never_creates_a_razorpay_order(team):
     team.twin.policy = {**team.twin.policy, "review_threshold": 0.0, "block_threshold": 0.0}
     out = team.guarded_checkout(CART)
     assert out["status"] == "blocked_by_risk_engine"
@@ -42,7 +42,7 @@ def _approved_checkout(team):
     team.twin.policy = {**team.twin.policy, "review_threshold": 1.01, "block_threshold": 1.01}
     out = team.guarded_checkout(CART)
     assert out["status"] == "awaiting_buyer_approval"
-    return out["paypal_order_id"]
+    return out["pay_order_id"]
 
 
 def test_repeat_capture_charges_once_and_counts_spend_once(team):
@@ -67,7 +67,7 @@ def test_capture_rechecks_mandate(team):
 
 def test_unknown_order_cannot_be_captured(team):
     with pytest.raises(agents.CaptureRefused) as e:
-        team.capture("DEMO-NOT-OURS")
+        team.capture("order_NOTOURS")
     assert e.value.status == 404
 
 
@@ -83,11 +83,11 @@ def test_unverified_webhook_changes_nothing(monkeypatch):
     order = main.twin.orders[0]
     order["capture_id"], order["status"], order["fraud"] = "CAP-TEST-1", "captured", False
     client = TestClient(main.app)
-    dispute = {"event_type": "CUSTOMER.DISPUTE.CREATED",
-               "resource": {"disputed_transactions": [{"seller_transaction_id": "CAP-TEST-1"}]}}
-    refund = {"event_type": "PAYMENT.CAPTURE.REFUNDED", "resource": {"id": "CAP-TEST-1"}}
+    dispute = {"event": "payment.dispute.created",
+               "payload": {"dispute": {"entity": {"id": "disp_1", "payment_id": "CAP-TEST-1"}}}}
+    refund = {"event": "refund.processed", "payload": {"refund": {"entity": {"payment_id": "CAP-TEST-1"}}}}
     for ev in (dispute, refund):
-        r = client.post("/api/paypal/webhook", json=ev)
+        r = client.post("/api/razorpay/webhook", json=ev)
         assert r.status_code == 200 and r.json()["processed"] is False
     assert order["fraud"] is False and order["status"] == "captured"
 
@@ -96,15 +96,15 @@ def test_every_agent_checkout_gets_a_receipt(team):
     oid = _approved_checkout(team)
     co = team.checkouts[oid]
     rc = team.receipts[co["receipt_id"]]
-    assert rc["outcome"] == "paypal_order_created" and rc["paypal"]["order_id"] == oid
+    assert rc["outcome"] == "razorpay_order_created" and rc["payment"]["order_id"] == oid
     assert all(c["pass"] for c in rc["mandate_checks"])
     assert rc["risk"]["policy_version"]["hash"] and rc["risk"]["decision"] == "approve"
     team.capture(oid)
-    assert rc["paypal"]["status"] == "COMPLETED" and rc["paypal"]["capture_id"]
+    assert rc["payment"]["status"] == "COMPLETED" and rc["payment"]["capture_id"]
     team.twin.policy = {**team.twin.policy, "review_threshold": 0.0, "block_threshold": 1.01}
     held = team.guarded_checkout(CART)
     hr = team.receipts[held["receipt_id"]]
-    assert hr["outcome"] == "held_for_review" and hr["paypal"] is None and hr["review"]["status"] == "pending"
+    assert hr["outcome"] == "held_for_review" and hr["payment"] is None and hr["review"]["status"] == "pending"
     rejected = team.guarded_checkout([{"sku": "SKU-GFT-02", "qty": 5}])
     rr = team.receipts[rejected["receipt_id"]]
     assert rr["outcome"] == "rejected_by_mandate_guard" and not all(c["pass"] for c in rr["mandate_checks"])
@@ -113,7 +113,7 @@ def test_every_agent_checkout_gets_a_receipt(team):
 def test_investigator_only_proposes_refunds_and_freezes(team):
     oid = _approved_checkout(team)
     team.capture(oid)
-    tw_order = next(o for o in team.twin.orders if o["paypal_order_id"] == oid)
+    tw_order = next(o for o in team.twin.orders if o["pay_order_id"] == oid)
     case = {"id": "CASE-T", "actions": []}
     tools = team.investigator_tools(case)
     refunds_before = sum(1 for c in team.pp.calls if "/refund" in c["path"])
@@ -147,7 +147,7 @@ def test_held_checkout_needs_a_reviewer(team):
     rejected = team.decide_hold(h2, False, "alice", "looks off")
     assert rejected["status"] == "rejected" and team.checkouts == {}
     released = team.decide_hold(h1, True, "alice", "known customer")
-    assert released["status"] == "released" and released["paypal_order_id"] in team.checkouts
+    assert released["status"] == "released" and released["pay_order_id"] in team.checkouts
     again = team.decide_hold(h1, True, "bob")
     assert again.get("duplicate") is True and len(team.checkouts) == 1
     rc = team.receipts[team.holds[h1]["receipt_id"]]

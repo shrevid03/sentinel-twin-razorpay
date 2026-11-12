@@ -15,7 +15,7 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 - Use a clean window: hide the bookmarks bar (Cmd+Shift+B), close other tabs, zoom at 100% (Cmd+0).
 - Window size about 1440x900. Full screen (Ctrl+Cmd+F) looks cleanest.
 - Open two tabs: tab 1 is the landing page (http://localhost:8000, or `/static/landing.html` if the server predates the landing page); tab 2 is the app at `/app` (or `/`).
-- Check the header pills read **PayPal sandbox · live**, **Gemini · gemini-2.5-flash** and **Channel3 · live products**.
+- Check the header pills read **Razorpay test mode · live**, **Gemini · gemini-2.5-flash** and **Channel3 · live products**.
 
 **Warm-up, off camera**
 - Run one **defense drill** so you know your numbers, then click **Roll back** on the Defense drill tab.
@@ -46,25 +46,25 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 **On screen:** the app's Command center. Scroll slowly past the **Defense score** gauge and the **Decisions** donut down to the neon graph. Hover one fraud-ring chip, then click it. The graph zooms in and **Why is it risky?** fills with attention bars. Point the mouse at the top bar.
 
 **Say:**
-> "This is a digital twin of a PayPal business. Every buyer, device and IP address is a node in a live graph. A graph attention network found these fraud rings, accounts quietly sharing the same devices. I click one, and it shows exactly which neighbours made this account risky."
+> "This is a digital twin of a business on Razorpay. Every buyer, device and IP address is a node in a live graph. A graph attention network found these fraud rings, accounts quietly sharing the same devices. I click one, and it shows exactly which neighbours made this account risky."
 
 **Filming tip:** let the zoom finish before you speak the last sentence. If the chip label overlaps, click the chip anyway; it focuses the ring.
 
 ---
 
-## Scene 3: Shop by asking, pay with PayPal (0:35–1:15)
+## Scene 3: Shop by asking, pay with Razorpay (0:35–1:15)
 
 **On screen:**
 1. Click the **Concierge** tab. Type: *Find a coffee gift under $40*. Press Enter. Real product cards from Channel3 appear with photos.
 2. Type: *Buy the first one*. The checkout card appears.
 3. Point the mouse at the green **mandate ticks**, then the **approve** pill.
-4. Click the yellow **PayPal** button and approve in the sandbox popup.
+4. Click **Pay ₹… with Razorpay**, pick UPI, enter `success@razorpay` and pay.
 5. Back in the app, show **capture COMPLETED**. Click **Why? (receipt)** and let the receipt open for 2 seconds.
 
 **Say:**
-> "Now the shopping agent. It runs on Gemini, and it searches real products from thousands of retailers through Channel3. I ask it to buy one. Before any PayPal order exists, my spending limits are checked in code, not by the AI, and the twin scores the order on its graph. It's approved, so a real PayPal sandbox order is created. I approve it, and it's captured exactly once. And every checkout leaves a receipt: every check, the risk score, and the PayPal ids."
+> "Now the shopping agent. It runs on Gemini, and it searches real products from thousands of retailers through Channel3. I ask it to buy one. Before any Razorpay order exists, my spending limits are checked in code, not by the AI, and the twin scores the order on its graph. It's approved, so a Razorpay test-mode order is created with manual capture. I pay with UPI, the server verifies Razorpay's signature, re-checks my limits, and captures exactly once. And every checkout leaves a receipt: every check, the risk score, and the Razorpay ids."
 
-**Filming tip:** the PayPal popup login is boring and shows an email address. **Cut it out in editing**: stop talking while the popup is open, and trim from the moment you click the yellow button to the moment the popup closes. Never show passwords on screen.
+**Filming tip:** the Razorpay Checkout modal may ask for a phone number: use a dummy one in test mode, and trim any waiting in editing.
 
 ---
 
@@ -111,7 +111,7 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 **On screen:** click **Command center**; the gauge now shows your hardened score. Hold for 3 seconds on the neon graph. Then switch to the landing page tab and scroll to the bottom band, "Safe checkout, before money moves.", and hold still to the end.
 
 **Say:**
-> "Agents are going to spend real money for people. That only works if every checkout is guarded before money moves. Sentinel Twin gives a merchant a living copy of their business: a graph model that sees fraud rings rules miss, an AI red team that attacks the twin, not customers, and a drill that turns every breach into a tested policy, while a human signs off on anything irreversible. Shop by asking. Pay with PayPal. Safely. This is Sentinel Twin."
+> "Agents are going to spend real money for people. That only works if every checkout is guarded before money moves. Sentinel Twin gives a merchant a living copy of their business: a graph model that sees fraud rings rules miss, an AI red team that attacks the twin, not customers, and a drill that turns every breach into a tested policy, while a human signs off on anything irreversible. Shop by asking. Pay with Razorpay. Safely. This is Sentinel Twin."
 
 **Filming tip:** slow down for the last three short sentences, with a small pause before "This is Sentinel Twin." End on 2 seconds of silence over the final band, then cut.
 
@@ -119,14 +119,14 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 
 ## Editing and upload
 
-- Put the seven clips in order and trim the dead air at the start and end of each. Cut the PayPal login and any long waits.
+- Put the seven clips in order and trim the dead air at the start and end of each. Cut the Checkout wait and any long waits.
 - Check the total is **under 3:00**. If it's long, trim scene 3 or scene 4 first.
 - No copyrighted music. Your voice alone is fine, or very quiet royalty-free music.
-- Export 1080p. Upload to YouTube as **Public**, title it "Sentinel Twin: safe AI checkout with PayPal", and paste the link into Devpost.
+- Export 1080p. Upload to YouTube (Unlisted is fine), title it "Sentinel Twin: safe AI checkout on Razorpay", and put the link in the README and your application.
 
 ## If someone asks (honesty notes)
 
 - Attack traffic is synthetic and labelled so on screen.
-- Channel3 provides real product data, but the payment is a PayPal **sandbox** order. We don't actually buy from the retailer.
-- "Restrict" is a merchant-side restriction inside the twin, not a PayPal account freeze.
+- Channel3 provides real product data, but the payment is a Razorpay **test-mode** order. We don't actually buy from the retailer.
+- "Restrict" is a merchant-side restriction inside the twin, not a Razorpay account action.
 - The numbers move a little with live traffic and training: always say the ones on your screen.

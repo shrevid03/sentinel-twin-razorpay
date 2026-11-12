@@ -141,9 +141,9 @@ $("#hero-drill").onclick = () => showTab("drill");
 $("#hero-shop").onclick = () => { showTab("concierge"); $("#msg").focus(); };
 async function loadHero() {
   const [d, cos] = await Promise.all([api("/api/drill/latest").catch(() => null), api("/api/checkouts").catch(() => [])]);
-  const real = cos.find((c) => c.status === "COMPLETED" && c.paypal_order_id && !String(c.paypal_order_id).startsWith("DEMO-"));
+  const real = cos.find((c) => c.status === "COMPLETED" && c.pay_order_id && !String(c.pay_order_id).startsWith("order_DEMO"));
   $("#hero-proof").innerHTML = real
-    ? `<span class="proof">✓ Real PayPal sandbox payment captured · order ${esc(real.paypal_order_id)} · ${money(real.total)}</span>` : "";
+    ? `<span class="proof">✓ Real Razorpay test-mode payment captured · order ${esc(real.pay_order_id)} · ${money(real.total)}</span>` : "";
   if (!d) {
     window.renderGauge?.(null); window.renderFlow?.(null);
     $("#loop-card").innerHTML = `<div class="loop-cta"><div><h3>Attack → Analyze → Harden → Verify</h3>

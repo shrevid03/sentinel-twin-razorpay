@@ -366,52 +366,64 @@ async function sendChat(text) {
 $("#send").onclick = () => sendChat();
 $("#msg").onkeydown = (e) => e.key === "Enter" && sendChat();
 
-/* PayPal checkout: the agent created the order server-side; the buyer approves it here. */
-let ppLoaded = null;
-function loadPayPalSdk() {
-  if (ppLoaded) return ppLoaded;
-  ppLoaded = new Promise((res, rej) => {
+/* Razorpay checkout: the agent created the order server-side (manual capture); the buyer pays in Razorpay
+   Checkout, and the server verifies the signature and re-checks the mandate before capturing. */
+let rzpLoaded = null;
+function loadRazorpay() {
+  if (rzpLoaded) return rzpLoaded;
+  rzpLoaded = new Promise((res, rej) => {
     const s = document.createElement("script");
-    s.src = `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(CFG.paypal_client_id)}&currency=USD&intent=capture&components=buttons`;
-    s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = res; s.onerror = () => { rzpLoaded = null; rej(new Error("Razorpay Checkout failed to load")); };
+    document.head.appendChild(s);
   });
-  return ppLoaded;
+  return rzpLoaded;
 }
+const SYM = { INR: "₹", USD: "$" };
+const fmtCharge = (ch) => ch && ch.amount != null ? `${SYM[ch.currency] || (ch.currency + " ")}${(ch.amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
 const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : "");
 function productCards(ps) {
-  return `<div class="c3-label">Live product data via Channel3 · payment in PayPal sandbox</div><div class="pcards">${ps.slice(0, 6).map((p) => `
+  return `<div class="c3-label">Live product data via Channel3 · payment in Razorpay sandbox</div><div class="pcards">${ps.slice(0, 6).map((p) => `
     <div class="pcard">${safeUrl(p.image) ? `<img src="${esc(safeUrl(p.image))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div class="noimg"></div>`}
       <div class="pc-body"><div class="pc-name">${esc(p.name)}</div><div class="pc-meta"><b>$${Number(p.price).toFixed(2)}</b> · ${esc(p.merchant)}</div>
       ${p.category === "gift_cards" ? `<div class="pc-warn">gift card · blocked by your mandate</div>` : ""}
       ${safeUrl(p.retailer_url) ? `<a href="${esc(safeUrl(p.retailer_url))}" target="_blank" rel="noopener noreferrer">View at retailer ↗</a>` : ""}</div></div>`).join("")}</div>`;
 }
 async function renderPay(co) {
-  const slot = $("#paypal-slot");
+  const slot = $("#pay-slot");
   let rc = null;
   if (co.receipt_id) { try { rc = await api("/api/receipts/" + encodeURIComponent(co.receipt_id)); } catch {} }
   const dec = rc?.risk?.decision || "approve";
   const checks = rc?.mandate_checks || [];
   slot.innerHTML = `<div class="paybox">
-    ${co.cart.some((c) => c.source === "channel3") ? `<div class="c3-label">Live product data via Channel3 · payment in PayPal sandbox (we don't buy from the retailer)</div>` : ""}
+    ${co.cart.some((c) => c.source === "channel3") ? `<div class="c3-label">Live product data via Channel3 · payment in Razorpay sandbox (we don't buy from the retailer)</div>` : ""}
     ${co.cart.filter((c) => c.source === "channel3" && safeUrl(c.image)).slice(0, 1).map((c) => `<div class="pc-hero"><img src="${esc(safeUrl(c.image))}" alt="" referrerpolicy="no-referrer"><span>${esc(c.merchant)}${safeUrl(c.retailer_url) ? ` · <a href="${esc(safeUrl(c.retailer_url))}" target="_blank" rel="noopener noreferrer">View at retailer ↗</a>` : ""}</span></div>`).join("")}
     ${co.cart.map((c) => `<div class="item"><span>${esc(c.qty > 1 ? c.qty + " × " : "")}${esc(c.name)}</span><span class="price">$${(c.price * (c.qty || 1)).toFixed(2)}</span></div>`).join("")}
     ${checks.length ? `<ul class="checks">${checks.map((c) => `<li class="${c.pass ? "" : "no"}">${esc(c.check)}</li>`).join("")}</ul>` : ""}
     <div class="meta"><span>Risk decision <span class="decision ${esc(dec)}">${esc(dec)}</span> · score ${Number(co.risk ?? rc?.risk?.score ?? 0).toFixed(2)}</span>
-      <span>PayPal order ${esc(co.paypal_order_id)}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</span></div>
+      <span>Razorpay order ${esc(co.pay_order_id)}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</span></div>
     <div id="pp-buttons"></div></div>`;
-  const done = (status) => { slot.innerHTML = `<div class="paybox done">✅ PayPal capture <b>${esc(status)}</b> for ${esc(co.paypal_order_id)}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
-  if (CFG.paypal_mode === "sandbox" && CFG.paypal_client_id) {
-    try {
-      await loadPayPalSdk();
-      paypal.Buttons({
-        createOrder: () => co.paypal_order_id,
-        onApprove: async (d) => { const r = await api(`/api/paypal/orders/${d.orderID}/capture`, {}); done(r.status); },
-        onError: (e) => addMsg("sys", "PayPal error: " + esc(e)),
-      }).render("#pp-buttons");
-    } catch (e) { $("#pp-buttons").textContent = "Could not load the PayPal SDK."; }
+  const charge = fmtCharge({ amount: co.amount, currency: co.currency });
+  const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ Razorpay payment <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
+  const fail = (e) => addMsg("sys", "Payment not captured: " + esc(e?.message || e));
+  const capture = (body) => api(`/api/razorpay/orders/${encodeURIComponent(co.pay_order_id)}/capture`, body).then(done, fail);
+  if (CFG.pay_mode !== "demo" && CFG.razorpay_key_id) {
+    $("#pp-buttons").innerHTML = `<button id="rzp-pay" class="rzp-btn">Pay ${esc(charge)} with Razorpay</button> <small class="muted">Test mode: pick UPI and enter success@razorpay.</small>`;
+    $("#rzp-pay").onclick = async () => {
+      try { await loadRazorpay(); } catch (e) { return fail(e); }
+      const rzp = new Razorpay({
+        key: CFG.razorpay_key_id, order_id: co.pay_order_id, amount: co.amount, currency: co.currency,
+        name: "Sentinel Twin Demo Store", description: co.cart.map((c) => c.name).join(", ").slice(0, 250),
+        theme: { color: "#0C2451" },
+        handler: (resp) => capture(resp),  // {razorpay_payment_id, razorpay_order_id, razorpay_signature}
+        modal: { ondismiss: () => addMsg("sys", "Razorpay Checkout closed; nothing was charged.") },
+      });
+      rzp.on("payment.failed", (r) => fail(r?.error?.description || "payment failed"));
+      rzp.open();
+    };
   } else {
-    $("#pp-buttons").innerHTML = `<button id="demo-approve">Approve payment (demo mode)</button> <small class="muted">Add PayPal sandbox keys for the real PayPal button.</small>`;
-    $("#demo-approve").onclick = async () => { const r = await api(`/api/paypal/orders/${co.paypal_order_id}/capture`, {}); done(r.status); };
+    $("#pp-buttons").innerHTML = `<button id="demo-approve">Pay ${esc(charge)} (demo mode)</button> <small class="muted">Add Razorpay test keys for the real Razorpay Checkout.</small>`;
+    $("#demo-approve").onclick = () => capture({});
   }
 }
 
@@ -569,20 +581,20 @@ $("#btn-apply").onclick = async () => { await api("/api/policy", getPolicy()); $
 /* ---------------- ledger ---------------- */
 let ordGrid, coGrid, apiGrid;
 async function loadLedger() {
-  const [orders, cos, calls] = await Promise.all([api("/api/orders"), api("/api/checkouts"), api("/api/paypal/calls")]);
+  const [orders, cos, calls] = await Promise.all([api("/api/orders"), api("/api/checkouts"), api("/api/razorpay/calls")]);
   const dec = (p) => ({ color: p.value === "block" ? "#D93025" : p.value === "review" ? "#B06000" : "#1E8E3E", fontWeight: 600 });
   if (!ordGrid) ordGrid = agGrid.createGrid($("#ord-grid"), { rowData: orders, pagination: true, paginationPageSize: 100,
     columnDefs: [{ field: "id", width: 120, pinned: "left" }, { field: "buyer" }, { field: "account", width: 90 }, { field: "merchant_name", headerName: "Merchant" },
       { field: "amount", width: 100, valueFormatter: (p) => "$" + p.value.toFixed(2) }, { field: "decision", width: 105, cellStyle: dec },
       { field: "risk", width: 85 }, { field: "status", width: 120 }, { field: "source", width: 105 }, { field: "ip_country", headerName: "IP ctry", width: 90 },
-      { field: "paypal_order_id", headerName: "PayPal order" }, { field: "factors", flex: 1, minWidth: 260 }],
+      { field: "pay_order_id", headerName: "Razorpay order" }, { field: "factors", flex: 1, minWidth: 260 }],
     defaultColDef: { sortable: true, filter: true, resizable: true } });
   else ordGrid.setGridOption("rowData", orders);
-  const coRows = cos.map((c) => ({ ...c, items: c.cart.map((x) => x.name).join(", "),
-    data: String(c.paypal_order_id).startsWith("DEMO-") ? "Demo mode" : "Real PayPal sandbox" }));
-  if (!coGrid) coGrid = agGrid.createGrid($("#co-grid"), { rowData: coRows, columnDefs: [{ field: "paypal_order_id" },
+  const coRows = cos.map((c) => ({ ...c, charge: fmtCharge({ amount: c.amount, currency: c.currency }), items: c.cart.map((x) => x.name).join(", "),
+    data: String(c.pay_order_id).startsWith("order_DEMO") ? "Demo mode" : "Real Razorpay test mode" }));
+  if (!coGrid) coGrid = agGrid.createGrid($("#co-grid"), { rowData: coRows, columnDefs: [{ field: "pay_order_id" },
     { field: "receipt_id", headerName: "Receipt", width: 130, cellRenderer: (p) => p.value ? `<a href="#" class="rcpt-link" data-rcpt="${esc(p.value)}">${esc(p.value)}</a>` : "" },
-    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real PayPal sandbox" ? "#1E8E3E" : "#B06000", fontWeight: 600 }) }, { field: "total", width: 90 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
+    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#1E8E3E" : "#B06000", fontWeight: 600 }) }, { field: "total", headerName: "Total (USD)", width: 110 }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
   else coGrid.setGridOption("rowData", coRows);
   if (!apiGrid) apiGrid = agGrid.createGrid($("#api-grid"), { rowData: calls, columnDefs: [{ field: "t", width: 90 }, { field: "method", width: 85 }, { field: "path", flex: 1 }, { field: "status", width: 85 }, { field: "mode", width: 95 }] });
   else apiGrid.setGridOption("rowData", calls);
@@ -607,8 +619,8 @@ $("#btn-retrain").onclick = async (e) => { e.target.disabled = true; await api("
 function refresh() { loadStats(); loadFeed(); }
 (async function boot() {
   CFG = await api("/api/config");
-  $("#b-paypal").textContent = CFG.paypal_mode === "sandbox" ? "PayPal sandbox · live" : "PayPal · demo mode";
-  $("#b-paypal").className = "badge " + (CFG.paypal_mode === "sandbox" ? "on" : "off");
+  $("#b-pay").textContent = CFG.pay_mode === "test" ? "Razorpay test mode · live" : CFG.pay_mode === "live" ? "Razorpay · LIVE keys" : CFG.live_key_refused ? "Razorpay · live key refused (demo)" : "Razorpay · demo mode";
+  $("#b-pay").className = "badge " + (CFG.pay_mode === "demo" ? "off" : "on");
   const BR = { claude: "Claude", gemini: "Gemini", groq: "Groq", ollama: "Ollama (local)" };
   $("#b-brain").textContent = CFG.brain === "demo" ? "AI · demo brain" : `${BR[CFG.brain] || CFG.brain} · ${CFG.model}`;
   $("#b-brain").className = "badge " + (CFG.brain === "demo" ? "off" : "on");
@@ -618,7 +630,7 @@ function refresh() { loadStats(); loadFeed(); }
   $("#auto").checked = CFG.auto_traffic;
   $("#lang").innerHTML = Object.entries(CFG.languages).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("#lang").onchange = setChips; setChips();
-  addMsg("bot", "Namaste! I'm Sentinel. I can shop for you and pay with PayPal, explain the twin, investigate fraud, or unleash the red team. Pick a language and type or tap the mic.");
+  addMsg("bot", "Namaste! I'm Sentinel. I can shop for you and pay with Razorpay, explain the twin, investigate fraud, or unleash the red team. Pick a language and type or tap the mic.");
   renderAttacks(); loadMandate(); refresh(); loadGraph();
   const h = location.hash.slice(1);  // deep links from the landing page, e.g. /app#concierge
   if (h && document.getElementById("tab-" + h)) showTab(h);

@@ -1,7 +1,7 @@
 """Channel3 product search: real products from many retailers for the shopping agent.
 
 Live only when CHANNEL3_API_KEY is set. Results are mapped to the demo catalog's shape and cached
-by SKU so checkout can resolve them. The key is never logged. Payment still runs in PayPal sandbox:
+by SKU so checkout can resolve them. The key is never logged. Payment still runs in Razorpay test mode:
 we do not buy from the retailer.
 """
 import os

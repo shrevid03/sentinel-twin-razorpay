@@ -1,8 +1,8 @@
-"""The digital twin: a live graph model of a PayPal merchant ecosystem.
+"""The digital twin: a live graph model of a Razorpay merchant ecosystem.
 
 Every buyer account, device, IP address and merchant is a node. Edges link an
 account to the devices and IPs it uses and to the merchants it buys from.
-Orders created through the app (and PayPal sandbox webhooks) are mirrored into
+Orders created through the app (and Razorpay webhooks) are mirrored into
 the twin, a GAT scores every account from its neighbourhood, and the twin can
 be forked so red-team attacks and what-if policies run without touching the
 real state.
@@ -185,7 +185,7 @@ class Twin:
             "id": self._next("O"), "account": acc.id, "merchant": merchant or r.choice(list(self.merchants)),
             "amount": round(min(amount, 4000), 2), "ts": -r.uniform(0, 60 * 24 * 30), "device": device, "ip": ip,
             "ip_country": self.ips.get(ip, acc.country), "status": "captured", "risk": None, "decision": "approve",
-            "fraud": fraud, "source": "history", "paypal_order_id": None, "factors": [],
+            "fraud": fraud, "source": "history", "pay_order_id": None, "factors": [],
         })
 
     # --------------------------------------------------------------- graph
@@ -402,7 +402,7 @@ class Twin:
         return "approve"
 
     def place_order(self, account, merchant, amount, device=None, ip=None, source="simulated",
-                    fraud=None, paypal_order_id=None, items=None):
+                    fraud=None, pay_order_id=None, items=None):
         with self.lock:
             acc = self.accounts[account]
             device = device or next(iter(acc.devices), None) or self.new_device()
@@ -420,7 +420,7 @@ class Twin:
                 "status": {"approve": "approved", "review": "review", "block": "blocked"}[decision],
                 "risk": s["risk"], "gat_risk": s["gat_risk"], "txn_score": s["txn_score"], "decision": decision,
                 "fraud": acc.fraud if fraud is None else fraud, "source": source,
-                "paypal_order_id": paypal_order_id, "factors": s["factors"], "new_device": new_device, "spend_ratio": s["spend_ratio"],
+                "pay_order_id": pay_order_id, "factors": s["factors"], "new_device": new_device, "spend_ratio": s["spend_ratio"],
                 "items": items or [], "new_device_flag": new_device,
             }
             self.orders.append(order)
@@ -688,4 +688,4 @@ def _ntype(n):
 
 def _public(o):
     return {k: o.get(k) for k in ("id", "account", "merchant", "amount", "status", "decision", "risk", "source",
-                                  "paypal_order_id", "device", "ip", "ip_country", "factors", "ts")}
+                                  "pay_order_id", "device", "ip", "ip_country", "factors", "ts")}
