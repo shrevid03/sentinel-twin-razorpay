@@ -12,30 +12,30 @@ An AI shopping agent pays through Razorpay Checkout (UPI, cards, netbanking). A 
 
 The **Defense drill** tab runs the whole loop in about 4 seconds, on one frozen copy of the twin so before and after compare like with like. It hardens the **decision policy**; the GAT itself is not retrained.
 
-1. **Red team attacks.** Five playbooks with fixed seeds, then it mutates the ones that were intercepted and records *why* it adapted (for example "fraud_ring intercepted at 68% (size 6, shared_devices 2, amount 400, age_days 10) -> fewer accounts, smaller amounts, older accounts").
-2. **Simulator searches.** It tests 216 policies on replayed traffic plus those attack orders. Score = fraud $ intercepted minus false-positive cost ($4 per good order sent to review, plus the full value of good orders blocked). Any policy that reviews more than 8% of good customers is rejected.
+1. **Red team attacks.** Five playbooks with fixed seeds, then it mutates the ones that were intercepted and records *why* it adapted (for example "fraud_ring intercepted at 68% (size 6, shared_devices 2, amount 33600, age_days 10) -> fewer accounts, smaller amounts, older accounts").
+2. **Simulator searches.** It tests 216 policies on replayed traffic plus those attack orders. Score = fraud ₹ intercepted minus false-positive cost (₹336 per good order sent to review, plus the full value of good orders blocked). Any policy that reviews more than 8% of good customers is rejected.
 3. **Same attack replayed.** The identical seeded attacks run again under the winning policy. **Unseen attacks** (fresh seeds, never tuned on) run under *both* policies on the same frozen twin.
 4. **Scorecard**, then **Apply** or **Roll back** on the live twin.
 5. **Why a graph?** The same orders through rules only, GAT + rules, and GAT + rules hardened.
 
 "Intercepted" always means blocked **or** sent to review; the screens show the two separately.
 
-| Result (seed 7, run on the live app, 12 Nov 2026) | Before | After |
+| Result (seed 7, fresh twin plus 30 ticks of live traffic, 18 Nov 2026) | Before | After |
 |---|---|---|
-| Attack $ that got through (same seeded attacks) | $2,629 | $443 |
-| **Unseen attacks that got through** (fresh seeds, never tuned on) | $2,211 | $434 (of $5,808) |
-| Intercept rate (replayed traffic plus attacks) | 93.9% | 99.0% |
-| Good customers sent to review (of 324) | 0 | 1 |
-| Good orders blocked | $0 | $0 |
-| False-positive cost | $0 | $4 |
+| Attack ₹ that got through (same seeded attacks) | ₹1,51,858 | ₹37,191 |
+| **Unseen attacks that got through** (fresh seeds, never tuned on) | ₹1,85,742 | ₹36,452 (of ₹4,87,889) |
+| Intercept rate (replayed traffic plus attacks) | 95.1% | 98.8% |
+| Good customers sent to review (of 344) | 2 | 7 |
+| Good orders blocked | ₹0 | ₹0 |
+| False-positive cost | ₹672 | ₹2,352 |
 
-The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over $150 (was $300), and review orders 4x the buyer's usual spend. After the fix, $3,253 of the replayed attack fraud is blocked and $2,187 is sent to review. What still gets through is synthetic-identity warm-up orders under $60: they look like normal shopping, and catching them would cost more good customers than they're worth. The "before" figure moves with live traffic ($1,808 to $2,629 across our runs); the drill is tested in `tests/test_drill.py`.
+The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹3,10,238 of the replayed attack fraud is blocked and ₹1,46,656 is sent to review. What still gets through is synthetic-identity warm-up orders under about ₹5,000: they look like normal shopping, and catching them would cost more good customers than they're worth. The "before" figure moves with live traffic and GAT training (₹1,51,858 to ₹2,20,836 across our runs); the drill is tested in `tests/test_drill.py`.
 
 ## Rules vs graph: why a GAT?
 
 The same orders replayed through three engines: **rules only** (new device, foreign IP, spend jump, velocity and account age, at full 0-1 scale, the fairest baseline), **GAT + rules** (the shipped engine) and **GAT + rules under the hardened policy**. The headline uses only the red team's attack orders, from fresh accounts the GAT never saw a label for.
 
-| Unseen attack traffic ($9,409 attempted, seeded) | Rules only | GAT + rules | GAT + rules, hardened |
+| Unseen attack traffic (₹7,90,356 attempted, seeded) | Rules only | GAT + rules | GAT + rules, hardened |
 |---|---|---|---|
 | **All attacks intercepted** | **42.5%** | **72% to 81%** | **95.3%** |
 | Fraud rings (new accounts sharing devices) | 0% | 34% to 67% | 100% |
@@ -120,7 +120,7 @@ Razorpay checkout/webhooks ──► Digital twin graph ──► GAT scores + a
 | **Refunds** (`POST /v1/payments/{id}/refund`) | Investigator `refund_order` tool, after merchant approval |
 | **Webhooks** with `X-Razorpay-Signature` | `POST /api/razorpay/webhook`: `payment.dispute.created` labels the order as fraud and opens an investigation, `refund.processed` updates the twin, `payment.failed` marks the checkout failed |
 
-**Amounts.** The twin and catalog keep prices in USD, so the fraud features and drill numbers are unchanged. Orders are charged in `RAZORPAY_CURRENCY` (default `INR`) at `RAZORPAY_FX_RATE` (default 84), so a $32 item is a ₹2,688.00 test payment. If international currencies are enabled on your account, set `RAZORPAY_CURRENCY=USD` and `RAZORPAY_FX_RATE=1`.
+**Amounts.** Everything is in rupees: catalog prices, the spending mandate (₹12,500 per order, ₹35,000 a month), simulated traffic, policy thresholds, red-team attacks and drill costs, so a ₹2,699 item is a ₹2,699.00 Razorpay test payment. The twin was first calibrated in dollars; every money constant is now that value × 84 (`app/money.py`) and the GAT's amount features are normalised by the same factor, so the risk engine makes the same decisions (a drill run on both versions gives the same chosen policy and exactly 84× the amounts once the hardened policy is applied). Channel3 returns US-dollar prices, which are converted to rupees on ingestion (`CHANNEL3_USD_INR`, default 84).
 
 Without test keys the app runs in a clearly labelled **demo mode** that returns the same response shapes, so every screen still works.
 

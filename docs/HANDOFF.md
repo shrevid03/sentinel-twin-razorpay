@@ -28,7 +28,7 @@ cd ~/sentinel-twin
 | `app/redteam.py` | Attack playbooks (fraud ring, card testing, ATO, synthetic identity, device farm, prompt injection) |
 | `app/drill.py` | Defense drill: attack, search 216 policies, replay the same seeds, plus rules-vs-GAT comparison |
 | `app/razorpay.py` | Razorpay Orders (manual capture), Checkout signature check, payment fetch + capture once, refunds, webhook HMAC; demo mode without keys; live keys refused |
-| `app/channel3.py` | Channel3 live product search (cheapest in-stock USD offer, cached by `C3-` SKU, demo-catalog fallback) |
+| `app/channel3.py` | Channel3 live product search (cheapest in-stock USD offer converted to rupees, cached by `C3-` SKU, demo-catalog fallback) |
 | `app/catalog.py` | Demo catalog and the poisoned listing used by the prompt-injection attack |
 | `app/integrations.py` | Optional Elastic and Zapier event sinks |
 | `static/` | `landing.html`; app shell `index.html` + `app.js`, `drill.js`, `receipts.js`, `review.js`, `fx.js` (visual effects), `style.css`; `img/` (product shots and the author's photos); `vendor/` (vis-network, AG Grid, Chart.js, marked, DOMPurify) |
@@ -53,7 +53,7 @@ cd ~/sentinel-twin
 ## Results to quote (read your own screen on the day)
 
 - Rules vs graph, same orders: **rules only 42.5%** of attack traffic intercepted, **GAT + rules about 72–81%** (80.8% on the reference run, varies with training), **GAT + hardened policy 95.3%**.
-- A drill on 12 Nov: attack $ that got through **$1,808 → $443**; intercept rate **93.9% → 98.5%**.
+- A drill on 18 Nov (seed 7): attack ₹ that got through **₹1,51,858 → ₹37,191**; intercept rate **95.1% → 98.8%**.
 - GAT test AUC is ~0.99 on this synthetic data.
 
 ## Tests
@@ -63,7 +63,7 @@ cd ~/sentinel-twin
 ## Gotchas
 
 - **In-memory state.** Checkouts, receipts, the latest drill, cases and the review queue are cleared on every restart. Before recording: start once, run a drill, do one sandbox payment, then don't restart.
-- **Razorpay test payment.** In Checkout pick UPI and enter `success@razorpay`. Test mode never moves real money. Prices are USD in the twin and charged in INR at `RAZORPAY_FX_RATE` (84).
+- **Razorpay test payment.** In Checkout pick UPI and enter `success@razorpay`. Test mode never moves real money. All amounts are rupees end to end (`app/money.py`); Razorpay charges them in INR as-is.
 - **Browser cache.** App assets use `?v=N` in `index.html`; bump it when changing JS or CSS.
 - **Free Render plan** sleeps after ~15 minutes idle and takes ~1 minute to wake: open the link yourself before a reviewer does.
 - Free Gemini keys have daily quotas. gemini-2.5-flash ran out on 12 Nov; the default is now `gemini-3.5-flash-lite` (set `LLM_MODEL` to override). If Gemini errors, the scripted demo brain takes over, and the chat never shows a raw error.

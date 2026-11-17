@@ -5,7 +5,7 @@ from app import agents
 from app.razorpay import Razorpay
 from app.twin import Twin
 
-CART = [{"sku": "SKU-COF-02", "qty": 1}]  # $32 pour-over set
+CART = [{"sku": "SKU-COF-02", "qty": 1}]  # ₹2,699 pour-over set
 
 
 @pytest.fixture(scope="module")
@@ -51,7 +51,7 @@ def test_repeat_capture_charges_once_and_counts_spend_once(team):
     second = team.capture(oid)
     assert first["status"] == "COMPLETED"
     assert second["status"] == "COMPLETED" and second["duplicate"] is True
-    assert team.mandate["spent"] == 32.0
+    assert team.mandate["spent"] == 2699.0
     captures = [c for c in team.pp.calls if c["path"].endswith("/capture")]
     assert len(captures) == 1
 

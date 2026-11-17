@@ -55,7 +55,7 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 ## Scene 3: Shop by asking, pay with Razorpay (0:35–1:15)
 
 **On screen:**
-1. Click the **Concierge** tab. Type: *Find a coffee gift under $40*. Press Enter. Real product cards from Channel3 appear with photos.
+1. Click the **Concierge** tab. Type: *Find a coffee gift under ₹3,000*. Press Enter. Real product cards from Channel3 appear with photos.
 2. Type: *Buy the first one*. The checkout card appears.
 3. Point the mouse at the green **mandate ticks**, then the **approve** pill.
 4. Click **Pay ₹… with Razorpay**, pick UPI, enter `success@razorpay` and pay.
@@ -78,7 +78,7 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 5. In step 4, point at the **before → after** tiles.
 
 **Say:**
-> "Now I attack my own system, on a frozen copy, never on real customers. An AI red team throws fraud rings, card testing and account takeovers at the twin, and when it gets caught, it changes tactics and explains why. [Your number] dollars get through. The simulator then tests two hundred and sixteen policies, and it charges itself for every good customer it would annoy, so it can't just block everyone. Same attacks, replayed: only [your after number] gets through."
+> "Now I attack my own system, on a frozen copy, never on real customers. An AI red team throws fraud rings, card testing and account takeovers at the twin, and when it gets caught, it changes tactics and explains why. [Your number] rupees get through. The simulator then tests two hundred and sixteen policies, and it charges itself for every good customer it would annoy, so it can't just block everyone. Same attacks, replayed: only [your after number] gets through."
 
 **Filming tip:** read your two numbers off step 4 during your warm-up and write them on a sticky note. The drill takes a few seconds: keep talking over it, or cut the wait.
 

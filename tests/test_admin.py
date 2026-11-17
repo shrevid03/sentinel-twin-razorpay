@@ -7,8 +7,8 @@ def test_admin_token_and_reset(monkeypatch):
     from app import main
 
     client = TestClient(main.app)
-    hardened = {"review_threshold": 0.3, "block_threshold": 0.75, "max_auto_amount": 600,
-                "review_new_device_over": 150, "review_spend_multiple": 4}
+    hardened = {"review_threshold": 0.3, "block_threshold": 0.75, "max_auto_amount": 50400,
+                "review_new_device_over": 12600, "review_spend_multiple": 4}
 
     monkeypatch.setenv("ADMIN_TOKEN", "s3cret")
     assert client.post("/api/policy", json=hardened).status_code == 401
@@ -19,7 +19,7 @@ def test_admin_token_and_reset(monkeypatch):
     assert main.twin.policy["review_threshold"] == 0.3
 
     # a visitor leaves state behind; reset (with the token) clears it
-    client.post("/api/chat", json={"text": "Buy a gift for a coffee lover under $40", "lang": "en-IN"})
+    client.post("/api/chat", json={"text": "Buy a gift for a coffee lover under ₹3,000", "lang": "en-IN"})
     assert main.team.checkouts
     r = client.post("/api/reset", headers={"X-Admin-Token": "s3cret"})
     assert r.status_code == 200

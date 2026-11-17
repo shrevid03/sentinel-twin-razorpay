@@ -25,7 +25,7 @@ services:
       - key: RAZORPAY_CURRENCY
         value: INR
       - key: RAZORPAY_FX_RATE
-        value: "84"
+        value: "1"
       - key: GEMINI_API_KEY
         sync: false
       - key: CHANNEL3_API_KEY

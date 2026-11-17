@@ -1,15 +1,16 @@
 /* Defense drill tab: attack, search, replay, scorecard. Loaded after app.js (uses $, api, esc, money, kpi, refresh). */
 let drillRes = null, drillChart = null;
 const pct = (x) => (x == null ? "–" : (x * 100).toFixed(1) + "%");
-const KNOB = { review_threshold: "review ≥ ", block_threshold: "block ≥ ", max_auto_amount: "auto-approve ≤ $",
-  review_new_device_over: "new-device review > $", review_spend_multiple: "review at spend × " };
-const changed = (p, base) => Object.keys(KNOB).filter((k) => p[k] !== base[k]).map((k) => KNOB[k] + p[k]).join(", ") || "no change";
+const KNOB = { review_threshold: "review ≥ ", block_threshold: "block ≥ ", max_auto_amount: "auto-approve ≤ ",
+  review_new_device_over: "new-device review > ", review_spend_multiple: "review at spend × " };
+const MONEY_KNOBS = new Set(["max_auto_amount", "review_new_device_over"]);
+const changed = (p, base) => Object.keys(KNOB).filter((k) => p[k] !== base[k]).map((k) => KNOB[k] + (MONEY_KNOBS.has(k) ? money(p[k]) : p[k])).join(", ") || "no change";
 const fmtParams = (p) => Object.entries(p || {}).filter(([k]) => k !== "victim").map(([k, v]) => `${k}=${v}`).join(", ");
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function attackRows(rows, round) {
-  return rows.map((r) => `<tr class="${r.evaded_usd > 0 ? "breach" : ""}"><td>${esc(r.attack)}</td><td class="muted">${round}</td>
-    <td>${esc(fmtParams(r.params))}${r.why_adapted ? `<div class="muted small">Why: ${esc(r.why_adapted)} · decided by ${esc(r.decided_by)}</div>` : ""}</td><td class="n">${money(r.fraud_usd)}</td><td class="n">${money(r.blocked_usd)} / ${money(r.reviewed_usd)}</td><td class="n ev">${money(r.evaded_usd)}</td>
+  return rows.map((r) => `<tr class="${r.evaded_inr > 0 ? "breach" : ""}"><td>${esc(r.attack)}</td><td class="muted">${round}</td>
+    <td>${esc(fmtParams(r.params))}${r.why_adapted ? `<div class="muted small">Why: ${esc(r.why_adapted)} · decided by ${esc(r.decided_by)}</div>` : ""}</td><td class="n">${money(r.fraud_inr)}</td><td class="n">${money(r.blocked_inr)} / ${money(r.reviewed_inr)}</td><td class="n ev">${money(r.evaded_inr)}</td>
     <td class="n">${Math.round((r.detection_rate || 0) * 100)}%</td></tr>`).join("");
 }
 
@@ -30,14 +31,14 @@ async function runDrill() {
 
     const searchLine = (d.log.find((l) => l.step === "search") || {}).text || "";
     $("#d-search").textContent = searchLine.charAt(0).toUpperCase() + searchLine.slice(1) +
-      `. Score = fraud $ intercepted (blocked or sent to review) minus false-positive cost ($${d.review_cost_usd} per good order reviewed, plus the full value of good orders blocked).`;
+      `. Score = fraud ₹ intercepted (blocked or sent to review) minus false-positive cost (${money(d.review_cost_inr)} per good order reviewed, plus the full value of good orders blocked).`;
     const base = d.before_policy;
     const rows = [{ policy: base, ...d.baseline, today: true }, ...d.top_candidates];
     $("#d-cands").innerHTML = `<table class="dtable"><tr><th>Policy (changed knobs)</th><th class="n">Intercept rate</th><th class="n">Good orders reviewed</th><th class="n">FP cost</th><th class="n">Net benefit</th></tr>
       ${rows.map((c, i) => {
         const chosen = !c.today && i === 1 && d.chosen;
         return `<tr class="${chosen ? "chosen" : ""}"><td>${c.today ? "<b>Today's policy</b>" : esc(changed(c.policy, base))}${chosen ? ' <span class="tag">chosen</span>' : ""}</td>
-        <td class="n">${pct(c.catch_rate)}</td><td class="n">${c.good_reviewed}</td><td class="n">${money(c.false_positive_cost_usd)}</td><td class="n">${money(c.net_benefit_usd)}</td></tr>`;
+        <td class="n">${pct(c.catch_rate)}</td><td class="n">${c.good_reviewed}</td><td class="n">${money(c.false_positive_cost_inr)}</td><td class="n">${money(c.net_benefit_inr)}</td></tr>`;
       }).join("")}</table>`;
     $("#ds-2").classList.add("show");
     await sleep(600);
@@ -46,10 +47,10 @@ async function runDrill() {
       $("#d-verify").innerHTML = `<table class="dtable"><tr><th>Attack (same seed)</th><th>Params</th><th class="n">Got through before</th><th class="n">After</th></tr>
         ${d.breaches.map((b, i) => {
           const v = d.verify[i] || {};
-          return `<tr><td>${esc(b.attack)}</td><td>${esc(fmtParams(b.params))}</td><td class="n bad">${money(b.evaded_usd)}</td>
-            <td class="n ${v.evaded_usd > 0 ? "bad" : "ok"}">${money(v.evaded_usd)}</td></tr>`;
+          return `<tr><td>${esc(b.attack)}</td><td>${esc(fmtParams(b.params))}</td><td class="n bad">${money(b.evaded_inr)}</td>
+            <td class="n ${v.evaded_inr > 0 ? "bad" : "ok"}">${money(v.evaded_inr)}</td></tr>`;
         }).join("")}</table>`;
-      $("#d-fresh").textContent = `After the fix, intercepted fraud splits into ${money(s.breach_blocked_after_usd)} blocked and ${money(s.breach_reviewed_after_usd)} sent to review. Unseen attacks (fresh seeds, never tuned on, same frozen twin): ${money(s.fresh_evaded_before_usd)} got through under today's policy, ${money(s.fresh_evaded_after_usd)} under the hardened one, of ${money(s.fresh_attempted_usd)} attempted.`;
+      $("#d-fresh").textContent = `After the fix, intercepted fraud splits into ${money(s.breach_blocked_after_inr)} blocked and ${money(s.breach_reviewed_after_inr)} sent to review. Unseen attacks (fresh seeds, never tuned on, same frozen twin): ${money(s.fresh_evaded_before_inr)} got through under today's policy, ${money(s.fresh_evaded_after_inr)} under the hardened one, of ${money(s.fresh_attempted_inr)} attempted.`;
     } else {
       $("#d-verify").innerHTML = `<p class="muted">No policy beat today's once false positives were priced in, so there is nothing to replay.</p>`;
       $("#d-fresh").textContent = "";
@@ -60,17 +61,17 @@ async function runDrill() {
     const arrow = (a, b) => `${a} → ${b ?? "–"}`;
     const after = (v, f) => (d.chosen ? f(v) : null);
     $("#d-kpis").innerHTML = [
-      kpi(`Attack $ that got through<small>same seeded attacks</small>`, arrow(money(s.breach_evaded_before_usd), after(s.breach_evaded_after_usd, money)), "ok"),
-      kpi(`Unseen attacks that got through<small>fresh seeds, never tuned on</small>`, arrow(money(s.fresh_evaded_before_usd), after(s.fresh_evaded_after_usd, money)), "ok"),
+      kpi(`Attack ₹ that got through<small>same seeded attacks</small>`, arrow(money(s.breach_evaded_before_inr), after(s.breach_evaded_after_inr, money)), "ok"),
+      kpi(`Unseen attacks that got through<small>fresh seeds, never tuned on</small>`, arrow(money(s.fresh_evaded_before_inr), after(s.fresh_evaded_after_inr, money)), "ok"),
       kpi(`Intercept rate<small>blocked or sent to review · replayed traffic plus attacks</small>`, arrow(pct(s.catch_rate_before), after(s.catch_rate_after, pct)), "ok"),
-      kpi(`Good customers sent to review<small>of ${s.legit_orders} good orders · blocked ${money(s.legit_blocked_before_usd)} → ${money(s.legit_blocked_after_usd)}</small>`,
+      kpi(`Good customers sent to review<small>of ${s.legit_orders} good orders · blocked ${money(s.legit_blocked_before_inr)} → ${money(s.legit_blocked_after_inr)}</small>`,
         arrow(s.legit_reviewed_before, s.legit_reviewed_after), "warn"),
-      kpi(`False-positive cost<small>$${d.review_cost_usd} per review plus blocked value</small>`, arrow(money(s.fp_cost_before_usd), after(s.fp_cost_after_usd, money)), "warn"),
+      kpi(`False-positive cost<small>${money(d.review_cost_inr)} per review plus blocked value</small>`, arrow(money(s.fp_cost_before_inr), after(s.fp_cost_after_inr, money)), "warn"),
     ].join("");
     $("#ds-4").classList.add("show");  // show before drawing so Chart.js can measure the canvas
     const data = { labels: ["Attack $ that got through", "False-positive cost $"], datasets: [
-      { label: "Before", data: [s.breach_evaded_before_usd, s.fp_cost_before_usd], backgroundColor: "#003087" },
-      { label: "After", data: [s.breach_evaded_after_usd ?? 0, s.fp_cost_after_usd ?? 0], backgroundColor: "#009CDE" }] };
+      { label: "Before", data: [s.breach_evaded_before_inr, s.fp_cost_before_inr], backgroundColor: "#003087" },
+      { label: "After", data: [s.breach_evaded_after_inr ?? 0, s.fp_cost_after_inr ?? 0], backgroundColor: "#009CDE" }] };
     if (drillChart) { drillChart.data = data; drillChart.update(); } else {
       drillChart = new Chart($("#d-chart"), { type: "bar", data, options: {
         plugins: { legend: { labels: { color: "#001435" } } },
@@ -99,9 +100,9 @@ function renderCompare(c) {
   $("#d-engines").innerHTML = `<table class="dtable"><tr><th>Engine</th><th class="n">Unseen attacks intercepted</th><th class="n">All fraud intercepted</th>
     <th class="n">Fraud blocked / reviewed</th><th class="n">Good orders reviewed</th><th class="n">Good $ blocked</th><th class="n">FP cost</th></tr>
     ${names.map((n) => { const e = c.engines[n], u = c.unseen_attacks[n]; return `<tr class="${n === "gat_rules_hardened" ? "chosen" : ""}"><td>${ENGINE[n]}</td>
-      <td class="n"><b>${pct(u.intercept_rate)}</b> <small class="muted">of ${money(u.total_usd)}</small></td><td class="n">${pct(e.intercept_rate)}</td>
-      <td class="n">${money(e.fraud_blocked_usd)} / ${money(e.fraud_reviewed_usd)}</td><td class="n">${e.good_reviewed} of ${e.good_total}</td>
-      <td class="n">${money(e.good_blocked_usd)}</td><td class="n">${money(e.false_positive_cost_usd)}</td></tr>`; }).join("")}</table>`;
+      <td class="n"><b>${pct(u.intercept_rate)}</b> <small class="muted">of ${money(u.total_inr)}</small></td><td class="n">${pct(e.intercept_rate)}</td>
+      <td class="n">${money(e.fraud_blocked_inr)} / ${money(e.fraud_reviewed_inr)}</td><td class="n">${e.good_reviewed} of ${e.good_total}</td>
+      <td class="n">${money(e.good_blocked_inr)}</td><td class="n">${money(e.false_positive_cost_inr)}</td></tr>`; }).join("")}</table>`;
   const kinds = Object.keys(c.by_attack).filter((k) => k !== "live fraud traffic");
   const colors = { rules_only: "#B8C4D6", gat_rules: "#0070E0", gat_rules_hardened: "#003087" };
   const data = { labels: kinds.map((k) => ATTACK_LABEL[k] || k), datasets: names.map((n) => ({ label: ENGINE[n],
@@ -115,7 +116,7 @@ function renderCompare(c) {
   const g = winsFor("gat_rules", "rules_only"), r = winsFor("rules_only", "gat_rules");
   $("#d-byattack").innerHTML = `<p>The graph wins on <b>${esc(g.join(", ") || "none")}</b>: fresh accounts tied together by shared devices and IPs.
     ${r.length ? `Rules alone do better on <b>${esc(r.join(", "))}</b>.` : ""} Where both are equal, the attack looks normal on the graph too, and only the policy layer helps.</p>
-    ${c.by_attack["live fraud traffic"] ? `<p class="muted">"Live fraud traffic" (${money(c.by_attack["live fraud traffic"].total_usd)}) comes from accounts the GAT was trained on, so it is left out of the unseen-attack figure and the chart.</p>` : ""}`;
+    ${c.by_attack["live fraud traffic"] ? `<p class="muted">"Live fraud traffic" (${money(c.by_attack["live fraud traffic"].total_inr)}) comes from accounts the GAT was trained on, so it is left out of the unseen-attack figure and the chart.</p>` : ""}`;
   const a = c.account_auc;
   $("#d-auc").textContent = a ? `Account-level held-out AUC on ${a.test_accounts} test accounts: same features with no graph ${a.features_only_no_graph}, GAT ${a.gat}. On this synthetic data, the graph's value shows up per transaction (new accounts joining a known ring), not in ranking already-known accounts.` : "";
 }
@@ -157,10 +158,10 @@ async function loadHero() {
   const step = (n, title, v) => `<div class="step"><b><span class="n">${n}</span>${title}</b><span class="v">${v}</span></div>`;
   $("#loop-card").innerHTML = `<div class="cardhead"><h3>Latest defense drill</h3><button class="ghost" id="loop-open">Open drill</button></div>
     <div class="loop">
-      ${step(1, "Attack", `${d.attacks} synthetic attacks, ${money(d.attempted_usd)} attempted; ${money(s.breach_evaded_before_usd)} got through`)}
+      ${step(1, "Attack", `${d.attacks} synthetic attacks, ${money(d.attempted_inr)} attempted; ${money(s.breach_evaded_before_inr)} got through`)}
       ${step(2, "Analyze", esc(d.search ? d.search.charAt(0).toUpperCase() + d.search.slice(1) : "Policies scored on fraud stopped minus false-positive cost"))}
       ${step(3, "Harden", d.chosen ? "New policy: " + esc(changed(d.after_policy, d.before_policy)) : "Kept today's policy: nothing beat it once false positives were priced in")}
-      ${step(4, "Verify", d.chosen ? `Same attacks replayed: ${money(s.breach_evaded_before_usd)} → ${money(s.breach_evaded_after_usd)} got through; intercept rate ${pct(s.catch_rate_before)} → ${pct(s.catch_rate_after)}` : "Nothing to replay")}
+      ${step(4, "Verify", d.chosen ? `Same attacks replayed: ${money(s.breach_evaded_before_inr)} → ${money(s.breach_evaded_after_inr)} got through; intercept rate ${pct(s.catch_rate_before)} → ${pct(s.catch_rate_after)}` : "Nothing to replay")}
     </div>`;
   $("#loop-card").querySelector(".loop").style.marginBottom = "0";
   $("#loop-open").onclick = () => showTab("drill");
@@ -174,9 +175,9 @@ $("#btn-drill").onclick = () => runDrill();
 /* Drill tab: attack arrows hitting the shield, before vs after hardening (counts from the latest drill) */
 window.renderFlow = (d) => {
   const el = document.getElementById("drill-flow"); if (!el) return;
-  const N = 10, s = d?.summary || {}, att = d?.attempted_usd || 0;
+  const N = 10, s = d?.summary || {}, att = d?.attempted_inr || 0;
   const share = (v) => (!att || !v ? 0 : Math.max(1, Math.round((N * v) / att)));
-  const passB = d ? share(s.breach_evaded_before_usd) : 3, passA = d ? (d.chosen ? share(s.breach_evaded_after_usd) : passB) : 0;
+  const passB = d ? share(s.breach_evaded_before_inr) : 3, passA = d ? (d.chosen ? share(s.breach_evaded_after_inr) : passB) : 0;
   const panel = (ox, pass, title, sub, shieldCol) => {
     const lanes = Array.from({ length: N }, (_, i) => i), passSet = new Set(lanes.filter((i) => i % Math.ceil(N / Math.max(pass, 1)) === 1).slice(0, pass));
     while (passSet.size < pass) passSet.add(lanes.find((i) => !passSet.has(i)));
@@ -191,8 +192,8 @@ window.renderFlow = (d) => {
   el.innerHTML = `<div class="cardhead"><h3>Attack flow <span class="tag synth">Synthetic attack traffic</span></h3>
       <small class="muted">${d ? `Each arrow is a tenth of the ${money(att)} attempted. Red got through; blue was intercepted.` : "Illustration until you run a drill: then the arrows follow the real result."}</small></div>
     <svg class="flowsvg" viewBox="0 0 900 140" role="img" aria-label="Before hardening ${passB} of ${N} attack arrows pass the shield; after hardening ${passA} of ${N}">
-      ${panel(0, passB, "Before hardening", d ? `${money(s.breach_evaded_before_usd)} got through · ${sub(passB)}` : "Today's policy", "#5B6B82")}
+      ${panel(0, passB, "Before hardening", d ? `${money(s.breach_evaded_before_inr)} got through · ${sub(passB)}` : "Today's policy", "#5B6B82")}
       <line x1="450" y1="20" x2="450" y2="130" stroke="#E3E8EF" stroke-width="2"/>
-      ${panel(460, passA, "After hardening", d ? (d.chosen ? `${money(s.breach_evaded_after_usd)} got through · ${sub(passA)}` : "No better policy found") : "Run a drill to see it", "#003087")}
+      ${panel(460, passA, "After hardening", d ? (d.chosen ? `${money(s.breach_evaded_after_inr)} got through · ${sub(passA)}` : "No better policy found") : "Run a drill to see it", "#003087")}
     </svg>`;
 };

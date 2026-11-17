@@ -49,14 +49,14 @@ def test_live_product_checks_out_and_gift_card_is_blocked(team, monkeypatch):
         return FakeResp(RESPONSE)
 
     monkeypatch.setattr(channel3.httpx, "post", fake_post)
-    out = team.shopper_tools()["search_catalog"]["fn"]("coffee gift", 40)
+    out = team.shopper_tools()["search_catalog"]["fn"]("coffee gift", 3360)
     live = [r for r in out["results"] if r["source"] == "channel3"]
     assert [r["sku"] for r in live] == ["C3-p1", "C3-p2"]
     assert any(r["source"] == "demo" for r in out["results"])  # demo items still listed after live ones
     v60 = live[0]
-    assert v60["price"] == 29.5 and v60["merchant"] == "shop-a.example"  # cheapest in-stock USD offer
+    assert v60["price"] == 2478.0 and v60["merchant"] == "shop-a.example"  # cheapest in-stock USD offer, $29.50 x 84 in rupees
     assert v60["image"] == "https://img.example/clean.jpg" and v60["category"] == "coffee"
-    assert sent["headers"]["x-api-key"] == "test-key" and sent["body"]["filters"]["price"]["max_price"] == 40
+    assert sent["headers"]["x-api-key"] == "test-key" and sent["body"]["filters"]["price"]["max_price"] == 40.0  # rupee budget converted back to USD for Channel3
 
     ok = team.guarded_checkout([{"sku": "C3-p1", "qty": 1}])
     assert ok["status"] == "awaiting_buyer_approval"
@@ -70,7 +70,7 @@ def test_live_product_checks_out_and_gift_card_is_blocked(team, monkeypatch):
 def test_channel3_error_falls_back_to_demo_catalog(team, monkeypatch):
     def boom(*a, **k): raise httpx.ConnectTimeout("timeout")
     monkeypatch.setattr(channel3.httpx, "post", boom)
-    out = team.shopper_tools()["search_catalog"]["fn"]("coffee", 40)
+    out = team.shopper_tools()["search_catalog"]["fn"]("coffee", 3360)
     assert out["results"] and all(r["source"] == "demo" for r in out["results"])
     assert "demo catalog" in out["note"]
 
@@ -89,6 +89,6 @@ def test_demo_brain_buys_channel3_product_from_unknown_domain(team, monkeypatch)
                           "offers": [{"url": "https://www.williams-sonoma.com/k", "domain": "williams-sonoma.com",
                                       "price": {"price": 34.95, "currency": "USD"}, "availability": "InStock"}]}]}
     monkeypatch.setattr(channel3.httpx, "post", lambda *a, **k: FakeResp(resp))
-    out = team.concierge("t-ws", "Buy a gift for a coffee lover under $40", "en-IN")
+    out = team.concierge("t-ws", "Buy a gift for a coffee lover under ₹3,400", "en-IN")
     assert out["checkout"] and out["checkout"]["cart"][0]["sku"] == "C3-ws1"
     assert "williams-sonoma.com" in out["reply"]

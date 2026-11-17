@@ -301,7 +301,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"review_threshold\": 0.35,\n  \"block_threshold\": 0.75,\n  \"max_auto_amount\": 600,\n  \"review_new_device_over\": 150,\n  \"review_spend_multiple\": 3.5\n}"
+              "raw": "{\n  \"review_threshold\": 0.35,\n  \"block_threshold\": 0.75,\n  \"max_auto_amount\": 50400,\n  \"review_new_device_over\": 12600,\n  \"review_spend_multiple\": 3.5\n}"
             }
           }
         },
@@ -327,7 +327,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"review_threshold\": 0.35,\n  \"block_threshold\": 0.75,\n  \"max_auto_amount\": 600,\n  \"review_new_device_over\": 150,\n  \"review_spend_multiple\": 3.5\n}"
+              "raw": "{\n  \"review_threshold\": 0.35,\n  \"block_threshold\": 0.75,\n  \"max_auto_amount\": 50400,\n  \"review_new_device_over\": 12600,\n  \"review_spend_multiple\": 3.5\n}"
             }
           }
         }
@@ -556,7 +556,7 @@
             },
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"per_order_limit\": 150,\n  \"monthly_budget\": 400,\n  \"blocked_categories\": [\n    \"gift_cards\"\n  ]\n}"
+              "raw": "{\n  \"per_order_limit\": 12500,\n  \"monthly_budget\": 35000,\n  \"blocked_categories\": [\n    \"gift_cards\"\n  ]\n}"
             }
           }
         },

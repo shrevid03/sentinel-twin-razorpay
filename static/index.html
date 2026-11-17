@@ -137,7 +137,7 @@
   <div class="card drill-step" id="ds-3"><h3>3 · Same attack replayed</h3><div id="d-verify"></div><p id="d-fresh" class="muted"></p></div>
   <div class="card drill-step" id="ds-4"><h3>4 · Scorecard</h3><div class="kpis big" id="d-kpis"></div>
     <div class="drill-chart"><canvas id="d-chart" height="200"></canvas></div>
-    <p class="muted">Remaining leak: synthetic-identity warm-up orders under $60 look like normal shopping; catching them would cost more good customers than they're worth.</p></div>
+    <p class="muted">Remaining leak: synthetic-identity warm-up orders under about ₹5,000 look like normal shopping; catching them would cost more good customers than they're worth.</p></div>
   <div class="card drill-step" id="ds-5"><h3>5 · Why a graph? Rules only vs GAT</h3>
     <p class="muted">The same orders replayed through three engines. Intercepted = blocked or sent to review. Synthetic attack traffic.</p>
     <div id="d-engines"></div>
@@ -160,7 +160,7 @@
       <div id="pay-slot"></div>
       <div class="composer">
         <button id="mic" class="mic" title="Hold to talk">🎙</button>
-        <input id="msg" placeholder="Try: buy a gift for a coffee lover under $40 · or · investigate the riskiest account · or · run the red team">
+        <input id="msg" placeholder="Try: buy a gift for a coffee lover under ₹3,000 · or · investigate the riskiest account · or · run the red team">
         <button id="send">Send</button>
       </div>
       <div class="chips" id="chips"></div>
@@ -168,8 +168,8 @@
     <div class="side">
       <div class="card"><h3>Spending mandate <small class="muted">enforced in code, not by the model</small></h3>
         <div class="form">
-          <label>Per-order limit $<input type="number" id="m-order"></label>
-          <label>Monthly budget $<input type="number" id="m-budget"></label>
+          <label>Per-order limit ₹<input type="number" id="m-order" step="100"></label>
+          <label>Monthly budget ₹<input type="number" id="m-budget" step="100"></label>
           <label>Blocked categories<input id="m-blocked"></label>
           <div class="row"><button id="m-save" class="ghost">Save mandate</button><span id="m-spent" class="muted"></span></div>
         </div>

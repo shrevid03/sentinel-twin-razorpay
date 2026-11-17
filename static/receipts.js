@@ -14,7 +14,7 @@ async function openReceipt(id) {
   $("#modal-title").textContent = `Decision receipt ${r.id}`;
   $("#modal-body").innerHTML = `
     <p><b class="${cls}">${esc(label)}</b> · ${money(r.total)} · created ${esc(r.created_at)} · buyer ${esc(r.buyer)}</p>
-    <div class="rc-sec"><h4>Cart</h4>${r.cart.map((c) => esc(`${c.qty} × ${c.name} ($${c.price}, ${c.category})`)).join("<br>")}</div>
+    <div class="rc-sec"><h4>Cart</h4>${r.cart.map((c) => esc(`${c.qty} × ${c.name} (${money(c.price)}, ${c.category})`)).join("<br>")}</div>
     <div class="rc-sec"><h4>Spending mandate at decision time</h4>
       Per-order limit ${money(m.per_order_limit)} · monthly budget ${money(m.monthly_budget)} · spent ${money(m.spent)} · remaining ${money(m.remaining)} · blocked: ${esc(m.blocked_categories.join(", ") || "none")}
       <table class="dtable">${r.mandate_checks.map((c) => `<tr><td>${esc(c.check)}</td><td>${yes(c.pass)}</td><td class="muted">${esc(c.detail)}</td></tr>`).join("")}</table></div>

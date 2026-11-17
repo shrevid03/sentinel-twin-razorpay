@@ -13,7 +13,7 @@ const api = async (path, body, retried) => {
   return r.json();
 };
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const money = (n) => "$" + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
+const money = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });  /* all amounts are rupees */
 const md = (t) => DOMPurify.sanitize(marked.parse(t || ""));
 /* Chart.js defaults: light theme, blue/navy series, legends on */
 if (window.Chart) {
@@ -44,7 +44,7 @@ async function loadStats() {
   $("#kpis").innerHTML = [
     kpi("accounts mirrored", s.accounts), kpi("devices · IPs", `${s.devices} · ${s.ips}`),
     kpi("live orders", s.live_orders), kpi("approved", s.approved, "ok"), kpi("sent to review", s.review, "warn"),
-    kpi("blocked", `${s.blocked} · ${money(s.blocked_usd)}`, "bad"), kpi("high-risk accounts", s.high_risk_accounts, "bad"),
+    kpi("blocked", `${s.blocked} · ${money(s.blocked_inr)}`, "bad"), kpi("high-risk accounts", s.high_risk_accounts, "bad"),
     kpi("frozen by investigator", s.frozen), kpi("GAT test AUC", s.model.test_auc ?? "–", "ok"),
   ].join("");
   window.lastStats = s; window.onStats?.(s);
@@ -332,13 +332,13 @@ function renderTrace(el, trace) {
 
 /* ---------------- concierge ---------------- */
 const SAMPLES = {
-  "en-IN": ["Buy a gift for a coffee lover under $40", "How is the twin doing?", "Investigate the riskiest account", "Run the red team"],
-  "hi-IN": ["मेरी माँ के लिए दिवाली का तोहफ़ा 40 डॉलर से कम में खरीदो", "ट्विन की स्थिति बताओ", "सबसे जोखिम वाले खाते की जांच करो"],
-  "ta-IN": ["காபி பிரியருக்கு 40 டாலருக்குள் ஒரு பரிசு வாங்கு", "மிகவும் ஆபத்தான கணக்கை விசாரி"],
-  "te-IN": ["40 డాలర్లలోపు కాఫీ ప్రియుడికి బహుమతి కొనండి", "అత్యంత ప్రమాదకరమైన ఖాతాను దర్యాప్తు చేయండి"],
-  "bn-IN": ["৪০ ডলারের মধ্যে একটি উপহার কিনে দাও"], "mr-IN": ["४० डॉलरच्या आत भेटवस्तू घ्या"],
-  "kn-IN": ["40 ಡಾಲರ್ ಒಳಗೆ ಉಡುಗೊರೆ ಖರೀದಿಸಿ"], "gu-IN": ["40 ડોલરની અંદર ભેટ ખરીદો"],
-  "ml-IN": ["40 ഡോളറിനുള്ളിൽ ഒരു സമ്മാനം വാങ്ങൂ"], "pa-IN": ["40 ਡਾਲਰ ਤੋਂ ਘੱਟ ਵਿੱਚ ਤੋਹਫ਼ਾ ਖਰੀਦੋ"],
+  "en-IN": ["Buy a gift for a coffee lover under ₹3,000", "How is the twin doing?", "Investigate the riskiest account", "Run the red team"],
+  "hi-IN": ["मेरी माँ के लिए दिवाली का तोहफ़ा 3000 रुपये से कम में खरीदो", "ट्विन की स्थिति बताओ", "सबसे जोखिम वाले खाते की जांच करो"],
+  "ta-IN": ["காபி பிரியருக்கு 3000 ரூபாய்க்குள் ஒரு பரிசு வாங்கு", "மிகவும் ஆபத்தான கணக்கை விசாரி"],
+  "te-IN": ["3000 రూపాయలలోపు కాఫీ ప్రియుడికి బహుమతి కొనండి", "అత్యంత ప్రమాదకరమైన ఖాతాను దర్యాప్తు చేయండి"],
+  "bn-IN": ["৩০০০ টাকার মধ্যে একটি উপহার কিনে দাও"], "mr-IN": ["३००० रुपयांच्या आत भेटवस्तू घ्या"],
+  "kn-IN": ["3000 ರೂಪಾಯಿ ಒಳಗೆ ಉಡುಗೊರೆ ಖರೀದಿಸಿ"], "gu-IN": ["3000 રૂપિયાની અંદર ભેટ ખરીદો"],
+  "ml-IN": ["3000 രൂപയ്ക്കുള്ളിൽ ഒരു സമ്മാനം വാങ്ങൂ"], "pa-IN": ["3000 ਰੁਪਏ ਤੋਂ ਘੱਟ ਵਿੱਚ ਤੋਹਫ਼ਾ ਖਰੀਦੋ"],
 };
 function setChips() {
   const l = $("#lang").value;
@@ -385,7 +385,7 @@ const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : "");
 function productCards(ps) {
   return `<div class="c3-label">Live product data via Channel3 · payment in Razorpay sandbox</div><div class="pcards">${ps.slice(0, 6).map((p) => `
     <div class="pcard">${safeUrl(p.image) ? `<img src="${esc(safeUrl(p.image))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div class="noimg"></div>`}
-      <div class="pc-body"><div class="pc-name">${esc(p.name)}</div><div class="pc-meta"><b>$${Number(p.price).toFixed(2)}</b> · ${esc(p.merchant)}</div>
+      <div class="pc-body"><div class="pc-name">${esc(p.name)}</div><div class="pc-meta"><b>${money(p.price)}</b> · ${esc(p.merchant)}</div>
       ${p.category === "gift_cards" ? `<div class="pc-warn">gift card · blocked by your mandate</div>` : ""}
       ${safeUrl(p.retailer_url) ? `<a href="${esc(safeUrl(p.retailer_url))}" target="_blank" rel="noopener noreferrer">View at retailer ↗</a>` : ""}</div></div>`).join("")}</div>`;
 }
@@ -398,7 +398,7 @@ async function renderPay(co) {
   slot.innerHTML = `<div class="paybox">
     ${co.cart.some((c) => c.source === "channel3") ? `<div class="c3-label">Live product data via Channel3 · payment in Razorpay sandbox (we don't buy from the retailer)</div>` : ""}
     ${co.cart.filter((c) => c.source === "channel3" && safeUrl(c.image)).slice(0, 1).map((c) => `<div class="pc-hero"><img src="${esc(safeUrl(c.image))}" alt="" referrerpolicy="no-referrer"><span>${esc(c.merchant)}${safeUrl(c.retailer_url) ? ` · <a href="${esc(safeUrl(c.retailer_url))}" target="_blank" rel="noopener noreferrer">View at retailer ↗</a>` : ""}</span></div>`).join("")}
-    ${co.cart.map((c) => `<div class="item"><span>${esc(c.qty > 1 ? c.qty + " × " : "")}${esc(c.name)}</span><span class="price">$${(c.price * (c.qty || 1)).toFixed(2)}</span></div>`).join("")}
+    ${co.cart.map((c) => `<div class="item"><span>${esc(c.qty > 1 ? c.qty + " × " : "")}${esc(c.name)}</span><span class="price">${money(c.price * (c.qty || 1))}</span></div>`).join("")}
     ${checks.length ? `<ul class="checks">${checks.map((c) => `<li class="${c.pass ? "" : "no"}">${esc(c.check)}</li>`).join("")}</ul>` : ""}
     <div class="meta"><span>Risk decision <span class="decision ${esc(dec)}">${esc(dec)}</span> · score ${Number(co.risk ?? rc?.risk?.score ?? 0).toFixed(2)}</span>
       <span>Razorpay order ${esc(co.pay_order_id)}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</span></div>
@@ -517,8 +517,8 @@ function renderAttacks() {
   });
 }
 function addResults(results, replace) {
-  const rows = results.map((r) => ({ attack: r.attack, params: JSON.stringify(r.params || {}), fraud: r.fraud_usd, stopped: r.stopped_usd,
-    evaded: r.evaded_usd, detection: r.detection_rate, decided_by: r.decided_by || "", notes: r.why_adapted ? "Why adapted: " + r.why_adapted : (r.notes || "") }));
+  const rows = results.map((r) => ({ attack: r.attack, params: JSON.stringify(r.params || {}), fraud: r.fraud_inr, stopped: r.stopped_inr,
+    evaded: r.evaded_inr, detection: r.detection_rate, decided_by: r.decided_by || "", notes: r.why_adapted ? "Why adapted: " + r.why_adapted : (r.notes || "") }));
   if (!rtGrid) {
     rtGrid = agGrid.createGrid($("#rt-grid"), { rowData: rows, columnDefs: [
       { field: "attack" }, { field: "params", flex: 1 }, { field: "fraud", valueFormatter: (p) => money(p.value), width: 100 },
@@ -531,8 +531,8 @@ function addResults(results, replace) {
 }
 function renderRun(run, trace) {
   const s = run.scorecard;
-  $("#rt-score").innerHTML = [kpi("attacks launched", s.attacks_run), kpi("fraud attempted", money(s.fraud_attempted_usd)),
-    kpi("intercepted (blocked or review)", money(s.stopped_usd), "ok"), kpi("got through", money(s.evaded_usd), "bad"),
+  $("#rt-score").innerHTML = [kpi("attacks launched", s.attacks_run), kpi("fraud attempted", money(s.fraud_attempted_inr)),
+    kpi("intercepted (blocked or review)", money(s.stopped_inr), "ok"), kpi("got through", money(s.evaded_inr), "bad"),
     kpi("resilience", Math.round(s.resilience * 100) + "%", s.resilience > 0.9 ? "ok" : "warn"),
     kpi("weakest spot", (s.weakest[0]?.attack || "–").replace(/_/g, " "), "bad")].join("");
   $("#rt-report").classList.remove("muted"); $("#rt-report").innerHTML = md(run.report);
@@ -550,22 +550,23 @@ $("#btn-to-whatif").onclick = async () => { showTab("whatif"); await initPolicy(
 /* ---------------- what-if ---------------- */
 const POLICY_FIELDS = [
   ["review_threshold", "Review at risk ≥", 0, 1, 0.01], ["block_threshold", "Block at risk ≥", 0, 1, 0.01],
-  ["max_auto_amount", "Auto-approve up to $", 50, 3000, 10], ["review_new_device_over", "Review new device over $", 0, 2000, 10],
+  ["max_auto_amount", "Auto-approve up to ₹", 4000, 250000, 500], ["review_new_device_over", "Review new device over ₹", 0, 170000, 500],
   ["review_spend_multiple", "Review at N× usual spend (0 off)", 0, 10, 0.5]];
 let policyInit = null, wiChart;
 function initPolicy() { return policyInit ||= _initPolicy(); }
 async function _initPolicy() {
   const s = await api("/api/stats");
   $("#policy-form").innerHTML = POLICY_FIELDS.map(([k, l, lo, hi, st]) => `<label>${l}<input type="range" id="p-${k}" min="${lo}" max="${hi}" step="${st}"><b id="v-${k}"></b></label>`).join("");
-  POLICY_FIELDS.forEach(([k]) => $("#p-" + k).oninput = () => $("#v-" + k).textContent = $("#p-" + k).value);
+  POLICY_FIELDS.forEach(([k]) => $("#p-" + k).oninput = () => $("#v-" + k).textContent = knobText(k, $("#p-" + k).value));
   setPolicy(s.policy);
 }
-function setPolicy(p) { POLICY_FIELDS.forEach(([k]) => { if (p[k] !== undefined && $("#p-" + k)) { $("#p-" + k).value = p[k]; $("#v-" + k).textContent = p[k]; } }); }
+const knobText = (k, v) => (k === "max_auto_amount" || k === "review_new_device_over" ? money(v) : v);
+function setPolicy(p) { POLICY_FIELDS.forEach(([k]) => { if (p[k] !== undefined && $("#p-" + k)) { $("#p-" + k).value = p[k]; $("#v-" + k).textContent = knobText(k, p[k]); } }); }
 const getPolicy = () => Object.fromEntries(POLICY_FIELDS.map(([k]) => [k, +$("#p-" + k).value]));
 async function runWhatIf() {
   await initPolicy();
   const r = await api("/api/whatif?include_redteam=" + $("#wi-rt").checked, getPolicy());
-  const keys = [["fraud_blocked_usd", "Fraud blocked $"], ["fraud_reviewed_usd", "Fraud sent to review $"], ["fraud_missed_usd", "Fraud missed $"], ["good_blocked_usd", "Good orders blocked $"]];
+  const keys = [["fraud_blocked_inr", "Fraud blocked $"], ["fraud_reviewed_inr", "Fraud sent to review $"], ["fraud_missed_inr", "Fraud missed $"], ["good_blocked_inr", "Good orders blocked $"]];
   const data = { labels: keys.map((k) => k[1]), datasets: [
     { label: "Current policy", data: keys.map((k) => r.current[k[0]]), backgroundColor: "#003087" },
     { label: "Proposed policy", data: keys.map((k) => r.proposed[k[0]]), backgroundColor: "#009CDE" }] };
@@ -585,7 +586,7 @@ async function loadLedger() {
   const dec = (p) => ({ color: p.value === "block" ? "#D93025" : p.value === "review" ? "#B06000" : "#1E8E3E", fontWeight: 600 });
   if (!ordGrid) ordGrid = agGrid.createGrid($("#ord-grid"), { rowData: orders, pagination: true, paginationPageSize: 100,
     columnDefs: [{ field: "id", width: 120, pinned: "left" }, { field: "buyer" }, { field: "account", width: 90 }, { field: "merchant_name", headerName: "Merchant" },
-      { field: "amount", width: 100, valueFormatter: (p) => "$" + p.value.toFixed(2) }, { field: "decision", width: 105, cellStyle: dec },
+      { field: "amount", width: 100, valueFormatter: (p) => money(p.value) }, { field: "decision", width: 105, cellStyle: dec },
       { field: "risk", width: 85 }, { field: "status", width: 120 }, { field: "source", width: 105 }, { field: "ip_country", headerName: "IP ctry", width: 90 },
       { field: "pay_order_id", headerName: "Razorpay order" }, { field: "factors", flex: 1, minWidth: 260 }],
     defaultColDef: { sortable: true, filter: true, resizable: true } });
@@ -594,7 +595,7 @@ async function loadLedger() {
     data: String(c.pay_order_id).startsWith("order_DEMO") ? "Demo mode" : "Real Razorpay test mode" }));
   if (!coGrid) coGrid = agGrid.createGrid($("#co-grid"), { rowData: coRows, columnDefs: [{ field: "pay_order_id" },
     { field: "receipt_id", headerName: "Receipt", width: 130, cellRenderer: (p) => p.value ? `<a href="#" class="rcpt-link" data-rcpt="${esc(p.value)}">${esc(p.value)}</a>` : "" },
-    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#1E8E3E" : "#B06000", fontWeight: 600 }) }, { field: "total", headerName: "Total (USD)", width: 110 }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
+    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#1E8E3E" : "#B06000", fontWeight: 600 }) }, { field: "total", headerName: "Total (₹)", width: 110, valueFormatter: (p) => money(p.value) }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
   else coGrid.setGridOption("rowData", coRows);
   if (!apiGrid) apiGrid = agGrid.createGrid($("#api-grid"), { rowData: calls, columnDefs: [{ field: "t", width: 90 }, { field: "method", width: 85 }, { field: "path", flex: 1 }, { field: "status", width: 85 }, { field: "mode", width: 95 }] });
   else apiGrid.setGridOption("rowData", calls);

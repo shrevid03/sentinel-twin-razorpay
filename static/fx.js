@@ -113,13 +113,13 @@
     return `<svg class="spark" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   };
   window.onStats = (s) => {
-    hist.push({ live: s.live_orders, approved: s.approved, blocked_usd: s.blocked_usd, rate: s.live_orders ? s.approved / s.live_orders : 0 });
+    hist.push({ live: s.live_orders, approved: s.approved, blocked_inr: s.blocked_inr, rate: s.live_orders ? s.approved / s.live_orders : 0 });
     if (hist.length > 30) hist.shift();
     // per-poll deltas = orders per interval; approval rate and blocked $ as running series
     const per = hist.slice(1).map((h, i) => Math.max(0, h.live - hist[i].live));
     const tiles = document.querySelectorAll("#kpis .kpi");
     const add = (idx, svg) => { const t = tiles[idx]; if (t && svg && !t.querySelector(".spark")) t.insertAdjacentHTML("beforeend", svg); };
-    add(2, spark(per, "#0070E0")); add(3, spark(hist.map((h) => h.rate), "#1E8E3E")); add(5, spark(hist.map((h) => h.blocked_usd), "#D93025"));
+    add(2, spark(per, "#0070E0")); add(3, spark(hist.map((h) => h.rate), "#1E8E3E")); add(5, spark(hist.map((h) => h.blocked_inr), "#D93025"));
     const data = [s.approved, s.review, s.blocked], n = s.live_orders;
     document.getElementById("donut-n").textContent = n.toLocaleString();
     const lg = document.getElementById("donut-legend");

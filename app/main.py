@@ -21,6 +21,7 @@ from . import integrations  # noqa: E402
 from . import channel3  # noqa: E402
 from .agents import LANGS, CaptureRefused, Team  # noqa: E402
 from .drill import defense_drill  # noqa: E402
+from .money import K, rs  # noqa: E402
 from .razorpay import Razorpay, RazorpayError  # noqa: E402
 from .redteam import ATTACKS, run_attack  # noqa: E402
 from .twin import Twin, _public  # noqa: E402
@@ -269,7 +270,7 @@ def drill_latest():
     search = next((l.get("text", "") for l in d.get("log", []) if l.get("step") == "search"), "")
     return {
         "attacks": len(attacks),
-        "attempted_usd": round(sum(r.get("fraud_usd", 0) for r in attacks), 2),
+        "attempted_inr": round(sum(r.get("fraud_inr", 0) for r in attacks), 2),
         "search": search,
         "chosen": bool(d.get("chosen")),
         "before_policy": d.get("before_policy"),
@@ -316,8 +317,8 @@ def runs():
 class PolicyIn(BaseModel):
     review_threshold: float = 0.5
     block_threshold: float = 0.8
-    max_auto_amount: float = 1000
-    review_new_device_over: float = 300
+    max_auto_amount: float = 1000 * K  # rupees
+    review_new_device_over: float = 300 * K
     review_spend_multiple: float = 0
 
 
@@ -330,7 +331,7 @@ def whatif(body: PolicyIn, include_redteam: bool = True):
 def set_policy(body: PolicyIn):
     twin.policy = body.model_dump()
     twin._event("policy", f"Policy updated: review>={body.review_threshold}, block>={body.block_threshold}, "
-                          f"auto-approve <= ${body.max_auto_amount:.0f}", level="warn")
+                          f"auto-approve <= {rs(body.max_auto_amount)}", level="warn")
     return twin.policy
 
 

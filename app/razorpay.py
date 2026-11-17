@@ -10,9 +10,9 @@ If RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET are not set the client runs in a clearl
 returns the same shapes, so the app can be explored without keys. Live keys (rzp_live_) are refused unless
 RAZORPAY_ALLOW_LIVE=1, so a demo deploy can never take real money by accident.
 
-Amounts: the twin and catalog price items in USD. Razorpay test accounts settle in INR by default, so orders
-are charged in RAZORPAY_CURRENCY (default INR) at RAZORPAY_FX_RATE (default 84 INR per USD). Set
-RAZORPAY_CURRENCY=USD and RAZORPAY_FX_RATE=1 if international payments are enabled on your account.
+Amounts: everything in Sentinel Twin is priced in rupees (INR), so orders are charged in INR as-is
+(RAZORPAY_FX_RATE defaults to 1). To charge another currency enabled on your account, set RAZORPAY_CURRENCY and
+RAZORPAY_FX_RATE (units of that currency per rupee).
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ class Razorpay:
         self.webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
         self.base = os.getenv("RAZORPAY_API_BASE", API)
         self.currency = (os.getenv("RAZORPAY_CURRENCY", "INR").strip() or "INR").upper()
-        self.fx = float(os.getenv("RAZORPAY_FX_RATE", "84") or 84)
+        self.fx = float(os.getenv("RAZORPAY_FX_RATE", "1") or 1)
         is_live_key = self.key_id.startswith("rzp_live_")
         allow_live = os.getenv("RAZORPAY_ALLOW_LIVE", "0") == "1"
         self.refused_live_key = is_live_key and not allow_live
@@ -60,9 +60,9 @@ class Razorpay:
         return "live" if self.key_id.startswith("rzp_live_") else "test"
 
     # ------------------------------------------------------------ plumbing
-    def to_minor(self, usd: float) -> int:
-        """USD price -> smallest unit of the charge currency (paise for INR)."""
-        return int(round(float(usd) * self.fx * 100))
+    def to_minor(self, inr: float) -> int:
+        """Rupee price -> smallest unit of the charge currency (paise for INR)."""
+        return int(round(float(inr) * self.fx * 100))
 
     def _req(self, method, path, json=None):
         r = httpx.request(method, f"{self.base}{path}", json=json, auth=(self.key_id, self.key_secret), timeout=30)
@@ -78,13 +78,13 @@ class Razorpay:
 
     # -------------------------------------------------------------- orders
     def create_order(self, items, reference, description="Sentinel Twin agent checkout"):
-        total_usd = round(sum(i["price"] * i.get("qty", 1) for i in items), 2)
+        total_inr = round(sum(i["price"] * i.get("qty", 1) for i in items), 2)
         body = {
-            "amount": self.to_minor(total_usd),
+            "amount": self.to_minor(total_inr),
             "currency": self.currency,
             "receipt": reference[:40],
             "notes": {"source": "sentinel-twin agent", "description": description[:200],
-                      "total_usd": f"{total_usd:.2f}",
+                      "total_inr": f"{total_inr:.2f}",
                       "items": "; ".join(f"{i.get('qty', 1)}x {i.get('sku') or i['name']}" for i in items)[:250]},
             # manual capture: the server re-checks the mandate before any money moves
             "payment": {"capture": "manual",
@@ -156,10 +156,10 @@ class Razorpay:
         return {"id": order_id, "status": status, "payment_id": payment_id, "capture_id": payment_id,
                 "amount": p.get("amount"), "currency": p.get("currency"), "method": p.get("method")}
 
-    def refund_capture(self, payment_id, amount_usd=None, note="Refund issued by Sentinel Twin investigator"):
+    def refund_capture(self, payment_id, amount_inr=None, note="Refund issued by Sentinel Twin investigator"):
         body = {"notes": {"reason": note[:250]}, "speed": "normal"}
-        if amount_usd:
-            body["amount"] = self.to_minor(amount_usd)
+        if amount_inr:
+            body["amount"] = self.to_minor(amount_inr)
         if not self.live:
             self._log("POST", f"/v1/payments/{payment_id}/refund", 200)
             return {"id": "rfnd_DEMO" + uuid.uuid4().hex[:10].upper(), "entity": "refund", "status": "processed",

@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .gat import GAT, auc
+from .money import K, rs
 
 COUNTRIES = ["US", "US", "US", "IN", "GB", "DE", "CA", "AU", "FR", "BR"]
 RISKY_COUNTRIES = ["NG", "RU", "VN", "RO"]
@@ -41,8 +42,8 @@ FEATURES = ["is_account", "is_device", "is_ip", "is_merchant", "account_age", "o
             "avg_amount", "max_amount", "velocity", "device_count", "ip_count", "geo_mismatch",
             "kyc_verified", "disposable_email", "degree"]
 
-DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amount": 1000.0,
-                  "review_new_device_over": 300.0, "review_spend_multiple": 0.0}
+DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amount": 1000.0 * K,
+                  "review_new_device_over": 300.0 * K, "review_spend_multiple": 0.0}
 
 
 @dataclass
@@ -155,11 +156,11 @@ class Twin:
             acc.ips.add(self.new_ip(acc.country))
             for _ in range(r.randint(2, 4)):
                 self._hist_order(acc, next(iter(acc.devices)), next(iter(acc.ips)),
-                                 amount=r.uniform(80, 400), fraud=True)
+                                 amount=r.uniform(80 * K, 400 * K), fraud=True)
         self.orders.sort(key=lambda o: o["ts"])
 
     def spawn_ring(self, size=6, label="ring", history=False, shared_devices=2, shared_ips=2,
-                   country=None, age_range=(1, 40), amount_range=(150, 900), disposable_rate=0.6):
+                   country=None, age_range=(1, 40), amount_range=(150 * K, 900 * K), disposable_rate=0.6):
         r = self.rng
         devs = [self.new_device() for _ in range(shared_devices)]
         ipc = country or r.choice(RISKY_COUNTRIES + ["US"])
@@ -180,10 +181,10 @@ class Twin:
 
     def _hist_order(self, acc, device, ip, amount=None, fraud=False, merchant=None):
         r = self.rng
-        amount = amount or round(r.lognormvariate(3.6, 0.7), 2)
+        amount = amount or round(r.lognormvariate(3.6, 0.7) * K, 2)
         self.orders.append({
             "id": self._next("O"), "account": acc.id, "merchant": merchant or r.choice(list(self.merchants)),
-            "amount": round(min(amount, 4000), 2), "ts": -r.uniform(0, 60 * 24 * 30), "device": device, "ip": ip,
+            "amount": round(min(amount, 4000 * K), 2), "ts": -r.uniform(0, 60 * 24 * 30), "device": device, "ip": ip,
             "ip_country": self.ips.get(ip, acc.country), "status": "captured", "risk": None, "decision": "approve",
             "fraud": fraud, "source": "history", "pay_order_id": None, "factors": [],
         })
@@ -239,7 +240,7 @@ class Twin:
             mism = np.mean([o["ip_country"] != a.country for o in os_]) if os_ else 0
             n_dev = len(a.devices) + (1 if extra and extra["account"] == a.id and extra["device"] not in a.devices else 0)
             X[i, 4:14] = [math.log1p(a.age_days) / math.log1p(2000), math.log1p(len(os_)) / 3,
-                          math.log1p(np.mean(amts)) / 8, math.log1p(max(amts)) / 8, min(recent / 5, 1),
+                          math.log1p(np.mean(amts) / K) / 8, math.log1p(max(amts) / K) / 8, min(recent / 5, 1),
                           n_dev / 4, len(a.ips) / 4, mism, float(a.kyc),
                           float(a.email.split("@")[1] in DISPOSABLE)]
         deg = mask.sum(axis=1) - 1
@@ -294,7 +295,7 @@ class Twin:
             for o in self.orders:  # back-fill scores on mirrored history so what-if has traffic to replay
                 if o.get("risk") is None:
                     others = [x["amount"] for x in by.get(o["account"], []) if x is not o]
-                    o["spend_ratio"] = round(o["amount"] / ((np.mean(others) if others else 60.0) + 20), 2)
+                    o["spend_ratio"] = round(o["amount"] / ((np.mean(others) if others else 60.0 * K) + 20 * K), 2)
                     o["risk"] = round(self._probs.get(o["account"], 0) * 0.95, 3)
                     o["decision"] = self.decide(o["risk"], o["amount"], False)
             return self.metrics
@@ -355,7 +356,7 @@ class Twin:
             dev_others = [a for a in self.accounts.values() if device in a.devices and a.id != account]
             dev_risk = max((self._probs.get(a.id, 0) for a in dev_others), default=0.0)
             hist = [o for o in self.orders if o["account"] == account and o["status"] != "blocked"]
-            avg = np.mean([o["amount"] for o in hist]) if hist else 60.0
+            avg = np.mean([o["amount"] for o in hist]) if hist else 60.0 * K
             velocity = sum(1 for o in hist if o["ts"] > self.clock - 60)
             new_device = device not in acc.devices
             geo = self.ips.get(ip, acc.country) != acc.country
@@ -367,7 +368,7 @@ class Twin:
             if geo:
                 t += 0.25
                 factors.append(f"IP country {self.ips.get(ip)} differs from account country {acc.country}")
-            ratio = amount / (avg + 20)
+            ratio = amount / (avg + 20 * K)
             if ratio > 2:
                 t += 0.2 * min(ratio / 6, 1)
                 factors.append(f"amount is {ratio:.1f}x this buyer's usual spend")
@@ -428,7 +429,7 @@ class Twin:
                 acc.devices.add(device)
                 acc.ips.add(ip)
             self._dirty = True
-            self._event("order", f"{order['id']} {acc.name} ${amount:.2f} at {self.merchants[merchant]['name']}"
+            self._event("order", f"{order['id']} {acc.name} {rs(amount)} at {self.merchants[merchant]['name']}"
                                  f" -> {decision.upper()} (risk {s['risk']:.2f})", order=order["id"],
                         level={"approve": "ok", "review": "warn", "block": "bad"}[decision])
             return order
@@ -453,11 +454,11 @@ class Twin:
             for _ in range(n):
                 if bad and r.random() < fraud_rate:
                     a = r.choice(bad)
-                    amt = r.uniform(120, 900)
+                    amt = r.uniform(120 * K, 900 * K)
                     m = r.choice(["M-02", "M-07", "M-09"])
                 else:
                     a = r.choice(legit)
-                    amt = round(r.lognormvariate(3.6, 0.6), 2)
+                    amt = round(r.lognormvariate(3.6, 0.6) * K, 2)
                     m = r.choice(list(self.merchants))
                     roll = r.random()
                     if roll < 0.06:  # real customers make the odd big purchase
@@ -474,30 +475,30 @@ class Twin:
         scored = [o for o in self.orders if o.get("risk") is not None][-last_n:] + list(extra_orders or [])
 
         def run(p):
-            res = {"approved": 0, "review": 0, "blocked": 0, "fraud_caught_usd": 0.0, "fraud_missed_usd": 0.0,
-                   "good_blocked_usd": 0.0, "good_reviewed": 0, "fraud_total_usd": 0.0,
-                   "good_blocked": 0, "good_total": 0, "fraud_blocked_usd": 0.0, "fraud_reviewed_usd": 0.0}
+            res = {"approved": 0, "review": 0, "blocked": 0, "fraud_caught_inr": 0.0, "fraud_missed_inr": 0.0,
+                   "good_blocked_inr": 0.0, "good_reviewed": 0, "fraud_total_inr": 0.0,
+                   "good_blocked": 0, "good_total": 0, "fraud_blocked_inr": 0.0, "fraud_reviewed_inr": 0.0}
             for o in scored:
                 d = self.decide(o["risk"], o["amount"], o.get("new_device", False), p, o.get("spend_ratio", 0))
                 res[{"approve": "approved", "review": "review", "block": "blocked"}[d]] += 1
                 if o["fraud"]:
-                    res["fraud_total_usd"] += o["amount"]
+                    res["fraud_total_inr"] += o["amount"]
                     if d == "approve":
-                        res["fraud_missed_usd"] += o["amount"]
+                        res["fraud_missed_inr"] += o["amount"]
                     else:  # "caught" = intercepted: blocked or sent to review
-                        res["fraud_caught_usd"] += o["amount"]
-                        res["fraud_blocked_usd" if d == "block" else "fraud_reviewed_usd"] += o["amount"]
+                        res["fraud_caught_inr"] += o["amount"]
+                        res["fraud_blocked_inr" if d == "block" else "fraud_reviewed_inr"] += o["amount"]
                 else:
                     res["good_total"] += 1
                     if d == "block":
-                        res["good_blocked_usd"] += o["amount"]
+                        res["good_blocked_inr"] += o["amount"]
                         res["good_blocked"] += 1
                     if d == "review":
                         res["good_reviewed"] += 1
             for k in list(res):
-                if k.endswith("usd"):
+                if k.endswith("inr"):
                     res[k] = round(res[k], 2)
-            res["catch_rate"] = round(res["fraud_caught_usd"] / max(res["fraud_total_usd"], 1), 3)
+            res["catch_rate"] = round(res["fraud_caught_inr"] / max(res["fraud_total_inr"], 1), 3)
             return res
 
         merged = {**self.policy, **policy}
@@ -505,11 +506,11 @@ class Twin:
                 "current_policy": self.policy, "proposed_policy": merged}
 
     # ------------------------------------------------- rules vs graph
-    def compare_engines(self, extra_orders=None, hardened_policy=None, last_n=400, review_cost=4.0):
+    def compare_engines(self, extra_orders=None, hardened_policy=None, last_n=400, review_cost=4.0 * K):
         """Replay the same orders through (a) rules only, (b) GAT + rules, (c) GAT + rules under a hardened policy.
 
         Only orders scored live (with a stored rules score) are used, so every engine sees identical inputs.
-        "Intercepted" = blocked or sent to review; blocked and reviewed fraud dollars are reported separately.
+        "Intercepted" = blocked or sent to review; blocked and reviewed fraud rupees are reported separately.
         """
         recent = [o for o in self.orders if o.get("txn_score") is not None][-last_n:]
         orders = recent + [o for o in (extra_orders or []) if o.get("txn_score") is not None]
@@ -523,38 +524,38 @@ class Twin:
         def kind(o):
             return o.get("attack") or ("live fraud traffic" if o["fraud"] else None)
 
-        out = {"orders": len(orders), "attack_orders": len(orders) - len(recent), "review_cost_usd": review_cost,
+        out = {"orders": len(orders), "attack_orders": len(orders) - len(recent), "review_cost_inr": review_cost,
                "engines": {}, "by_attack": {}}
         for name, (score, pol) in engines.items():
-            m = {"fraud_total_usd": 0.0, "fraud_blocked_usd": 0.0, "fraud_reviewed_usd": 0.0, "fraud_missed_usd": 0.0,
-                 "good_total": 0, "good_reviewed": 0, "good_blocked": 0, "good_blocked_usd": 0.0}
+            m = {"fraud_total_inr": 0.0, "fraud_blocked_inr": 0.0, "fraud_reviewed_inr": 0.0, "fraud_missed_inr": 0.0,
+                 "good_total": 0, "good_reviewed": 0, "good_blocked": 0, "good_blocked_inr": 0.0}
             per = {}
             for o in orders:
                 d = self.decide(score(o), o["amount"], o.get("new_device", False), pol, o.get("spend_ratio", 0))
                 if o["fraud"]:
-                    m["fraud_total_usd"] += o["amount"]
-                    key = {"block": "fraud_blocked_usd", "review": "fraud_reviewed_usd", "approve": "fraud_missed_usd"}[d]
+                    m["fraud_total_inr"] += o["amount"]
+                    key = {"block": "fraud_blocked_inr", "review": "fraud_reviewed_inr", "approve": "fraud_missed_inr"}[d]
                     m[key] += o["amount"]
                     k = kind(o)
-                    pk = per.setdefault(k, {"total_usd": 0.0, "intercepted_usd": 0.0})
-                    pk["total_usd"] += o["amount"]
+                    pk = per.setdefault(k, {"total_inr": 0.0, "intercepted_inr": 0.0})
+                    pk["total_inr"] += o["amount"]
                     if d != "approve":
-                        pk["intercepted_usd"] += o["amount"]
+                        pk["intercepted_inr"] += o["amount"]
                 else:
                     m["good_total"] += 1
                     if d == "review":
                         m["good_reviewed"] += 1
                     elif d == "block":
                         m["good_blocked"] += 1
-                        m["good_blocked_usd"] += o["amount"]
+                        m["good_blocked_inr"] += o["amount"]
             m = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in m.items()}
-            m["fraud_intercepted_usd"] = round(m["fraud_blocked_usd"] + m["fraud_reviewed_usd"], 2)
-            m["intercept_rate"] = round(m["fraud_intercepted_usd"] / max(m["fraud_total_usd"], 1), 3)
-            m["false_positive_cost_usd"] = round(m["good_blocked_usd"] + review_cost * m["good_reviewed"], 2)
+            m["fraud_intercepted_inr"] = round(m["fraud_blocked_inr"] + m["fraud_reviewed_inr"], 2)
+            m["intercept_rate"] = round(m["fraud_intercepted_inr"] / max(m["fraud_total_inr"], 1), 3)
+            m["false_positive_cost_inr"] = round(m["good_blocked_inr"] + review_cost * m["good_reviewed"], 2)
             out["engines"][name] = m
             for k, v in per.items():
-                out["by_attack"].setdefault(k, {"total_usd": round(v["total_usd"], 2)})[name] = round(
-                    v["intercepted_usd"] / max(v["total_usd"], 1e-9), 3)
+                out["by_attack"].setdefault(k, {"total_inr": round(v["total_inr"], 2)})[name] = round(
+                    v["intercepted_inr"] / max(v["total_inr"], 1e-9), 3)
         # the honest headline: red-team attack orders only (fresh accounts the GAT never saw a label for)
         unseen = {}
         for name, (score, pol) in engines.items():
@@ -565,7 +566,7 @@ class Twin:
                     if self.decide(score(o), o["amount"], o.get("new_device", False), pol,
                                    o.get("spend_ratio", 0)) != "approve":
                         icp += o["amount"]
-            unseen[name] = {"total_usd": round(tot, 2), "intercepted_usd": round(icp, 2),
+            unseen[name] = {"total_inr": round(tot, 2), "intercepted_inr": round(icp, 2),
                             "intercept_rate": round(icp / max(tot, 1e-9), 3)}
         out["unseen_attacks"] = unseen
         out["account_auc"] = self.account_auc()
@@ -640,7 +641,7 @@ class Twin:
             "approved": sum(o["decision"] == "approve" for o in live),
             "review": sum(o["decision"] == "review" for o in live),
             "blocked": sum(o["decision"] == "block" for o in live),
-            "blocked_usd": round(sum(o["amount"] for o in live if o["decision"] == "block"), 2),
+            "blocked_inr": round(sum(o["amount"] for o in live if o["decision"] == "block"), 2),
             "high_risk_accounts": int(sum(p >= 0.5 for p in acc_risk)),
             "frozen": sum(a.status == "frozen" for a in self.accounts.values()),
             "clock_min": round(self.clock, 1), "model": {k: v for k, v in self.metrics.items() if k != "history"},

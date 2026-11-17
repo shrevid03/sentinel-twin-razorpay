@@ -1,7 +1,8 @@
 """Channel3 product search: real products from many retailers for the shopping agent.
 
 Live only when CHANNEL3_API_KEY is set. Results are mapped to the demo catalog's shape and cached
-by SKU so checkout can resolve them. The key is never logged. Payment still runs in Razorpay test mode:
+by SKU so checkout can resolve them. Channel3 prices are in US dollars; they are converted to rupees on ingestion
+at CHANNEL3_USD_INR (default 84) so the whole app works in INR. The key is never logged. Payment still runs in Razorpay test mode:
 we do not buy from the retailer.
 """
 import os
@@ -12,6 +13,8 @@ import httpx
 URL = "https://api.trychannel3.com/v1/search"
 CACHE: dict[str, dict] = {}
 status = {"enabled": False, "searches": 0, "errors": 0, "last_error": None}
+
+USD_INR = float(os.getenv("CHANNEL3_USD_INR", "84") or 84)
 
 GIFT_CARD = re.compile(r"gift\s*card|e-?gift|voucher", re.I)
 CATEGORIES = [
@@ -62,7 +65,7 @@ def to_item(p):
     desc = (p.get("description") or "")[:240]
     brands = p.get("brands") or []
     item = {"sku": f"C3-{p['id']}", "merchant": o.get("domain") or "retailer", "name": title,
-            "price": round(float(o["price"]["price"]), 2), "category": _category(f"{title} {desc}"),
+            "price": round(float(o["price"]["price"]) * USD_INR, 2), "price_usd": round(float(o["price"]["price"]), 2), "category": _category(f"{title} {desc}"),
             "description": desc, "image": img.get("cleaned_url") or img.get("url"), "retailer_url": o.get("url"),
             "brand": brands[0].get("name") if brands else None, "source": "channel3"}
     item["twin_merchant"] = TWIN_MERCHANT.get(item["category"], "M-05")
@@ -71,13 +74,13 @@ def to_item(p):
 
 
 def search(query, max_price=None, limit=8):
-    """Live Channel3 search. Raises on any failure so the caller can fall back to the demo catalog."""
+    """Live Channel3 search (max_price in rupees). Raises on any failure so the caller can fall back to the demo catalog."""
     key = os.getenv("CHANNEL3_API_KEY")
     if not key:
         raise RuntimeError("CHANNEL3_API_KEY not set")
     body = {"query": query or "gift", "limit": int(limit), "filters": {"availability": ["InStock"]}}
     if max_price is not None:
-        body["filters"]["price"] = {"min_price": 0, "max_price": float(max_price)}
+        body["filters"]["price"] = {"min_price": 0, "max_price": round(float(max_price) / USD_INR, 2)}
     last = None
     for _ in range(2):  # one retry
         try:

@@ -9,7 +9,7 @@ from app import agents
 from app.razorpay import Razorpay, RazorpayError
 from app.twin import Twin
 
-CART = [{"sku": "SKU-COF-02", "qty": 1}]  # $32 pour-over set
+CART = [{"sku": "SKU-COF-02", "qty": 1}]  # ₹2,699 pour-over set
 
 
 def _sig(secret, msg):
@@ -82,8 +82,8 @@ def test_live_capture_flow_captures_authorized_payment_once(monkeypatch):
             return {"id": "pay_B", "order_id": "order_A", "status": "authorized", "amount": 268800, "currency": "INR"}
         return {"id": "pay_B", "order_id": "order_A", "status": "captured", "amount": 268800, "currency": "INR"}
     monkeypatch.setattr(rp, "_req", fake)
-    o = rp.create_order([{"name": "x", "price": 32.0, "qty": 1, "sku": "S"}], "twin-1")
-    assert calls[0][2]["amount"] == 268800 and calls[0][2]["currency"] == "INR"  # $32 x 84 in paise
+    o = rp.create_order([{"name": "x", "price": 2699.0, "qty": 1, "sku": "S"}], "twin-1")
+    assert calls[0][2]["amount"] == 269900 and calls[0][2]["currency"] == "INR"  # ₹2,699 in paise
     assert calls[0][2]["payment"]["capture"] == "manual"
     res = rp.capture_order(o["id"], "pay_B", _sig("s3cret", "order_A|pay_B"))
     assert res["status"] == "COMPLETED" and res["capture_id"] == "pay_B"
