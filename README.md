@@ -211,7 +211,7 @@ pytest -q
 ## A 3-minute tour
 
 1. **Command center**: the twin graph lights up fraud rings in red. Click a node to see the attention weights behind its score.
-2. **Concierge**: pick Hindi, tap the mic, say *"मेरी माँ के लिए दिवाली का तोहफ़ा 40 डॉलर से कम में खरीदो"*. The agent reads the mandate, searches, checks the twin, creates a Razorpay order, and you pay it in Razorpay Checkout with test UPI.
+2. **Concierge**: pick Hindi, tap the mic, say *"मेरी माँ के लिए दिवाली का तोहफ़ा 3000 रुपये से कम में खरीदो"*. The agent reads the mandate, searches, checks the twin, creates a Razorpay order, and you pay it in Razorpay Checkout with test UPI.
 3. **Red team**: *Launch adaptive campaign*. Watch it find that a quiet account takeover and low-and-slow synthetic identities slip through.
 4. **The defining moment**: open **Defense drill** and click *Run defense drill*. Watch the attacks get through, the simulator pick a policy that prices false positives, the same attacks get stopped, and the before → after scorecard. Then *Apply hardened policy to live* (or *Roll back*).
 5. **Investigator**: *Investigate riskiest*. It maps the ring, files a case report and proposes restrictions. Approve or reject them in the **Review queue**, then open the audit trail.
