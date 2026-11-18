@@ -72,6 +72,30 @@ What it means for Sentinel Twin:
 * A production version would need what CARE-GNN adds: filter out dissimilar neighbours, learn how much to trust each relation, and keep a skip connection to the node's own features. The current GAT has none of these.
 * The dataset is not committed. To reproduce: download `Amazon.zip` from the CARE-GNN repo, unzip it, then `python scripts/real_data_eval.py path/to/Amazon.mat --n 2500 --seeds 3 --epochs 200` (about 40 min on a laptop CPU, since the GAT uses a dense mask).
 
+### Second real dataset: Elliptic Bitcoin transactions
+
+`scripts/elliptic_eval.py` runs the same GAT on the **Elliptic** dataset (Weber et al., 2019): 203,769 Bitcoin transactions linked by 234,355 payment flows over 49 time steps, 46,564 labelled (9.8% illicit). Protocol as in the paper: train on time steps 1-34, test on 35-49 (16,670 labelled transactions, 1,083 illicit). Elliptic ships 72 *aggregated* features that already summarise each transaction's neighbours, so to measure what the graph itself adds, **every model gets only the 93 local features** (the paper's 94 minus the time step). The 165-feature models are a reference line only. The GAT trains on one graph per time step: the labelled transactions plus their 1-hop neighbours, capped at 2,500 nodes (16 of 49 steps hit the cap). It runs 80 epochs, with one seed.
+
+Unlike Amazon, these edges carry signal: **51% of an illicit transaction's labelled neighbours are also illicit**, against a 9.8% base rate (98% for licit transactions).
+
+| Illicit class, test steps 35-49 | F1 | Precision | Recall | AUC | Recall, top 5% reviewed | Precision, top 5% |
+|---|---|---|---|---|---|---|
+| Logistic regression, local | 0.242 | 0.141 | 0.860 | 0.866 | 0.133 | 0.173 |
+| **Random forest, local** | **0.772** | **0.844** | 0.712 | 0.893 | **0.696** | **0.904** |
+| GAT, no edges, local | 0.377 | 0.247 | 0.800 | **0.894** | 0.646 | 0.839 |
+| GAT + transaction edges, local | 0.527 | 0.431 | 0.680 | 0.873 | 0.531 | 0.689 |
+| *Reference:* random forest, all 165 (includes neighbour aggregates) | 0.802 | 0.900 | 0.724 | 0.918 | 0.721 | 0.936 |
+
+F1, precision and recall are at a 0.5 cutoff. Logistic regression and the GAT use balanced class weights, which pushes them towards recall at that cutoff. The random forest is unweighted, as in the paper. The two top-5% columns don't depend on a cutoff.
+
+What this honestly shows:
+* **Edges help the GAT's precision at the cutoff but not its ranking.** Adding edges lifts F1 from 0.38 to 0.53 (precision 0.25 to 0.43), but AUC falls from 0.894 to 0.873, and the share of fraud caught in the riskiest 5% falls from 65% to 53%. So the graph changes how confident the model is more than how well it ranks.
+* **A random forest on the same local features is still clearly best** (F1 0.77, 90% precision in the riskiest 5%). This matches the paper, where a random forest beat a graph convolutional network. Tree models fit these nonlinear features much better than a linear model (0.24) or our small GAT.
+* **Every model fails after the dark-market shutdown at time step 43:** illicit F1 is at most 0.10 from step 43 on, for all models (it was 0.34-0.90 before). That is the same failure the paper reports.
+* Caveats: one seed, a small GAT (8 hidden units x 4 heads, 80 epochs) and capped step graphs.
+
+Across both datasets the lesson is the same. The graph only pays off when links connect fraud to fraud: shared devices, IPs or cards rather than shared products. And the GAT needs the CARE-GNN-style parts it lacks: neighbour filtering, per-relation trust and a skip connection to the node's own features. To reproduce, download the three CSVs from `https://data.pyg.org/datasets/elliptic/`, unzip them into a folder, and run `python scripts/elliptic_eval.py that/folder --epochs 80` (about 25 min, needs `scikit-learn` and `pandas`).
+
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
 * The spending mandate (a Reserve Pay-style consent: approve a limit once, the agent spends inside it) and the risk gate run in code, never in the prompt. A prompt-injected agent cannot buy blocked gift cards.
@@ -265,6 +289,7 @@ tests/
 * The defense drill hardens the decision policy; it does not retrain or improve the GAT. The simulator replays stored risk scores.
 * The GAT's high account-level AUC is on synthetic data, and a no-graph model matches it there. Its measurable advantage is on new accounts joining a ring (see Rules vs graph).
 * On the real Amazon fraud graph the GAT's edges lower AUC (0.96 features only vs 0.87-0.91 with relations) because fraudsters there are camouflaged among honest neighbours (see Tested on real data).
+* On Elliptic (Bitcoin) the transaction edges raise the GAT's F1 at a 0.5 cutoff (0.38 to 0.53) but lower its AUC (0.894 to 0.873), and a random forest on the same local features beats both (F1 0.77).
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
 * State is in memory: a restart (or Reset demo) starts from the seed again.
 
