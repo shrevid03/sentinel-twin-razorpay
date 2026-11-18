@@ -96,6 +96,26 @@ What this honestly shows:
 
 Across both datasets the lesson is the same. The graph only pays off when links connect fraud to fraud: shared devices, IPs or cards rather than shared products. And the GAT needs the CARE-GNN-style parts it lacks: neighbour filtering, per-relation trust and a skip connection to the node's own features. To reproduce, download the three CSVs from `https://data.pyg.org/datasets/elliptic/`, unzip them into a folder, and run `python scripts/elliptic_eval.py that/folder --epochs 80` (about 25 min, needs `scikit-learn` and `pandas`).
 
+### Third real dataset: T-Finance (a financial transaction network)
+
+`scripts/tfinance_eval.py` runs the same comparison on **T-Finance** (Tang et al., ICML 2022, also part of the GADBench benchmark): 39,357 real accounts with 10 account features, linked by 21.2M transaction records (about 1,078 links per account). 4.6% of the accounts are labelled anomalous: fraud, money laundering or online gambling. This is the closest public dataset to a payments business. The file is a DGL graph, and DGL has no Mac build for this Python, so the script reads the arrays straight from the file. The protocol matches Amazon: 5 seeds, a stratified sample of 2,500 accounts, the induced subgraph (about 66 links per account remain), 60/20/20 split and 200 GAT epochs. Features are log-transformed and then standardised.
+
+The links carry strong signal: **54% of an anomalous account's neighbours are anomalous, against 2.4% for a normal account** (base rate 4.6%).
+
+| Test set (500 accounts, about 23 anomalous; mean ± std over 5 seeds) | AUC | F1 at 0.5 | Recall, top 5% reviewed | Precision, top 5% |
+|---|---|---|---|---|
+| Logistic regression (features) | **0.956 ± 0.009** | 0.458 | 0.748 | 0.688 |
+| Random forest (features) | 0.949 ± 0.018 | **0.746** | 0.730 | 0.672 |
+| GAT, no edges | 0.917 ± 0.018 | 0.413 | 0.713 | 0.656 |
+| **GAT + transaction edges** | 0.944 ± 0.037 | 0.533 | **0.757** | **0.696** |
+
+What this honestly shows:
+* **Here the graph helps the GAT on every metric:** AUC goes from 0.917 to 0.944, F1 from 0.41 to 0.53, and the share of fraud caught in the riskiest 5% from 71% to 76%. It is the first of the three datasets where that happens, and the one where the links connect fraud to fraud most strongly.
+* **With edges, the GAT catches up with the feature-only models but does not clearly beat them.** It is level at a 5% review budget (76% of fraud caught vs 75% for logistic regression and 73% for the random forest) and level on AUC. The differences are inside the noise: each test split has only about 23 anomalous accounts, and the standard deviations are 0.04-0.10.
+* Without edges our GAT is weaker than logistic regression on the same features (0.917 vs 0.956 AUC), because it has no skip connection to a node's own features. The edges partly make up for that, which again points to the same next step.
+
+**Across the three datasets:** the graph's value tracks how strongly links connect fraud to fraud. On Amazon (11-21% of a fraudster's neighbours are fraudsters) the edges hurt. On Elliptic (51%) they shift the GAT's confidence but not its ranking. On T-Finance (54%, against 2.4% for normal accounts) they help it on every metric. Sentinel Twin's graph links accounts through shared devices and IPs, the strongly linked kind. To reproduce, download `tfinance.zip` from the BWGNN repo's Google Drive folder (github.com/squareRoot3/Rethinking-Anomaly-Detection), unzip it, then run `python scripts/tfinance_eval.py path/to/tfinance --seeds 5` (about 20 min).
+
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
 * The spending mandate (a Reserve Pay-style consent: approve a limit once, the agent spends inside it) and the risk gate run in code, never in the prompt. A prompt-injected agent cannot buy blocked gift cards.
@@ -290,6 +310,7 @@ tests/
 * The GAT's high account-level AUC is on synthetic data, and a no-graph model matches it there. Its measurable advantage is on new accounts joining a ring (see Rules vs graph).
 * On the real Amazon fraud graph the GAT's edges lower AUC (0.96 features only vs 0.87-0.91 with relations) because fraudsters there are camouflaged among honest neighbours (see Tested on real data).
 * On Elliptic (Bitcoin) the transaction edges raise the GAT's F1 at a 0.5 cutoff (0.38 to 0.53) but lower its AUC (0.894 to 0.873), and a random forest on the same local features beats both (F1 0.77).
+* On T-Finance the edges lift the GAT to the level of feature-only models (AUC 0.944 vs 0.956 for logistic regression; 76% vs 75% of fraud caught when reviewing the riskiest 5%), not clearly past them, and the test splits are small (about 23 anomalous accounts).
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
 * State is in memory: a restart (or Reset demo) starts from the seed again.
 
