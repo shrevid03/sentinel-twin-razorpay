@@ -14,6 +14,10 @@ Protocol, matching the Amazon evaluation: for each seed, a stratified sample of 
 features log1p-transformed and standardised, 60/20/20 split. Models: class-weighted logistic regression, random
 forest, the app's GAT with no edges, and the GAT with the transaction edges. Metrics on the test split: AUC, F1 at
 0.5, and recall/precision when the riskiest 5% are reviewed. Also reports the neighbour statistic on the full graph.
+
+GAT variants added after the first runs (app/gat.py options, both off by default): "skip" adds each node's own
+transformed features to the attention output (A @ Z + Z); "filter" keeps, for each node, the half of its neighbours
+whose label-aware score (a logistic regression fitted on training nodes only) is closest to its own (CARE-GNN style).
 """
 from __future__ import annotations
 
@@ -152,20 +156,23 @@ def main():
         for name, mdl in (("logreg", lr), ("rf", rf)):
             res[name] = metrics(y[te], mdl.predict_proba(X[te])[:, 1])
             print(f"  {name:<10} AUC {res[name]['auc']:.4f}  F1 {res[name]['f1']:.3f}", flush=True)
-        for name, mk in (("gat_none", np.eye(len(idx), dtype=bool)), ("gat_edges", mask)):
+        eye = np.eye(len(idx), dtype=bool)
+        for name, mk, opt in (("gat_none", eye, {}), ("gat_edges", mask, {}), ("gat_edges_skip", mask, {"skip": True}),
+                              ("gat_edges_skip_filter", mask, {"skip": True, "filter_keep": 0.5})):
             t1 = time.time()
-            model = GAT(X.shape[1], hidden=8, heads=4, seed=seed)
+            model = GAT(X.shape[1], hidden=8, heads=4, seed=seed, **opt)
             hist = model.fit(X, mk, y, tr, va, epochs=a.epochs, lr=a.lr)
             p = model.predict_proba(X, mk)
             res[name] = metrics(y[te], p[te])
             res[name]["val_auc"] = hist[-1]["val_auc"]
             res[name]["seconds"] = round(time.time() - t1, 1)
-            print(f"  {name:<10} AUC {res[name]['auc']:.4f}  F1 {res[name]['f1']:.3f}  (val {hist[-1]['val_auc']:.4f}, "
+            print(f"  {name:<22} AUC {res[name]['auc']:.4f}  F1 {res[name]['f1']:.3f}  (val {hist[-1]['val_auc']:.4f}, "
                   f"{res[name]['seconds']}s)", flush=True)
         runs.append(res)
 
     models = [("logreg", "LogReg (features)"), ("rf", "RandomForest (features)"),
-              ("gat_none", "GAT, no edges"), ("gat_edges", "GAT + transaction edges")]
+              ("gat_none", "GAT, no edges"), ("gat_edges", "GAT + transaction edges"),
+              ("gat_edges_skip", "GAT + edges, skip"), ("gat_edges_skip_filter", "GAT + edges, skip+filter")]
     keys = [("auc", "AUC"), ("f1", "F1@0.5"), ("precision", "Prec@0.5"), ("recall", "Rec@0.5"),
             ("recall_top5", "R@5%"), ("precision_top5", "P@5%")]
     summary = {}

@@ -8,6 +8,10 @@ relations: U-P-U (reviewed the same product), U-S-U (same star rating within a w
 and U-V-U (top-5% mutual review-text similarity). Following the CARE-GNN protocol only
 users with index >= 3305 are used (the first 3,305 are unlabelled).
 
+GAT variants added after the first runs (app/gat.py options, both off by default): "skip" adds each node's own
+transformed features to the attention output (A @ Z + Z); "filter" keeps, for each node, the half of its neighbours
+whose label-aware score (a logistic regression fitted on training nodes only) is closest to its own (CARE-GNN style).
+
 For each seed a stratified sample of N labelled users is drawn, features are
 standardised, and a 60/20/20 split is used. Models:
   * logreg      class-weighted numpy logistic regression on features only
@@ -141,6 +145,9 @@ def main():
             union = A if union is None else union + A
             masks[f"gat_{key}"] = (A.toarray() > 0) | eye
         masks["gat_all"] = (union.toarray() > 0) | eye
+        masks["gat_all_skip"] = masks["gat_all"]
+        masks["gat_all_skip_filter"] = masks["gat_all"]
+        opts = {"gat_all_skip": {"skip": True}, "gat_all_skip_filter": {"skip": True, "filter_keep": 0.5}}
 
         res = {"seed": seed, "n": len(y), "fraud": int(y.sum()),
                "edges": {k: int((m.sum() - len(y)) // 2) for k, m in masks.items()}}
@@ -149,21 +156,21 @@ def main():
         print(f"  logreg    AUC {res['logreg']['auc']:.4f}")
         for name, mask in masks.items():
             t0 = time.time()
-            model = GAT(X.shape[1], hidden=8, heads=4, seed=seed)
+            model = GAT(X.shape[1], hidden=8, heads=4, seed=seed, **opts.get(name, {}))
             hist = model.fit(X, mask, y, tr, va, epochs=a.epochs, lr=a.lr)
             s = model.predict_proba(X, mask)
             res[name] = metrics(y[te], s[te])
             res[name]["val_auc"] = hist[-1]["val_auc"]
             res[name]["seconds"] = round(time.time() - t0, 1)
-            print(f"  {name:<9} AUC {res[name]['auc']:.4f}  (val {hist[-1]['val_auc']:.4f}, "
+            print(f"  {name:<19} AUC {res[name]['auc']:.4f}  (val {hist[-1]['val_auc']:.4f}, "
                   f"{res[name]['seconds']}s, {res['edges'][name]:,} edges)")
         runs.append(res)
 
-    models = ["logreg", "gat_none", "gat_upu", "gat_usu", "gat_uvu", "gat_all"]
+    models = ["logreg", "gat_none", "gat_upu", "gat_usu", "gat_uvu", "gat_all", "gat_all_skip", "gat_all_skip_filter"]
     keys = ["auc"] + [f"{m}@{int(p * 100)}%" for p in REVIEW_PCTS for m in ("recall", "precision")]
     summary = {}
     print(f"\nSummary (mean ± std over {a.seeds} seeds, N={a.n}, test set = 20%)")
-    print(f"  {'model':<9} " + "  ".join(f"{k:>16}" for k in keys))
+    print(f"  {'model':<19} " + "  ".join(f"{k:>16}" for k in keys))
     for m in models:
         summary[m] = {}
         cells = []
@@ -171,7 +178,7 @@ def main():
             vals = np.array([r[m][k] for r in runs])
             summary[m][k] = {"mean": float(vals.mean()), "std": float(vals.std())}
             cells.append(f"{vals.mean():.3f} ± {vals.std():.3f}".rjust(16))
-        print(f"  {m:<9} " + "  ".join(cells))
+        print(f"  {m:<19} " + "  ".join(cells))
 
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w") as f:

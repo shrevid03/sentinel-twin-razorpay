@@ -17,6 +17,10 @@ neighbourhood, so models on all 165 features are reported only as a reference.
 Models: logistic regression and random forest (the paper's best) on features; the app's GAT with no edges
 (identity mask); the same GAT with the transaction edges. The GAT is dense, so each time step is one graph made of
 its labelled nodes plus their 1-hop neighbours, capped at --cap nodes (labelled nodes always kept).
+
+GAT variants added after the first runs (app/gat.py options, both off by default): "skip" adds each node's own
+transformed features to the attention output (A @ Z + Z); "filter" keeps, for each node, the half of its neighbours
+whose label-aware score (a logistic regression fitted on training nodes only) is closest to its own (CARE-GNN style).
 """
 from __future__ import annotations
 
@@ -109,8 +113,12 @@ def metrics(y, p, thr=0.5, review=0.05):
             "recall_top5": hits / max(int(y.sum()), 1), "precision_top5": hits / k}
 
 
-def train_gat(graphs, X, y, epochs, lr, seed, wd=5e-4, use_edges=True):
-    model = GAT(X.shape[1], hidden=8, heads=4, seed=seed)
+def train_gat(graphs, X, y, epochs, lr, seed, wd=5e-4, use_edges=True, **opt):
+    model = GAT(X.shape[1], hidden=8, heads=4, seed=seed, **opt)
+    if model.filter_keep:  # similarity model on the labelled training nodes only
+        lab_nodes = np.concatenate([n[li] for n, li, _ in graphs])
+        model.fit_similarity(X[lab_nodes], y[lab_nodes], np.arange(len(lab_nodes)))
+    masks = [model.filter_mask(X[n], m) if use_edges else np.eye(len(n), dtype=bool) for n, _, m in graphs]
     params = model.params()
     m = [np.zeros_like(p) for p in params]
     v = [np.zeros_like(p) for p in params]
@@ -122,8 +130,8 @@ def train_gat(graphs, X, y, epochs, lr, seed, wd=5e-4, use_edges=True):
     for ep in range(epochs):
         losses = []
         for gi in rng.permutation(len(graphs)):
-            nodes, li, mask = graphs[gi]
-            mk = mask if use_edges else np.eye(len(nodes), dtype=bool)
+            nodes, li, _ = graphs[gi]
+            mk = masks[gi]
             yl = np.full(len(nodes), 0)
             yl[li] = y[nodes[li]]
             loss, grads, _ = model.loss_and_grads(X[nodes], mk, yl, li, cw)
@@ -204,10 +212,12 @@ def main():
           f"edges kept: {sum(int((g[2].sum() - len(g[0])) // 2) for g in g_tr + g_te):,}", flush=True)
 
     order = None
-    for name, use_edges in (("gat_none_local", False), ("gat_edges_local", True)):
+    for name, use_edges, opt in (("gat_none_local", False, {}), ("gat_edges_local", True, {}),
+                                 ("gat_edges_skip", True, {"skip": True}),
+                                 ("gat_edges_skip_filter", True, {"skip": True, "filter_keep": 0.5})):
         t1 = time.time()
         print(f"\n{name}: training {a.epochs} epochs over {len(g_tr)} step graphs", flush=True)
-        model = train_gat(g_tr, Zl, y, a.epochs, a.lr, a.seed, use_edges=use_edges)
+        model = train_gat(g_tr, Zl, y, a.epochs, a.lr, a.seed, use_edges=use_edges, **opt)
         idx, p = gat_predict(model, g_te, Zl, use_edges=use_edges)
         if order is None:
             order = idx
@@ -226,9 +236,11 @@ def main():
             pr = (preds[name][sel] >= 0.5).astype(int)
             results[name][f"f1_{period}"] = f1_score(y[te][sel], pr, zero_division=0)
 
-    rows = ["logreg_local", "rf_local", "gat_none_local", "gat_edges_local", "logreg_all165", "rf_all165"]
+    rows = ["logreg_local", "rf_local", "gat_none_local", "gat_edges_local", "gat_edges_skip", "gat_edges_skip_filter",
+            "logreg_all165", "rf_all165"]
     label = {"logreg_local": "LogReg, local 93", "rf_local": "RandomForest, local 93",
              "gat_none_local": "GAT no edges, local 93", "gat_edges_local": "GAT + tx edges, local 93",
+             "gat_edges_skip": "GAT + edges, skip", "gat_edges_skip_filter": "GAT + edges, skip+filter",
              "logreg_all165": "LogReg, all 165*", "rf_all165": "RandomForest, all 165*"}
     print(f"\nSummary: illicit class on test steps 35-49 ({te.sum():,} labelled txs, {(y[te] == 1).sum():,} illicit), threshold 0.5")
     print(f"  {'model':<26}{'F1':>7}{'Prec':>7}{'Recall':>8}{'AUC':>7}{'R@5%':>7}{'P@5%':>7}{'F1<43':>8}{'F1>=43':>8}")
