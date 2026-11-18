@@ -52,6 +52,26 @@ Ranges are across our runs on 12 Nov 2026 (GAT training and live traffic vary). 
 * **Rules alone are slightly better on card testing**, and the graph adds nothing on account takeover and synthetic identities. There, only the policy layer helps.
 * **Account-level held-out AUC is not evidence for the graph here:** the same node features with no message passing (logistic regression) score 0.99, the same as the GAT, on 43 held-out synthetic accounts. The GAT's value shows up per transaction, when a new account joins a known ring.
 
+## Tested on real data: the Amazon fraud graph
+
+To check the GAT outside our own synthetic twin, `scripts/real_data_eval.py` runs it on the public **Amazon fraud dataset** used by CARE-GNN (Dou et al., CIKM 2020): 8,639 labelled Amazon users (9.5% fraudulent), 25 handcrafted review features, and three real relations: **U-P-U** (reviewed the same product), **U-S-U** (gave the same star rating within a week) and **U-V-U** (top 5% mutual review-text similarity). For each of 3 seeds it samples 2,500 users (stratified), splits 60/20/20 and compares a class-weighted logistic regression with the same NumPy GAT the app ships, given no edges, each relation, or all of them (200 epochs, lr 0.01).
+
+| Test set (501 users, mean ± std over 3 seeds) | AUC | Recall, top 5% reviewed | Precision, top 5% | Recall, top 10% | Precision, top 10% |
+|---|---|---|---|---|---|
+| Logistic regression (features only) | **0.962 ± 0.012** | 0.521 | 0.962 | **0.826** | **0.778** |
+| GAT, no edges | 0.959 ± 0.015 | 0.521 | 0.962 | 0.819 | 0.771 |
+| GAT on U-P-U | 0.868 ± 0.009 | 0.451 | 0.833 | 0.576 | 0.542 |
+| GAT on U-S-U | 0.910 ± 0.012 | 0.424 | 0.782 | 0.715 | 0.673 |
+| GAT on U-V-U | 0.877 ± 0.042 | 0.403 | 0.744 | 0.646 | 0.608 |
+| GAT on all three | 0.907 ± 0.032 | 0.424 | 0.782 | 0.694 | 0.654 |
+
+**What this honestly shows: on this real graph, the edges hurt.** The features alone are strong (0.96 AUC, and reviewing the riskiest 10% of users catches about 83% of fraud), and adding any relation drops the GAT to 0.87-0.91. The reason is camouflage, the effect CARE-GNN was built to handle: 95% of edges join users with the same label overall, but that is driven by the honest majority. Seen from a fraudster, only 11-21% of their neighbours are also fraudsters (base rate 9.5%), so a plain GAT that averages over neighbours mixes a fraudster's signal with mostly honest ones.
+
+What it means for Sentinel Twin:
+* The GAT's value is specific to **fraud that shares infrastructure** (rings and device farms reusing devices and IPs), which is what the twin's graph links. "Reviewed the same product" is not that kind of link. This matches our synthetic result: no-graph models match the GAT on account-level AUC, and the graph helps when a new account joins a known ring.
+* A production version would need what CARE-GNN adds: filter out dissimilar neighbours, learn how much to trust each relation, and keep a skip connection to the node's own features. The current GAT has none of these.
+* The dataset is not committed. To reproduce: download `Amazon.zip` from the CARE-GNN repo, unzip it, then `python scripts/real_data_eval.py path/to/Amazon.mat --n 2500 --seeds 3 --epochs 200` (about 40 min on a laptop CPU, since the GAT uses a dense mask).
+
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
 * The spending mandate (a Reserve Pay-style consent: approve a limit once, the agent spends inside it) and the risk gate run in code, never in the prompt. A prompt-injected agent cannot buy blocked gift cards.
@@ -244,6 +264,7 @@ tests/
 * Voice depends on the browser: Chrome and Edge support all ten locales.
 * The defense drill hardens the decision policy; it does not retrain or improve the GAT. The simulator replays stored risk scores.
 * The GAT's high account-level AUC is on synthetic data, and a no-graph model matches it there. Its measurable advantage is on new accounts joining a ring (see Rules vs graph).
+* On the real Amazon fraud graph the GAT's edges lower AUC (0.96 features only vs 0.87-0.91 with relations) because fraudsters there are camouflaged among honest neighbours (see Tested on real data).
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
 * State is in memory: a restart (or Reset demo) starts from the seed again.
 
