@@ -125,6 +125,91 @@ What this honestly shows:
 
 **Across the three datasets:** the graph's value tracks how strongly links connect fraud to fraud. On Amazon (11-21% of a fraudster's neighbours are fraudsters) the edges hurt. On Elliptic (51%) they shift the GAT's confidence but not its ranking. On T-Finance (54%, against 2.4% for normal accounts) they help it on every metric. **With the skip connection** the edge GAT is at or above every feature-only model on AUC on all three datasets (Amazon 0.968, Elliptic 0.898, T-Finance 0.958). The neighbour filter helped only on T-Finance's top-5% recall. On Amazon and Elliptic it did as well as skip alone or worse, so it is kept as an option rather than a default. Sentinel Twin's graph links accounts through shared devices and IPs, the strongly linked kind. To reproduce, download `tfinance.zip` from the BWGNN repo's Google Drive folder (github.com/squareRoot3/Rethinking-Anomaly-Detection), unzip it, then run `python scripts/tfinance_eval.py path/to/tfinance --seeds 5` (about 70 min with all four GAT variants).
 
+### New accounts: does the graph rescue accounts with no history?
+
+The public datasets score established accounts with full feature histories, which is where feature-only models are strongest. Sentinel Twin's real case is a **new** account: almost no history, but it may share a device, IP or counterparty with known fraud. `scripts/cold_start_eval.py` simulates that on T-Finance and Amazon. It uses the same seeds 0-2 and samples as above, and every model is trained on full-feature training accounts. Only the **test** accounts are made new, in one of two ways:
+* **few features:** they keep only the ~20% least informative features (2 of 10 on T-Finance, 5 of 25 on Amazon, ranked on the training split), and the rest are set to the training mean;
+* **no features:** every feature is set to the training mean, so every new account looks the same on its own.
+
+Their links are kept. That is the best case for the graph, since a genuinely new account usually also has fewer links.
+
+| T-Finance, new test accounts (3 seeds) | AUC, full features | AUC, few | AUC, none | Fraud caught in riskiest 5%, none |
+|---|---|---|---|---|
+| Logistic regression | 0.953 | 0.364 | 0.500 | none |
+| Random forest | 0.943 | 0.416 | 0.500 | none |
+| GAT, no edges | 0.903 | 0.390 | (constant) | |
+| **GAT + edges, skip** | 0.953 | 0.911 | 0.935 ± 0.027 | 72.5% |
+| **Random forest + neighbour features** (see Hybrid below) | 0.980 | **0.928** | **0.955 ± 0.011** | 72.5% |
+| *Control:* GAT + **randomly rewired** edges | | | 0.456 ± 0.074 | 0% |
+| *Control:* random forest + neighbour features, rewired edges | | | 0.623 ± 0.041 | 11.6% |
+
+| Amazon, new test accounts (3 seeds) | AUC, full features | AUC, few | AUC, none | Fraud caught in riskiest 5%, none |
+|---|---|---|---|---|
+| Logistic regression | 0.960 | 0.524 | 0.500 | none |
+| Random forest | 0.974 | 0.565 | 0.500 | none |
+| GAT, no edges | 0.959 | 0.557 | (constant) | |
+| GAT + edges, skip | 0.968 | 0.691 | 0.690 ± 0.009 | 20.1% |
+| **Random forest + neighbour features** | 0.953 | **0.836** | **0.819 ± 0.024** | 25.0% |
+| *Control:* GAT + randomly rewired edges | | | 0.540 ± 0.039 | 17.4% |
+| *Control:* random forest + neighbour features, rewired edges | | | 0.708 ± 0.044 | 16.0% |
+
+"None" means the feature-only models give every new account the same score, so they cannot rank them at all (AUC 0.5). Their "fraud caught" column reflects only how tied scores happen to be ordered; with no ranking at all, the fair figure is about 5%. The full-feature GAT numbers come from the runs above (seeds 0-2). The neighbour features are described under Hybrid; their known-fraud share uses training labels only.
+
+What this honestly shows:
+* **Without history, feature-only models are blind or worse.** With a few weak features left they fall *below* 0.5 on T-Finance (0.36-0.42): they learned what a full account looks like, and a half-blank one misleads them.
+* **The links rescue new accounts.** On T-Finance, with no features at all, the GAT still reaches AUC 0.935 and catches 72.5% of fraud in the riskiest 5% (about the same share as with full features). On Amazon, despite the camouflage, it goes from 0.5 to 0.69.
+* **The control confirms this is the real links, not a leak.** The control rewires every account's links at random, keeping roughly its number of links (about 17% of T-Finance edges are lost as duplicates when rewiring a graph this dense). On the rewired graph the GAT drops to chance (0.46 T-Finance, 0.54 Amazon). The random forest keeps a little signal (0.62 / 0.71), because its neighbour features include the account's link count, and rewiring keeps that. The code was also checked: the test accounts carry the blank features in every training pass as well as at scoring, only training labels reach the loss and the label-aware features, and a guard asserts every new test account has the identical blank feature vector.
+* **But the GAT is not the only way to get this.** A random forest given simple neighbour features matches the GAT on T-Finance (0.955 vs 0.935 AUC, same 72.5% caught) and clearly beats it on Amazon (0.82 vs 0.69).
+* Caveats: 3 seeds, small test splits (about 23 anomalous accounts on T-Finance), and links are kept intact for new accounts. The neighbour-filter variant was dropped from this test after one seed (0.72 AUC with no features against 0.95 for skip): its similarity scores are meaningless for a blank account. Each condition takes 40-100 min (`python scripts/cold_start_eval.py tfinance path/to/tfinance --seeds 3 --condition none`; add `--rewire` for the control).
+
+### Hybrid: give the random forest the graph
+
+If simple models are strong and the graph carries signal, the obvious next step is to combine them. `scripts/hybrid_eval.py` adds three kinds of graph features to logistic regression and the random forest, using the same protocols as above (seeds 0-2 on Amazon and T-Finance, Elliptic's temporal split with local features only):
+* **(a) neighbour aggregates, label-free:** the mean and max of the neighbours' features, and the log of the number of links;
+* **(b) known-fraud neighbours:** how many neighbours are training accounts, how many of those are fraud, and the share. It reads training labels only. It is left out on Elliptic, where links never cross time steps, so a test transaction never has a neighbour with a known label;
+* **(c) the GAT's risk score** (edges + skip). This is out-of-fold for training rows: two GATs, each trained on half the training split, score the other half, so the forest never sees a score the GAT produced for an account it was trained on. Validation and test rows are scored by a GAT trained on the full training split.
+
+| T-Finance (3 seeds) | AUC | F1 at 0.5 | Fraud caught, riskiest 5% |
+|---|---|---|---|
+| Logistic regression | 0.953 ± 0.009 | 0.472 | 76.8% |
+| Random forest | 0.943 ± 0.014 | 0.735 | 72.5% |
+| GAT + edges, skip (alone) | 0.953 ± 0.037 | 0.641 | 81.2% |
+| RF + (a) | 0.964 ± 0.020 | 0.859 | 82.6% |
+| **RF + (a) + (b)** | 0.980 ± 0.012 | **0.868** | **85.5%** |
+| RF + (c) | 0.976 ± 0.014 | 0.787 | 82.6% |
+| RF + (a) + (b) + (c) | 0.975 ± 0.016 | 0.859 | 85.5% |
+| **Logistic regression + (a) + (b) + (c)** | **0.983 ± 0.011** | 0.693 | **85.5%** |
+
+| Amazon (3 seeds) | AUC | F1 at 0.5 | Fraud caught, riskiest 5% | Precision, riskiest 5% |
+|---|---|---|---|---|
+| Logistic regression | 0.960 ± 0.015 | 0.763 | 51.4% | 0.949 |
+| **Random forest** | **0.974 ± 0.015** | 0.835 | 52.1% | 0.962 |
+| GAT + edges, skip (alone) | 0.968 ± 0.013 | 0.758 | 50.7% | 0.936 |
+| RF + (a) | 0.954 ± 0.023 | 0.828 | **53.5%** | **0.987** |
+| RF + (a) + (b) | 0.953 ± 0.022 | 0.823 | 53.5% | 0.987 |
+| RF + (c) | 0.973 ± 0.017 | **0.840** | 52.1% | 0.962 |
+| RF + (a) + (b) + (c) | 0.960 ± 0.017 | 0.828 | 53.5% | 0.987 |
+| Logistic regression + (a) + (b) + (c) | 0.958 ± 0.013 | 0.735 | 51.4% | 0.949 |
+
+| Elliptic (seed 0, test steps 35-49, local features) | F1 | Precision | Recall | AUC | Fraud caught, riskiest 5% | Precision, riskiest 5% |
+|---|---|---|---|---|---|---|
+| Logistic regression | 0.242 | 0.141 | 0.859 | 0.865 | 13.1% | 0.170 |
+| Random forest | 0.772 | 0.844 | 0.712 | 0.893 | 69.6% | 0.904 |
+| GAT + edges, skip (alone) | 0.507 | 0.379 | 0.765 | 0.898 | 55.3% | 0.718 |
+| **RF + (a)** | **0.815** | **0.931** | 0.725 | 0.903 | **72.4%** | **0.940** |
+| RF + (c) | 0.784 | 0.851 | 0.727 | 0.892 | 71.0% | 0.922 |
+| RF + (a) + (c) | 0.811 | 0.923 | 0.723 | **0.915** | 72.0% | 0.935 |
+| Logistic regression + (a) + (c) | 0.430 | 0.293 | 0.802 | 0.904 | 52.5% | 0.682 |
+| *Reference (earlier):* RF, all 165 incl. Elliptic's own neighbour aggregates | 0.802 | 0.900 | 0.724 | 0.918 | 72.1% | 0.936 |
+
+What this honestly shows:
+* **Where links connect fraud to fraud, the hybrid beats both the random forest and the GAT.** On T-Finance, the forest with neighbour features reaches F1 0.87 (against 0.74 for the forest and 0.64 for the GAT) and catches 85.5% of fraud in the riskiest 5% (against 72.5% and 81.2%). On Elliptic, RF + (a) has the best F1 of any model in this README (0.815), above even the forest on all 165 features with the dataset's own neighbour aggregates (0.802). RF + (a) + (c) has the best AUC on local features (0.915).
+* **On Amazon it does not.** The plain random forest is the best model on AUC (0.974, also above the GAT's 0.968), and neighbour features lower its AUC slightly (0.954). They make the very top of the list a little cleaner (98.7% precision in the riskiest 5%, against 96.2%), but these gaps are within noise. This is the camouflage result again.
+* **The GAT's score adds little on top of explicit neighbour features.** It helps a forest that has nothing else (T-Finance RF + (c): AUC 0.943 to 0.976), and it lifts logistic regression the most. But once (a) and (b) are in, adding (c) changes nothing beyond noise. So in our tests the cheapest strong design is a tree model with neighbour features; the GAT is the end-to-end alternative.
+* Caveats: 3 seeds on Amazon and T-Finance (5 were planned; the runs were cut to fit the time), one on Elliptic. The out-of-fold GAT scores for training rows come from GATs trained on half the data, so they are a little weaker than the scores for test rows. Run time is about 2 hours per dataset on a laptop CPU (`python scripts/hybrid_eval.py tfinance path/to/tfinance --seeds 3`).
+
+**What this means for Sentinel Twin:** the graph matters most for exactly the accounts Sentinel Twin cares about: new accounts that share infrastructure with known fraud. There, feature-only models are blind and link-based models keep most of their accuracy. The strongest practical design in these tests is a tree model fed neighbour features (including the share of known-fraud neighbours), with the GAT as an end-to-end option where per-neighbour attention is wanted. The app still ships the GAT.
+
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
 * The spending mandate (a Reserve Pay-style consent: approve a limit once, the agent spends inside it) and the risk gate run in code, never in the prompt. A prompt-injected agent cannot buy blocked gift cards.
@@ -321,6 +406,7 @@ tests/
 * On Elliptic (Bitcoin) a random forest on the same local features is still clearly best (F1 0.77). The GAT's best AUC (0.898, with skip) is only a hair above it, and its F1 at 0.5 is 0.51 at most.
 * On T-Finance the skip GAT is level with logistic regression on AUC (0.958 vs 0.956), and the skip-plus-filter GAT catches the most fraud in the riskiest 5% (83% vs 75%). But the test splits are small (about 23 anomalous accounts), and the random forest has a better F1.
 * The skip connection and neighbour filter are opt-in options (`GAT(skip=True, filter_keep=0.5)`). The app's own model still uses the original setting, and the filter did not help on Amazon or Elliptic. Elliptic was run with one seed.
+* In the new-account and hybrid tests, a random forest with simple neighbour features matches or beats the GAT (T-Finance new accounts: 0.955 vs 0.935 AUC; Amazon: 0.82 vs 0.69). The GAT's own score adds little once those features are present. On Amazon no graph feature beats the plain random forest. These tests used 3 seeds (Elliptic one), and new accounts keep their links, the graph's best case.
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
 * State is in memory: a restart (or Reset demo) starts from the seed again.
 
