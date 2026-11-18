@@ -64,13 +64,16 @@ To check the GAT outside our own synthetic twin, `scripts/real_data_eval.py` run
 | GAT on U-S-U | 0.910 ± 0.012 | 0.424 | 0.782 | 0.715 | 0.673 |
 | GAT on U-V-U | 0.877 ± 0.042 | 0.403 | 0.744 | 0.646 | 0.608 |
 | GAT on all three | 0.907 ± 0.032 | 0.424 | 0.782 | 0.694 | 0.654 |
+| **GAT on all three, + skip connection** | **0.968 ± 0.013** | 0.507 | 0.936 | 0.799 | 0.752 |
+| GAT on all three, + skip + neighbour filter | 0.956 ± 0.021 | 0.514 | 0.949 | 0.812 | 0.765 |
 
 **What this honestly shows: on this real graph, the edges hurt.** The features alone are strong (0.96 AUC, and reviewing the riskiest 10% of users catches about 83% of fraud), and adding any relation drops the GAT to 0.87-0.91. The reason is camouflage, the effect CARE-GNN was built to handle: 95% of edges join users with the same label overall, but that is driven by the honest majority. Seen from a fraudster, only 11-21% of their neighbours are also fraudsters (base rate 9.5%), so a plain GAT that averages over neighbours mixes a fraudster's signal with mostly honest ones.
 
 What it means for Sentinel Twin:
 * The GAT's value is specific to **fraud that shares infrastructure** (rings and device farms reusing devices and IPs), which is what the twin's graph links. "Reviewed the same product" is not that kind of link. This matches our synthetic result: no-graph models match the GAT on account-level AUC, and the graph helps when a new account joins a known ring.
-* A production version would need what CARE-GNN adds: filter out dissimilar neighbours, learn how much to trust each relation, and keep a skip connection to the node's own features. The current GAT has none of these.
-* The dataset is not committed. To reproduce: download `Amazon.zip` from the CARE-GNN repo, unzip it, then `python scripts/real_data_eval.py path/to/Amazon.mat --n 2500 --seeds 3 --epochs 200` (about 40 min on a laptop CPU, since the GAT uses a dense mask).
+* **Follow-up: a skip connection fixes most of this.** The last two rows were run later with the same seeds, samples and epochs, using two opt-in GAT options (both off by default, so the app is unchanged). *Skip* adds each node's own transformed features to what it gathers from its neighbours (`A @ Z + Z`). *Neighbour filter* (CARE-GNN style) keeps, for each user, the half of their neighbours whose score from a logistic regression fitted on training users only is closest to their own. With skip, edges go from costing about 0.05 AUC to adding about 0.01 (0.968 vs 0.959 without edges), the best AUC of any model here. That gain is inside one standard deviation, and at a 5% or 10% review budget skip is still just below logistic regression. The filter does not help on top of skip (0.956).
+* Still missing from CARE-GNN: learning how much to trust each relation.
+* The dataset is not committed. To reproduce: download `Amazon.zip` from the CARE-GNN repo, unzip it, then `python scripts/real_data_eval.py path/to/Amazon.mat --n 2500 --seeds 3 --epochs 200` (about an hour on a laptop CPU with all eight models, since the GAT uses a dense mask).
 
 ### Second real dataset: Elliptic Bitcoin transactions
 
@@ -84,6 +87,8 @@ Unlike Amazon, these edges carry signal: **51% of an illicit transaction's label
 | **Random forest, local** | **0.772** | **0.844** | 0.712 | 0.893 | **0.696** | **0.904** |
 | GAT, no edges, local | 0.377 | 0.247 | 0.800 | **0.894** | 0.646 | 0.839 |
 | GAT + transaction edges, local | 0.527 | 0.431 | 0.680 | 0.873 | 0.531 | 0.689 |
+| GAT + edges, + skip connection | 0.507 | 0.379 | 0.765 | **0.898** | 0.553 | 0.718 |
+| GAT + edges, + skip + neighbour filter | 0.471 | 0.337 | 0.781 | **0.898** | 0.281 | 0.365 |
 | *Reference:* random forest, all 165 (includes neighbour aggregates) | 0.802 | 0.900 | 0.724 | 0.918 | 0.721 | 0.936 |
 
 F1, precision and recall are at a 0.5 cutoff. Logistic regression and the GAT use balanced class weights, which pushes them towards recall at that cutoff. The random forest is unweighted, as in the paper. The two top-5% columns don't depend on a cutoff.
@@ -91,10 +96,11 @@ F1, precision and recall are at a 0.5 cutoff. Logistic regression and the GAT us
 What this honestly shows:
 * **Edges help the GAT's precision at the cutoff but not its ranking.** Adding edges lifts F1 from 0.38 to 0.53 (precision 0.25 to 0.43), but AUC falls from 0.894 to 0.873, and the share of fraud caught in the riskiest 5% falls from 65% to 53%. So the graph changes how confident the model is more than how well it ranks.
 * **A random forest on the same local features is still clearly best** (F1 0.77, 90% precision in the riskiest 5%). This matches the paper, where a random forest beat a graph convolutional network. Tree models fit these nonlinear features much better than a linear model (0.24) or our small GAT.
-* **Every model fails after the dark-market shutdown at time step 43:** illicit F1 is at most 0.10 from step 43 on, for all models (it was 0.34-0.90 before). That is the same failure the paper reports.
+* **Follow-up with the skip connection and neighbour filter** (see the Amazon section; same seed and epochs). Skip gives the GAT the best AUC on local features (0.898, against 0.894 without edges and 0.893 for the random forest) and recovers some of the top-5% recall that plain edges lost (55% vs 53%, still below 65% without edges). F1 at 0.5 stays about where plain edges left it (0.51). **The filter does not help here:** AUC is the same, but only 28% of fraud is caught in the riskiest 5%, so its top-ranked transactions are worse. Its one gain is after the shutdown at step 43 (F1 0.12, the best of any model there), which is too small to count. The random forest remains clearly the best practical model.
+* **Every model fails after the dark-market shutdown at time step 43:** illicit F1 is at most 0.12 from step 43 on, for all models (it was 0.34-0.90 before). That is the same failure the paper reports.
 * Caveats: one seed, a small GAT (8 hidden units x 4 heads, 80 epochs) and capped step graphs.
 
-Across both datasets the lesson is the same. The graph only pays off when links connect fraud to fraud: shared devices, IPs or cards rather than shared products. And the GAT needs the CARE-GNN-style parts it lacks: neighbour filtering, per-relation trust and a skip connection to the node's own features. To reproduce, download the three CSVs from `https://data.pyg.org/datasets/elliptic/`, unzip them into a folder, and run `python scripts/elliptic_eval.py that/folder --epochs 80` (about 25 min, needs `scikit-learn` and `pandas`).
+Across both datasets the lesson is the same. The graph only pays off when links connect fraud to fraud: shared devices, IPs or cards rather than shared products. A skip connection to the node's own features is the CARE-GNN-style part that helps most; neighbour filtering helps less consistently. To reproduce, download the three CSVs from `https://data.pyg.org/datasets/elliptic/`, unzip them into a folder, and run `python scripts/elliptic_eval.py that/folder --epochs 80` (about 50 min with all four GAT variants, needs `scikit-learn` and `pandas`).
 
 ### Third real dataset: T-Finance (a financial transaction network)
 
@@ -107,14 +113,17 @@ The links carry strong signal: **54% of an anomalous account's neighbours are an
 | Logistic regression (features) | **0.956 ± 0.009** | 0.458 | 0.748 | 0.688 |
 | Random forest (features) | 0.949 ± 0.018 | **0.746** | 0.730 | 0.672 |
 | GAT, no edges | 0.917 ± 0.018 | 0.413 | 0.713 | 0.656 |
-| **GAT + transaction edges** | 0.944 ± 0.037 | 0.533 | **0.757** | **0.696** |
+| GAT + transaction edges | 0.944 ± 0.037 | 0.533 | 0.757 | 0.696 |
+| **GAT + edges, + skip connection** | **0.958 ± 0.031** | 0.637 | 0.791 | 0.728 |
+| **GAT + edges, + skip + neighbour filter** | 0.946 ± 0.039 | 0.641 | **0.826** | **0.760** |
 
 What this honestly shows:
 * **Here the graph helps the GAT on every metric:** AUC goes from 0.917 to 0.944, F1 from 0.41 to 0.53, and the share of fraud caught in the riskiest 5% from 71% to 76%. It is the first of the three datasets where that happens, and the one where the links connect fraud to fraud most strongly.
 * **With edges, the GAT catches up with the feature-only models but does not clearly beat them.** It is level at a 5% review budget (76% of fraud caught vs 75% for logistic regression and 73% for the random forest) and level on AUC. The differences are inside the noise: each test split has only about 23 anomalous accounts, and the standard deviations are 0.04-0.10.
-* Without edges our GAT is weaker than logistic regression on the same features (0.917 vs 0.956 AUC), because it has no skip connection to a node's own features. The edges partly make up for that, which again points to the same next step.
+* Without edges our GAT is weaker than logistic regression on the same features (0.917 vs 0.956 AUC), because it has no skip connection to a node's own features. The edges partly make up for that.
+* **Follow-up with the skip connection and neighbour filter** (last two rows, same seeds and samples; see the Amazon section). Skip lifts the edge GAT to AUC 0.958 (level with logistic regression at 0.956) and F1 0.64. Adding the filter gives the best review-budget result of any model: 82.6% of fraud caught in the riskiest 5%, against 74.8% for logistic regression. That is 19 of 23 anomalous test accounts on every seed (its std is 0.000 because the metric is coarse), against about 17 for logistic regression. The random forest still has the best F1 at a 0.5 cutoff (0.75), and with test splits this small the gaps remain suggestive rather than conclusive.
 
-**Across the three datasets:** the graph's value tracks how strongly links connect fraud to fraud. On Amazon (11-21% of a fraudster's neighbours are fraudsters) the edges hurt. On Elliptic (51%) they shift the GAT's confidence but not its ranking. On T-Finance (54%, against 2.4% for normal accounts) they help it on every metric. Sentinel Twin's graph links accounts through shared devices and IPs, the strongly linked kind. To reproduce, download `tfinance.zip` from the BWGNN repo's Google Drive folder (github.com/squareRoot3/Rethinking-Anomaly-Detection), unzip it, then run `python scripts/tfinance_eval.py path/to/tfinance --seeds 5` (about 20 min).
+**Across the three datasets:** the graph's value tracks how strongly links connect fraud to fraud. On Amazon (11-21% of a fraudster's neighbours are fraudsters) the edges hurt. On Elliptic (51%) they shift the GAT's confidence but not its ranking. On T-Finance (54%, against 2.4% for normal accounts) they help it on every metric. **With the skip connection** the edge GAT is at or above every feature-only model on AUC on all three datasets (Amazon 0.968, Elliptic 0.898, T-Finance 0.958). The neighbour filter helped only on T-Finance's top-5% recall. On Amazon and Elliptic it did as well as skip alone or worse, so it is kept as an option rather than a default. Sentinel Twin's graph links accounts through shared devices and IPs, the strongly linked kind. To reproduce, download `tfinance.zip` from the BWGNN repo's Google Drive folder (github.com/squareRoot3/Rethinking-Anomaly-Detection), unzip it, then run `python scripts/tfinance_eval.py path/to/tfinance --seeds 5` (about 70 min with all four GAT variants).
 
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
@@ -308,9 +317,10 @@ tests/
 * Voice depends on the browser: Chrome and Edge support all ten locales.
 * The defense drill hardens the decision policy; it does not retrain or improve the GAT. The simulator replays stored risk scores.
 * The GAT's high account-level AUC is on synthetic data, and a no-graph model matches it there. Its measurable advantage is on new accounts joining a ring (see Rules vs graph).
-* On the real Amazon fraud graph the GAT's edges lower AUC (0.96 features only vs 0.87-0.91 with relations) because fraudsters there are camouflaged among honest neighbours (see Tested on real data).
-* On Elliptic (Bitcoin) the transaction edges raise the GAT's F1 at a 0.5 cutoff (0.38 to 0.53) but lower its AUC (0.894 to 0.873), and a random forest on the same local features beats both (F1 0.77).
-* On T-Finance the edges lift the GAT to the level of feature-only models (AUC 0.944 vs 0.956 for logistic regression; 76% vs 75% of fraud caught when reviewing the riskiest 5%), not clearly past them, and the test splits are small (about 23 anomalous accounts).
+* On the real Amazon fraud graph the plain GAT's edges lower AUC (0.96 features only vs 0.87-0.91 with relations) because fraudsters there are camouflaged among honest neighbours. With the opt-in skip connection the edges no longer hurt (0.968), but the gain over logistic regression (0.962) is within noise (see Tested on real data).
+* On Elliptic (Bitcoin) a random forest on the same local features is still clearly best (F1 0.77). The GAT's best AUC (0.898, with skip) is only a hair above it, and its F1 at 0.5 is 0.51 at most.
+* On T-Finance the skip GAT is level with logistic regression on AUC (0.958 vs 0.956), and the skip-plus-filter GAT catches the most fraud in the riskiest 5% (83% vs 75%). But the test splits are small (about 23 anomalous accounts), and the random forest has a better F1.
+* The skip connection and neighbour filter are opt-in options (`GAT(skip=True, filter_keep=0.5)`). The app's own model still uses the original setting, and the filter did not help on Amazon or Elliptic. Elliptic was run with one seed.
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
 * State is in memory: a restart (or Reset demo) starts from the seed again.
 
