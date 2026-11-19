@@ -157,6 +157,35 @@ class Twin:
                                         f"({', '.join(PAY_KINDS[i.split('-')[0]] for i in new)}; hashed, no raw PII)")
             return new
 
+    def engine_risk(self, account):
+        """Account-level risk as the shipped engine sees it: the model's score combined with the known-fraud share."""
+        g = float(self.risk(account))
+        return round(1 - (1 - g) * (1 - NEIGHBOUR_WEIGHT * self.known_fraud_signal(account)["share"]), 3)
+
+    def link_payer(self, account, links, source="razorpay"):
+        """Mirror a captured payment's hashed identifiers (payment ids, device, IP) onto the account, then re-score
+        it with the live model, so the very next order from a shared UPI ID, card, device or IP is linked."""
+        with self.lock:
+            before = self.engine_risk(account)
+            new = self.link_pay_ids(account, links.get("pay_ids") or [], source=source)
+            acc = self.accounts[account]
+            if links.get("device") and links["device"] not in acc.devices:
+                self.devices.add(links["device"])
+                acc.devices.add(links["device"])
+                new.append(links["device"])
+            if links.get("ip") and links["ip"] not in acc.ips:
+                self.ips.setdefault(links["ip"], acc.country)
+                acc.ips.add(links["ip"])
+                new.append(links["ip"])
+            self._dirty = True
+            after = self.engine_risk(account)
+            shared = [s for s in self.shared_identifiers(account) if s["id"] in new]
+            if any(s["flagged"] for s in shared):
+                self._event("razorpay", f"{account}'s payment links it to "
+                            + ", ".join(f"{s['flagged']} flagged account(s) via a {s['label']}" for s in shared if s["flagged"])
+                            + f"; risk {before:.2f} -> {after:.2f}", level="warn")
+            return {"linked": new, "risk_before": before, "risk_after": after, "shared": shared}
+
     def new_account(self, *, country=None, age_days=None, fraud=False, segment="legit",
                     disposable=False, kyc=None, name=None):
         r = self.rng
@@ -621,7 +650,7 @@ class Twin:
     def shared_identifiers(self, account, extra_device=None):
         """Devices and payment identifiers this account shares, and how many of the sharers are flagged.
 
-        Flagged = GAT risk >= 0.5 or frozen by an investigator. IPs are left out: shared wifi makes them noisy."""
+        Flagged = known fraud, frozen, or model risk >= 0.5 (is_flagged). IPs are left out: shared wifi is noisy."""
         acc = self.accounts[account]
         out = []
         ids = sorted(acc.devices | ({extra_device} if extra_device else set())) + sorted(acc.pay_ids)
@@ -630,16 +659,22 @@ class Twin:
             others = [b for b in self.accounts.values() if b.id != account and (i in b.devices or i in b.pay_ids)]
             if not others:
                 continue
-            flagged = [b for b in others if b.status == "frozen" or self._probs.get(b.id, 0) >= 0.5]
+            flagged = [b for b in others if self.is_flagged(b.id)]
             out.append({"id": i, "kind": _ntype(i),
                         "label": "device" if kind == "device" else PAY_KINDS[kind], "accounts": len(others),
                         "flagged": len(flagged)})
         return out
 
+    def is_flagged(self, account):
+        """Known fraud (training labels), frozen by an investigator, or scored >= 0.5. Labels and freezes do not move
+        when a clean account attaches itself to a ring and dilutes the model's score, so they are checked first."""
+        return (account in self.known_fraud or self.accounts[account].status == "frozen"
+                or self._probs.get(account, 0) >= 0.5)
+
     def money_flow_links(self, account):
         """Accounts this one moved money with, and how many of them are flagged."""
         partners = sorted(self.xfer_nb.get(account, ()))
-        flagged = [b for b in partners if self.accounts[b].status == "frozen" or self._probs.get(b, 0) >= 0.5]
+        flagged = [b for b in partners if self.is_flagged(b)]
         return {"partners": len(partners), "flagged": len(flagged)}
 
     def decide(self, risk, amount, new_device, policy=None, spend_ratio=0.0):

@@ -109,3 +109,21 @@ def test_twin_is_reproducible_across_hash_seeds():
     outs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
                            env={"PYTHONHASHSEED": h, "PATH": ""}).stdout for h in ("0", "1")}
     assert len(outs) == 1 and next(iter(outs)).strip()
+
+
+def test_card_fingerprint_device_and_ip_link_and_rescore(trained_twin):
+    from app.razorpay import payer_links
+    t = trained_twin.fork()
+    ring = next(a for a in t.accounts.values() if a.segment == "ring-1")
+    p = {"card": {"fingerprint": "cf_SHARED9", "last4": "4417", "network": "Visa"},
+         "notes": {"device_id": "dev_SHARED", "ip": "203.0.113.9"}, "email": "x@example.com"}
+    links = payer_links(p)
+    assert links["device"].startswith("D-") and links["ip"].startswith("IP-")
+    assert "SHARED" not in str(links) and "203.0.113" not in str(links)
+    t.link_payer(ring.id, links, source="test")  # a known fraudster paid with this card on this device
+    acc = t.new_account(age_days=40, kyc=True)
+    acc.devices.add(t.new_device())
+    acc.ips.add(t.new_ip(acc.country))
+    out = t.link_payer(acc.id, payer_links(p), source="test")  # a new account pays with the same card and device
+    assert set(out["linked"]) >= {links["device"], links["ip"]} and out["risk_after"] >= out["risk_before"]
+    assert any(s["flagged"] for s in out["shared"])

@@ -22,7 +22,7 @@ from . import channel3  # noqa: E402
 from .agents import LANGS, CaptureRefused, Team  # noqa: E402
 from .drill import defense_drill  # noqa: E402
 from .money import K, rs  # noqa: E402
-from .razorpay import Razorpay, RazorpayError, payer_ids  # noqa: E402
+from .razorpay import Razorpay, RazorpayError, payer_links  # noqa: E402
 from .redteam import ATTACKS, run_attack  # noqa: E402
 from .scenario import new_account_joins_ring  # noqa: E402
 from .compliance import RULES, ComplianceError  # noqa: E402
@@ -577,7 +577,7 @@ async def webhook(request: Request, bg: BackgroundTasks):
         p = ent("payment")
         for o in twin.orders:
             if p.get("order_id") and o.get("pay_order_id") == p.get("order_id"):
-                twin.link_pay_ids(o["account"], payer_ids(p), source="webhook payment.captured")
+                twin.link_payer(o["account"], payer_links(p), source="webhook payment.captured")
     if etype == "payment.failed":
         oid = ent("payment").get("order_id")
         for o in twin.orders:

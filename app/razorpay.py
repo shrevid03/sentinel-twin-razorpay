@@ -45,7 +45,9 @@ def payer_ids(p: dict) -> list[str]:
     if vpa:
         out.append(_h("UPI", vpa))
     card = p.get("card") or {}
-    if isinstance(card, dict) and card.get("last4"):
+    if isinstance(card, dict) and card.get("fingerprint"):  # Razorpay's card fingerprint, when the account has it
+        out.append(_h("CARD", "fp|" + str(card["fingerprint"])))
+    elif isinstance(card, dict) and card.get("last4"):
         out.append(_h("CARD", f"{card.get('network', '')}|{card['last4']}|{card.get('issuer', '')}".lower()))
     contact = "".join(ch for ch in str(p.get("contact") or "") if ch.isdigit())[-10:]
     if contact:
@@ -54,6 +56,15 @@ def payer_ids(p: dict) -> list[str]:
     if email and email != "void@razorpay.com":  # Razorpay's placeholder when no email was collected
         out.append(_h("CT", email))
     return out
+
+
+def payer_links(p: dict) -> dict:
+    """Everything the twin can link from a payment entity, hashed: payment ids, plus the device and IP the
+    merchant's checkout recorded in the order/payment notes (notes.device_id, notes.ip), when present."""
+    notes = p.get("notes") if isinstance(p.get("notes"), dict) else {}
+    dev = str(notes.get("device_id") or "").strip()[:200]
+    ip = str(notes.get("ip") or "").strip()[:100]
+    return {"pay_ids": payer_ids(p), "device": _h("D", dev) if dev else None, "ip": _h("IP", ip) if ip else None}
 
 
 def _sig(secret: str, message: bytes | str) -> str:
@@ -169,7 +180,7 @@ class Razorpay:
             if not p:
                 raise RazorpayError(f"payment {payment_id} not found")
             self._log("GET", f"/v1/payments/{payment_id}", 200)
-        ids = payer_ids(p)  # hashed before anything else sees the payment entity
+        links = payer_links(p)  # hashed before anything else sees the payment entity
         if p.get("order_id") != order_id:
             raise RazorpayError(f"payment {payment_id} does not belong to order {order_id}")
         if p.get("status") == "authorized":
@@ -182,7 +193,7 @@ class Razorpay:
         status = "COMPLETED" if p.get("status") == "captured" else str(p.get("status", "unknown")).upper()
         return {"id": order_id, "status": status, "payment_id": payment_id, "capture_id": payment_id,
                 "amount": p.get("amount"), "currency": p.get("currency"), "method": p.get("method"),
-                "payer_ids": ids}
+                "payer_ids": links["pay_ids"], "payer_links": links}
 
     def refund_capture(self, payment_id, amount_inr=None, note="Refund issued by Sentinel Twin investigator"):
         body = {"notes": {"reason": note[:250]}, "speed": "normal"}
