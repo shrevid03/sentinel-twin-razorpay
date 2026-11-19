@@ -78,7 +78,7 @@ class Razorpay:
         self.key_id = os.getenv("RAZORPAY_KEY_ID", "").strip()
         self.key_secret = os.getenv("RAZORPAY_KEY_SECRET", "").strip()
         self.webhook_secret = os.getenv("RAZORPAY_WEBHOOK_SECRET", "").strip()
-        self.base = os.getenv("RAZORPAY_API_BASE", API)
+        self.base = os.getenv("RAZORPAY_API_BASE", "").strip() or API
         self.currency = (os.getenv("RAZORPAY_CURRENCY", "INR").strip() or "INR").upper()
         self.fx = float(os.getenv("RAZORPAY_FX_RATE", "1") or 1)
         is_live_key = self.key_id.startswith("rzp_live_")
