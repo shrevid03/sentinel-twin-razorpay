@@ -25,6 +25,7 @@ from .money import K, rs  # noqa: E402
 from .razorpay import Razorpay, RazorpayError, payer_links  # noqa: E402
 from .redteam import ATTACKS, run_attack  # noqa: E402
 from .scenario import new_account_joins_ring  # noqa: E402
+from . import guard  # noqa: E402
 from .compliance import RULES, ComplianceError  # noqa: E402
 from .twin import Twin, _public  # noqa: E402
 
@@ -45,6 +46,19 @@ def require_admin(x_admin_token: str | None = Header(default=None)):
 
 
 ADMIN = [Depends(require_admin)]
+
+
+def rate(bucket, per_minute):
+    """Per-client sliding-window rate limit (RATE_LIMIT=0 disables it). Behind Render's proxy the client is the first
+    X-Forwarded-For address."""
+    def dep(request: Request):
+        if os.getenv("RATE_LIMIT", "1") == "0":
+            return
+        fwd = request.headers.get("x-forwarded-for", "")
+        client = fwd.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+        if not guard.LIMITER.allow(client, bucket, per_minute):
+            raise HTTPException(429, f"too many requests to {bucket}: limit {per_minute} per minute, try again shortly")
+    return [Depends(dep)]
 _reset_lock = threading.Lock()
 auto = {"on": os.getenv("AUTO_TRAFFIC", "1") == "1", "n": 3}
 
@@ -180,7 +194,7 @@ class ChatIn(BaseModel):
     lang: str = "en-IN"
 
 
-@app.post("/api/chat")
+@app.post("/api/chat", dependencies=rate("chat", 30))
 def chat(body: ChatIn):
     try:
         team.last_live = []
@@ -206,7 +220,7 @@ class InvIn(BaseModel):
     lang: str = "en-IN"
 
 
-@app.post("/api/investigate")
+@app.post("/api/investigate", dependencies=rate("investigate", 10))
 def investigate(body: InvIn):
     trace = []
     case = team.investigate(body.account, trace, body.lang)
@@ -223,7 +237,7 @@ class RTIn(BaseModel):
     lang: str = "en-IN"
 
 
-@app.post("/api/redteam")
+@app.post("/api/redteam", dependencies=rate("redteam", 6))
 def redteam(body: RTIn):
     trace = []
     run = team.red_team(trace, body.lang, body.focus)
@@ -235,7 +249,7 @@ class AttackIn(BaseModel):
     params: dict = {}
 
 
-@app.post("/api/redteam/attack")
+@app.post("/api/redteam/attack", dependencies=rate("attack", 20))
 def attack(body: AttackIn):
     trace = []
     return {"result": run_attack(twin, body.attack, body.params, shopper_guard=lambda: team.injection_probe(trace)),
@@ -250,7 +264,7 @@ class DrillIn(BaseModel):
 LAST_DRILL: dict = {}
 
 
-@app.post("/api/drill")
+@app.post("/api/drill", dependencies=rate("drill", 6))
 def drill(body: DrillIn, x_admin_token: str | None = Header(default=None)):
     """One-click defense drill: attack, search for a safer policy, replay the same attack, optionally apply."""
     if body.apply:  # applying changes the live policy: an admin action
@@ -281,13 +295,31 @@ def drill_latest():
     }
 
 
-@app.post("/api/scenario/new-account")
+@app.post("/api/scenario/new-account", dependencies=rate("heavy", 8))
 def scenario_new_account():
     """A clean new account shares a UPI ID with a known ring, then the agent checks out (on a fork; nothing live)."""
     return new_account_joins_ring(twin)
 
 
-@app.post("/api/model-redteam")
+@app.get("/api/guard")
+def guard_stats():
+    """Prompt-injection guard counters: blocked inputs, scrubbed tool outputs, blocked replies, refused tool calls."""
+    return guard.STATS.view()
+
+
+@app.post("/api/redteam/chatbot-injection", dependencies=rate("model-redteam", 4))
+def chatbot_injection():
+    """Throw the injection corpus at the agents on a throwaway copy and report what was blocked or got through."""
+    from .injection import run
+
+    def factory():
+        t = Team(twin.fork(), Razorpay())
+        t.no_live = True
+        return t
+    return run(factory)
+
+
+@app.post("/api/model-redteam", dependencies=rate("model-redteam", 4))
 def model_redteam():
     """Attack the detector itself (drop ring edges + cover edges), harden it, and run RED/BLUE rounds (on a copy)."""
     from .model_redteam import run_on_twin
@@ -302,7 +334,7 @@ def compare_get():
     return LAST_DRILL["compare"]
 
 
-@app.post("/api/compare")
+@app.post("/api/compare", dependencies=rate("heavy", 8))
 def compare_post(body: DrillIn):
     """Run a fresh drill (never applied) and return its rules-vs-graph comparison."""
     return drill(DrillIn(seed=body.seed, apply=False), None)["compare"]
@@ -426,7 +458,7 @@ class AskIn(BaseModel):
     question: str
 
 
-@app.post("/api/evidence/{account_id}")
+@app.post("/api/evidence/{account_id}", dependencies=rate("evidence", 30))
 def open_evidence_case(account_id: str):
     """Model triage + deterministic graph evidence (claim, evidence, source) + precedent. Recorded in the ledger."""
     return _review(team.casebook.open_case, account_id)
@@ -445,7 +477,7 @@ def decide_evidence_case(case_id: str, body: DecideIn):
     return _review(team.casebook.decide, case_id, body.decision, body.reason, body.reviewer)
 
 
-@app.post("/api/evidence/{case_id}/ask")
+@app.post("/api/evidence/{case_id}/ask", dependencies=rate("chat", 30))
 def ask_copilot(case_id: str, body: AskIn):
     """Grounded copilot: answers only from the case's verified evidence and never decides."""
     return _review(team.casebook.ask, case_id, body.question[:500])
@@ -464,7 +496,7 @@ def reviewer_twin():
     return team.reviewer_twin.status()
 
 
-@app.post("/api/reviewer-twin/replay", dependencies=ADMIN)
+@app.post("/api/reviewer-twin/replay", dependencies=ADMIN + rate("replay", 6))
 def reviewer_twin_replay():
     """Demo: a simulated reviewer works 30 synthetic cases; the twin predicts each before it is decided."""
     return team.reviewer_twin.replay(30)

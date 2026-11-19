@@ -82,3 +82,29 @@ $("#btn-reset").onclick = async () => {
   try { await api("/api/reset", {}); location.reload(); }
   catch (e) { alert("Reset failed: " + e.message); b.disabled = false; b.textContent = "Reset demo"; }
 };
+
+/* Red team tab: chatbot-injection playbook + live guard counters */
+async function loadGuard() {
+  try {
+    const g = await api("/api/guard");
+    const el = $("#inj-kpis"); if (!el || el.dataset.ran) return;
+    el.innerHTML = [kpi("injections blocked (live)", g.blocked_inputs, "ok"), kpi("instruction-like data removed", g.scrubbed_tool_outputs, "ok"),
+      kpi("replies blocked", g.blocked_outputs), kpi("tool calls refused", g.refused_tools)].join("");
+  } catch (e) { /* counters are informational */ }
+}
+$("#btn-inj").onclick = async () => {
+  const b = $("#btn-inj"); b.disabled = true; b.innerHTML = `<span class="spin"></span>Attacking…`;
+  try {
+    const r = await api("/api/redteam/chatbot-injection", {});
+    const k = $("#inj-kpis"); k.dataset.ran = "1";
+    k.innerHTML = [kpi("attempts", r.attempts), kpi("blocked or contained", r.blocked_or_contained, "ok"),
+      kpi("got through", r.got_through, r.got_through ? "bad" : "ok"), kpi("canary leaks", r.canary_leaks, r.canary_leaks ? "bad" : "ok"),
+      kpi("normal questions refused", `${r.false_refusals} of ${r.benign.length}`, r.false_refusals ? "warn" : "ok")].join("");
+    $("#inj-out").innerHTML = `<table class="dtable"><tr><th>Attempt</th><th>Kind</th><th>Blocked at input</th><th>Effect</th><th>Reply</th></tr>
+      ${r.rows.map((x) => `<tr class="${x.got_through ? "breach" : ""}"><td>${esc(x.id)}</td><td>${esc(x.kind)} · ${esc(x.lang)}</td><td>${x.blocked_at_input ? "yes" : "no"}</td>
+        <td class="${x.got_through ? "bad" : "ok"}">${x.got_through ? "GOT THROUGH" : "none"}</td><td class="small">${esc(x.reply)}</td></tr>`).join("")}</table>
+      <p class="muted small">Brain: ${esc(r.brain)}. ${esc(r.note)}</p>`;
+  } catch (e) { $("#inj-out").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  finally { b.disabled = false; b.textContent = "Run injection playbook"; }
+};
+document.querySelectorAll('#tabs button[data-tab="redteam"]').forEach((x) => x.addEventListener("click", loadGuard));

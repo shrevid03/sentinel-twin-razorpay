@@ -18,7 +18,7 @@ import re
 import threading
 import time
 
-from . import catalog, compliance, channel3
+from . import catalog, compliance, channel3, guard
 from .money import K, rs
 from .redteam import ATTACKS, run_attack, scorecard, why_adapted
 
@@ -108,9 +108,15 @@ class Brain:
         return {"anthropic": "claude"}.get(self.provider, self.provider)
 
     def run(self, agent, system, tools, messages, trace, max_steps=10):
+        system = system + guard.system_suffix()
         if self.provider == "anthropic":
-            return self._run_anthropic(agent, system, tools, messages, trace, max_steps)
-        return self._run_openai(agent, system, tools, messages, trace, max_steps)
+            reply = self._run_anthropic(agent, system, tools, messages, trace, max_steps)
+        else:
+            reply = self._run_openai(agent, system, tools, messages, trace, max_steps)
+        if guard.leaks(reply, system):  # canary or system-prompt text in the reply: never shown
+            guard.note("blocked_outputs", agent, str(reply), ["output_leak"])
+            return guard.refusal()
+        return reply
 
     def _run_anthropic(self, agent, system, tools, messages, trace, max_steps):
         defs = [{"name": n, "description": t["description"], "input_schema": t["schema"]} for n, t in tools.items()]
@@ -132,7 +138,7 @@ class Brain:
             results = []
             for u in uses:
                 out, err = call_tool(agent, tools, u.name, dict(u.input or {}), trace)
-                results.append({"type": "tool_result", "tool_use_id": u.id, "content": json.dumps(out, default=str)[:12000],
+                results.append({"type": "tool_result", "tool_use_id": u.id, "content": _as_data(u.name, out),
                                 "is_error": err})
             messages.append({"role": "user", "content": results})
         return "I ran out of steps; here is what I found so far."
@@ -176,20 +182,35 @@ class Brain:
                 else:
                     out, err = call_tool(agent, tools, name, args if isinstance(args, dict) else {}, trace)
                 messages.append({"role": "tool", "tool_call_id": c.get("id", name), "name": name,
-                                 "content": json.dumps(out, default=str)[:12000]})
+                                 "content": _as_data(name, out)})
         return "I ran out of steps; here is what I found so far."
 
 
 def call_tool(agent, tools, name, args, trace):
     t0 = time.time()
+    allowed = guard.ALLOWLIST.get(agent)
+    if name in guard.NEVER_LLM or (allowed is not None and name not in allowed) or name not in tools:
+        # privilege separation, enforced in code: the model cannot reach a tool outside its agent's allowlist
+        guard.note("refused_tools", f"{agent}:{name}", json.dumps(args, default=str), ["tool_not_allowed"])
+        out = {"error": f"tool {name!r} is not available to the {agent} agent"}
+        trace.append({"agent": agent, "type": "tool", "tool": name, "input": args, "ms": 0, "output": out})
+        return out, True
     try:
         out = tools[name]["fn"](**args)
         err = False
     except Exception as e:  # tool errors go back to the model
         out, err = {"error": f"{type(e).__name__}: {e}"}, True
+    # indirect injection: strings in tool results (listings, names, notes) that look like instructions are removed
+    out = guard.scrub_tool_output(out, lambda p, t, h: guard.note("scrubbed_tool_outputs", f"{agent}:{name}{p[6:]}", t, h))
     trace.append({"agent": agent, "type": "tool", "tool": name, "input": args, "ms": int((time.time() - t0) * 1000),
                   "output": _short(out)})
     return out, err
+
+
+def _as_data(name, out):
+    """Tool results go back to the model as clearly delimited data, never as instructions."""
+    body = json.dumps(out, default=str)[:12000].replace("</untrusted_data>", "</untrusted_data_>")
+    return f'<untrusted_data source="tool:{name}">{body}</untrusted_data>'
 
 
 def _short(o, n=600):
@@ -229,6 +250,8 @@ class Team:
         self.reviewer_twin = ReviewerTwin(self)  # learns from the human review queue; shadow mode by default
         self.casebook = CaseBook(self)  # evidence cases + the append-only ledger (compliance_rules.yaml)
         self.ledger = self.casebook.ledger
+        guard.LEDGER = self.ledger
+        self._recent_turns: dict[str, list] = {}
 
     # ================================================================ shopper
     def shopper_tools(self, poisoned=False, attack_log=None):
@@ -836,6 +859,18 @@ class Team:
     def concierge(self, session, text, lang="en-IN"):
         trace = []
         out = {"trace": trace, "checkout": None, "case": None, "redteam": None}
+        text = guard.normalize(text)
+        recent = self._recent_turns.setdefault(session, [])
+        recent.append(text)
+        del recent[:-3]
+        hits = guard.detect(text) or guard.detect(" ".join(recent))  # multi-turn: split instructions are joined
+        if hits:
+            guard.note("blocked_inputs", "concierge chat/voice", text, hits)
+            recent.clear()
+            trace.append({"agent": "guard", "type": "thought", "text": "Input looked like a prompt injection: "
+                                                                        + ", ".join(hits) + ". Not sent to the model."})
+            out.update(reply=guard.refusal(lang), guard={"blocked": True, "patterns": hits})
+            return out
         tools = dict(self.shopper_tools())
 
         def investigate_account(account_id: str = ""):

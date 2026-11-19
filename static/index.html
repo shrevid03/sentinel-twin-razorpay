@@ -229,6 +229,10 @@
     <p class="muted">The red team attacks a sandboxed fork of the twin, watches what got intercepted (blocked or sent to review), then changes tactics to evade. Nothing touches live state.</p>
     <div class="kpis" id="rt-score"></div>
   </div>
+  <div class="card" id="inj-card"><div class="cardhead"><div><h3>Chatbot injection <span class="tag synth">Synthetic attack traffic</span></h3>
+    <small class="muted">Prompt-injection attempts against the agents: direct, multilingual (Hindi, Hinglish, Tamil, Telugu, Bengali), encoded, hidden characters, multi-turn, and indirect through an account name, a product listing and webhook notes. On a throwaway copy; nothing live changes. Privileged actions are never available to a model, so "got through" means a real effect or a leak, not just a cheeky reply.</small></div>
+    <button id="btn-inj">Run injection playbook</button></div>
+    <div class="kpis" id="inj-kpis"></div><div id="inj-out"></div></div>
   <div class="grid2">
     <div class="card"><h3>Attack playbooks <small class="muted">tune and fire one by hand</small></h3><div id="attacks" class="attacks"></div>
       <h3>Results</h3><div id="rt-grid" class="ag-theme-quartz gridbox small"></div></div>
@@ -304,7 +308,7 @@
 <script src="/static/app.js?v=25"></script>
 <script src="/static/drill.js?v=26"></script>
 <script src="/static/receipts.js?v=24"></script>
-<script src="/static/review.js?v=26"></script>
+<script src="/static/review.js?v=27"></script>
 <script src="/static/evidence.js?v=1"></script>
 <script src="/static/fx.js?v=24"></script>
 </body>

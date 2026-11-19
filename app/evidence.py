@@ -17,7 +17,9 @@ import time
 import networkx as nx
 import numpy as np
 
-from . import compliance
+import re
+
+from . import compliance, guard
 from .money import rs
 
 BAND_LOW, BAND_HIGH = 0.35, 0.75  # triage bands on the account's risk: auto-clear < 0.35 <= review < 0.75 <= flag
@@ -222,6 +224,11 @@ class CaseBook:
         """Grounded copilot: answers ONLY from the case's verified evidence; never decides."""
         case = self.cases[case_id]
         brain = self.team.brain
+        question = guard.normalize(question, guard.MAX_QUESTION)
+        hits = guard.detect(question)
+        if hits:
+            guard.note("blocked_inputs", "case copilot", question, hits)
+            return {"answer": guard.refusal(), "grounded_in": 0, "brain": "guard", "blocked": True}
         answer = None
         if brain.live:
             system = ("You are a fraud-analyst copilot helping a human reviewer with ONE case. Answer ONLY from the "
@@ -234,10 +241,20 @@ class CaseBook:
                 answer = brain.run("copilot", system, {}, [{"role": "user", "content": question}], [], max_steps=1)
             except Exception:  # noqa: BLE001 - fall back to the deterministic answer
                 answer = None
+        if answer and not self._cites_only_case_ids(case, answer):
+            guard.note("blocked_outputs", "case copilot", answer, ["cited_unknown_id"])
+            answer = "I don't have that information in the verified evidence for this case."
         if not answer:
             answer = self._grounded_answer(case, question)
         case["chat"].append({"q": question, "a": answer, "brain": brain.label if brain.live else "deterministic"})
         return {"answer": answer, "grounded_in": len(case["reasoning_steps"]), "brain": case["chat"][-1]["brain"]}
+
+    @staticmethod
+    def _cites_only_case_ids(case, answer):
+        known = case["account"] + " " + evidence_text(case) + " " + " ".join(p["case_id"] + " " + p["account"]
+                                                                               for p in case.get("precedent", []))
+        ids = re.findall(r"\b(?:A|D|IP|UPI|CARD|CT|T|ORD|EV|HOLD|ACT)-[0-9A-Fa-f]{3,}\b", answer)
+        return all(i in known for i in ids)
 
     @staticmethod
     def _grounded_answer(case, question):
