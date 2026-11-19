@@ -25,6 +25,7 @@ from .money import K, rs  # noqa: E402
 from .razorpay import Razorpay, RazorpayError, payer_ids  # noqa: E402
 from .redteam import ATTACKS, run_attack  # noqa: E402
 from .scenario import new_account_joins_ring  # noqa: E402
+from .compliance import RULES, ComplianceError  # noqa: E402
 from .twin import Twin, _public  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -407,6 +408,49 @@ class AutopilotIn(BaseModel):
     min_confidence: float | None = None
 
 
+# ------------------------------------------------- evidence cases + compliance
+class DecideIn(BaseModel):
+    decision: str
+    reason: str = ""
+    reviewer: str = ""
+
+
+class AskIn(BaseModel):
+    question: str
+
+
+@app.post("/api/evidence/{account_id}")
+def open_evidence_case(account_id: str):
+    """Model triage + deterministic graph evidence (claim, evidence, source) + precedent. Recorded in the ledger."""
+    return _review(team.casebook.open_case, account_id)
+
+
+@app.get("/api/evidence")
+def evidence_cases():
+    cb = team.casebook
+    return {"cases": [cb.public(c) for c in cb.cases.values()][::-1], "ledger": cb.ledger.verify(),
+            "metrics": cb.ledger.metrics()}
+
+
+@app.post("/api/evidence/{case_id}/decide", dependencies=ADMIN)
+def decide_evidence_case(case_id: str, body: DecideIn):
+    """The human's decision: confirm_fraud, clear or monitor. Reason and reviewer are required (RBI-ACC-03)."""
+    return _review(team.casebook.decide, case_id, body.decision, body.reason, body.reviewer)
+
+
+@app.post("/api/evidence/{case_id}/ask")
+def ask_copilot(case_id: str, body: AskIn):
+    """Grounded copilot: answers only from the case's verified evidence and never decides."""
+    return _review(team.casebook.ask, case_id, body.question[:500])
+
+
+@app.get("/api/ledger")
+def ledger(limit: int = 200):
+    """The append-only, hash-chained ledger: model recommendations and human decisions as separate records."""
+    lg = team.ledger
+    return {"verify": lg.verify(), "metrics": lg.metrics(), "records": lg.records()[-limit:][::-1], "rules": RULES}
+
+
 @app.get("/api/reviewer-twin")
 def reviewer_twin():
     """The reviewer twin: what it was trained on, agreement with the human, model weights, autopilot state."""
@@ -437,6 +481,10 @@ def _review(fn, item_id, *args):
         raise HTTPException(404, f"unknown id {item_id}")
     except CaptureRefused as e:
         raise HTTPException(e.status, e.detail)
+    except ComplianceError as e:
+        raise HTTPException(422, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.post("/api/actions/{action_id}/approve", dependencies=ADMIN)

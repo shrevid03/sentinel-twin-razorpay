@@ -32,7 +32,7 @@ document.addEventListener("click", async (e) => {
   const b = e.target.closest("[data-rv]");
   if (!b) return;
   const ok = b.dataset.ok === "1", kind = b.dataset.rv, id = b.dataset.id;
-  const note = prompt(`${ok ? "Approve" : "Reject"} ${id}. Optional note for the audit trail:`, "") ?? null;
+  const note = prompt(`${ok ? "Approve" : "Reject"} ${id}. Reason (required, RBI-ACC-03; goes to the audit trail and ledger):`, "") ?? null;
   if (note === null) return;
   const verb = kind === "hold" ? (ok ? "release" : "reject") : (ok ? "approve" : "reject");
   const path = kind === "hold" ? `/api/holds/${id}/${verb}` : `/api/actions/${id}/${verb}`;

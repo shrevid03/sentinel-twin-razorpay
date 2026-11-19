@@ -18,7 +18,7 @@ import re
 import threading
 import time
 
-from . import catalog, channel3
+from . import catalog, compliance, channel3
 from .money import K, rs
 from .redteam import ATTACKS, run_attack, scorecard, why_adapted
 
@@ -224,8 +224,11 @@ class Team:
         self.buyer = acc.id
         self.mandate = {"per_order_limit": 12500.0, "monthly_budget": 35000.0, "spent": 0.0,
                         "blocked_categories": ["gift_cards"], "currency": "INR"}
+        from .evidence import CaseBook
         from .reviewer_twin import ReviewerTwin
         self.reviewer_twin = ReviewerTwin(self)  # learns from the human review queue; shadow mode by default
+        self.casebook = CaseBook(self)  # evidence cases + the append-only ledger (compliance_rules.yaml)
+        self.ledger = self.casebook.ledger
 
     # ================================================================ shopper
     def shopper_tools(self, poisoned=False, attack_log=None):
@@ -347,6 +350,8 @@ class Team:
             self.holds[hid] = {"id": hid, "receipt_id": rc["id"], "cart": cart, "merchant": merchant, "total": total,
                                "risk": score["risk"], "factors": score["factors"], "status": "pending",
                                "created_at": rc["created_at"], "account": self.buyer}
+            self.ledger.append({"type": "recommendation", "case_id": hid, "account": self.buyer, "by": "risk engine",
+                                "model_score": score["risk"], "recommendation": "review", "kind": "held checkout"})
             rc["outcome"] = "held_for_review"
             rc["review"] = {"hold_id": hid, "status": "pending"}
             self._stamp(rc, f"held for manual review as {hid}; no Razorpay order yet")
@@ -518,6 +523,8 @@ class Team:
              "proposed_by": "investigator", "case_id": (case or {}).get("id"), "status": "pending",
              "created_at": time.strftime("%Y-%m-%d %H:%M:%S"), "decision": None}
         self.actions[aid] = a
+        self.ledger.append({"type": "recommendation", "case_id": aid, "account": target, "by": "investigator agent",
+                            "recommendation": kind, "reason": reason, "kind": "proposed action"})
         if case is not None:
             case["actions"].append(f"proposed {kind} of {target} ({aid}), awaiting merchant approval")
         label = "merchant-side restriction (simulated)" if kind == "freeze" else "Razorpay refund"
@@ -548,6 +555,9 @@ class Team:
                 raise KeyError(action_id)
             if a["status"] != "pending":  # idempotent: a decided action never runs again
                 return {**a, "duplicate": True}
+            compliance.require_reason_and_reviewer(reviewer, note)  # RBI-ACC-03
+            if approve:
+                compliance.block_auto_classification(a["type"], reviewer)  # RBI-NJ-01: only a human restricts
             a["twin"] = self.reviewer_twin.observe("action", a, approve, reviewer)["prediction"]
             if approve:
                 a["result"] = self._execute(a)
@@ -556,6 +566,10 @@ class Team:
                 a["status"] = "rejected"
             a["decision"] = {"by": reviewer, "note": note, "at": time.strftime("%Y-%m-%d %H:%M:%S")}
             self._audit("action", action_id, a["status"], reviewer, note, a.get("result"))
+            self.ledger.append(compliance.mark_reportable({
+                "type": "decision", "case_id": action_id, "account": a["target"], "by": "human",
+                "human_decision": "confirm_fraud" if approve and a["type"] == "freeze" else a["status"],
+                "reason": note, "reviewer": reviewer, "model_recommendation": a["type"]}))
             self.twin._event("review", f"{reviewer} {a['status']} {a['type']} of {a['target']} ({action_id})",
                              level="ok" if approve else "info")
             return a
@@ -568,6 +582,7 @@ class Team:
                 raise KeyError(hold_id)
             if h["status"] != "pending":
                 return {**h, "duplicate": True}
+            compliance.require_reason_and_reviewer(reviewer, note)  # RBI-ACC-03
             rc = self.receipts.get(h["receipt_id"])
             remaining = self.mandate["monthly_budget"] - self.mandate["spent"]
             if release and (h["total"] > self.mandate["per_order_limit"] or h["total"] > remaining):
@@ -591,6 +606,10 @@ class Team:
             if rc:
                 rc["review"] = {"hold_id": hold_id, "status": h["status"], "reviewer": reviewer, "note": note}
             self._audit("hold", hold_id, h["status"], reviewer, note, {"pay_order_id": h.get("pay_order_id")})
+            self.ledger.append({"type": "decision", "case_id": hold_id, "account": h.get("account"),
+                                "by": "machine" if compliance.is_machine(reviewer) else "human",
+                                "human_decision": h["status"], "reason": note, "reviewer": reviewer,
+                                "model_recommendation": "review"})
             self.twin._event("review", f"{reviewer} {h['status']} held checkout {hold_id} ({rs(h['total'])})",
                              level="ok" if release else "info")
             return h

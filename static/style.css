@@ -358,6 +358,7 @@ div.vis-tooltip{padding:0!important;border:0!important;background:transparent!im
 .legend .dot.acc{border:2px solid #4DA3FF;box-shadow:0 0 6px #2F7BFF}
 .legend .dot.dev{border:1.5px solid #5CE1FF;border-radius:1px;transform:rotate(45deg) scale(.85);box-shadow:0 0 6px #2FB8FF}
 .legend .dot.ip{background:#8AA8FF!important;width:6px;height:6px;box-shadow:0 0 6px #5C7CFF}
+.ev-steps li{margin:6px 0}.ev-steps code{font-size:11px;background:#EEF3FA;border-radius:4px;padding:0 4px}
 .rt-badge{font-size:12.5px;border-radius:8px;padding:5px 9px;margin-bottom:6px;background:#EAF4FF;color:#003087}
 .rt-badge.reject{background:#FDECEA;color:#9B1C14}
 .scn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}

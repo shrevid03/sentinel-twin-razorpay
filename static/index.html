@@ -195,6 +195,10 @@
     <div class="card"><div class="cardhead"><h3>Accounts ranked by GAT risk</h3>
       <button id="btn-investigate-top">Investigate riskiest</button></div>
       <div id="acc-grid" class="ag-theme-quartz gridbox"></div></div>
+    <div class="card" id="ev-card"><div class="cardhead"><div><h3>Evidence case <span class="tag">model → evidence → copilot → human</span></h3>
+      <small class="muted">The GAT triages; deterministic graph checks gather evidence with record pointers; the copilot only explains that evidence; a person decides, with a reason (RBI rules in <code>compliance_rules.yaml</code>).</small></div></div>
+      <div class="row"><input id="ev-account" placeholder="account, e.g. A-212" style="width:160px"><button id="btn-ev-open">Open evidence case</button><button class="ghost" id="btn-ev-top">Riskiest account</button></div>
+      <div id="ev-out"></div><p class="muted small" id="ev-ledger"></p></div>
     <div class="side">
       <div class="card"><div class="cardhead"><h3>Reviewer twin <span class="tag">shadow mode</span></h3></div>
         <p class="muted">A digital twin of the person working this queue: it learns from every approve and reject and predicts the next one. It never decides on its own unless you switch autopilot on.</p>
@@ -297,7 +301,8 @@
 <script src="/static/app.js?v=25"></script>
 <script src="/static/drill.js?v=25"></script>
 <script src="/static/receipts.js?v=24"></script>
-<script src="/static/review.js?v=25"></script>
+<script src="/static/review.js?v=26"></script>
+<script src="/static/evidence.js?v=1"></script>
 <script src="/static/fx.js?v=24"></script>
 </body>
 </html>

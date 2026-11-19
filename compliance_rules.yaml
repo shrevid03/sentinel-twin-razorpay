@@ -1,0 +1,31 @@
+# compliance_rules.yaml: regulation as config (carried over from Abuse-Ring Sentinel).
+# The rules live here, not in code, so a regulatory change is a config edit, not a redeploy; app/compliance.py loads
+# this file at start-up and enforces each rule's `enforce` hook in code, and the app refuses to start if a hook is
+# unknown. Grounding: RBI Master Directions on Fraud Risk Management (July 2024), which incorporate the
+# natural-justice requirement from the Supreme Court's Rajesh Agarwal judgment (2023): an opportunity to be heard
+# before an account is classified as fraud. These are engineering rules, not legal advice.
+
+rules:
+  - id: RBI-NJ-01
+    name: Human sign-off before fraud classification
+    principle: natural_justice
+    rule: No account may be auto-classified as fraud. The model and the reviewer twin may only recommend; any
+          adverse classification needs a named human's sign-off. A "flag" recommendation is routed to review.
+    enforce: block_auto_classification
+
+  - id: RBI-AUD-02
+    name: Append-only audit trail
+    rule: Every model recommendation and every human decision is appended to a hash-chained ledger as separate
+          records linked by case id. Records are never overwritten, and the chain can be verified.
+    enforce: append_only_ledger
+
+  - id: RBI-ACC-03
+    name: Attributed, reasoned decisions
+    rule: Every human decision (approve, reject, override) must carry a reason and the reviewer's identity.
+    enforce: require_reason_and_reviewer
+
+  - id: RBI-RPT-04
+    name: Timely reporting flag
+    rule: Cases a human confirms as fraud are marked reportable, with the date they were confirmed, so reporting
+          timelines to law enforcement or the regulator can be tracked.
+    enforce: mark_reportable
