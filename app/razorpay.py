@@ -101,7 +101,11 @@ class Razorpay:
         return int(round(float(inr) * self.fx * 100))
 
     def _req(self, method, path, json=None):
-        r = httpx.request(method, f"{self.base}{path}", json=json, auth=(self.key_id, self.key_secret), timeout=30)
+        try:
+            r = httpx.request(method, f"{self.base}{path}", json=json, auth=(self.key_id, self.key_secret), timeout=30)
+        except httpx.HTTPError as e:  # network down, DNS, timeout: a clean error, never a crash or a hang
+            self._log(method, path, 0)
+            raise RazorpayError(f"Razorpay is unreachable ({type(e).__name__}); nothing was charged") from None
         self._log(method, path, r.status_code)
         if r.status_code >= 400:
             raise RazorpayError(f"{method} {path} -> {r.status_code}: {r.text[:300]}")

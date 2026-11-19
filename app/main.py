@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
 import json
 import os
 import threading
@@ -573,6 +574,10 @@ def checkouts():
     return list(team.checkouts.values())[::-1]
 
 
+_seen_events: dict[str, float] = {}
+_webhook_lock = threading.Lock()
+
+
 @app.post("/api/razorpay/webhook")
 async def webhook(request: Request, bg: BackgroundTasks):
     raw = await request.body()  # the signature covers the exact raw bytes, so verify before parsing
@@ -581,7 +586,9 @@ async def webhook(request: Request, bg: BackgroundTasks):
         event = json.loads(raw or b"{}")
     except ValueError:
         raise HTTPException(400, "invalid JSON")
-    etype = event.get("event", "unknown")
+    if not isinstance(event, dict) or not isinstance(event.get("payload", {}) or {}, dict):
+        raise HTTPException(400, "webhook body must be a Razorpay event object")
+    etype = str(event.get("event", "unknown"))[:80]
     payload = event.get("payload", {}) or {}
     ent = lambda k: ((payload.get(k) or {}).get("entity") or {})  # noqa: E731
     # Only a Razorpay-signed webhook may change state. ALLOW_UNVERIFIED_WEBHOOKS=1 is a local testing switch
@@ -590,6 +597,14 @@ async def webhook(request: Request, bg: BackgroundTasks):
     if not trusted:
         twin._event("razorpay", f"Webhook {etype} ignored: signature not verified", level="warn")
         return {"received": True, "verified": False, "processed": False}
+    # replay / duplicate safety: Razorpay may deliver the same event more than once (X-Razorpay-Event-Id)
+    eid = request.headers.get("x-razorpay-event-id") or hashlib.sha256(raw).hexdigest()
+    with _webhook_lock:
+        if eid in _seen_events:
+            return {"received": True, "verified": verified, "processed": False, "duplicate": True}
+        _seen_events[eid] = time.time()
+        while len(_seen_events) > 5000:
+            _seen_events.pop(next(iter(_seen_events)))
     twin._event("razorpay", f"Webhook {etype} ({'verified' if verified else 'unverified, demo testing'})",
                 level="bad" if etype.startswith("payment.dispute") else "info")
     if etype.startswith("payment.dispute.created"):

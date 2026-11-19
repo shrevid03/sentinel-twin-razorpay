@@ -122,3 +122,17 @@ def test_signed_webhook_is_processed_and_tampered_one_is_not(monkeypatch):
                      headers={"X-Razorpay-Signature": _sig("whsec", raw), "Content-Type": "application/json"})
     assert ok.json()["verified"] is True and ok.json()["processed"] is True
     assert order["status"] == "refunded"
+
+
+def test_webhook_replay_is_processed_once(monkeypatch):
+    monkeypatch.setenv("GAT_EPOCHS", "20")
+    monkeypatch.setenv("ALLOW_UNVERIFIED_WEBHOOKS", "1")
+    from fastapi.testclient import TestClient
+    from app import main
+    c = TestClient(main.app)
+    body = json.dumps({"event": "payment.failed", "payload": {"payment": {"entity": {"order_id": "order_REPLAY1"}}}})
+    h = {"content-type": "application/json", "x-razorpay-event-id": "evt_replay_1"}
+    first = c.post("/api/razorpay/webhook", content=body, headers=h).json()
+    second = c.post("/api/razorpay/webhook", content=body, headers=h).json()
+    assert first["processed"] and second.get("duplicate") and not second["processed"]
+    assert c.post("/api/razorpay/webhook", content="[]", headers={"content-type": "application/json"}).status_code == 400

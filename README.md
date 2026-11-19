@@ -199,7 +199,7 @@ Requires Python 3.10 or newer.
 
 ```bash
 git clone <this repo>
-cd sentinel-twin
+cd sentinel-twin-razorpay
 python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env        # optional: add keys (see below)

@@ -910,7 +910,7 @@ class Twin:
     def account_view(self, account):
         a = self.accounts[account]
         orders = [o for o in self.orders if o["account"] == account]
-        return {"id": a.id, "name": a.name, "country": a.country, "age_days": a.age_days, "email": a.email,
+        return {"id": a.id, "name": a.name, "country": a.country, "age_days": a.age_days, "email": _mask_email(a.email),
                 "kyc_verified": a.kyc, "status": a.status, "devices": sorted(a.devices), "ips": sorted(a.ips),
                 "payment_ids": sorted(a.pay_ids), "shared_identifiers": self.shared_identifiers(account),
                 "risk": round(self.risk(account), 3), "order_count": len(orders),
@@ -987,6 +987,12 @@ class Twin:
             twin = copy.deepcopy(self, memo)
             twin.on_event = None
             return twin
+
+
+def _mask_email(e):
+    """a.b.123@gmail.com -> a***@gmail.com: enough to see the provider (disposable or not), not the address."""
+    local, _, dom = str(e).partition("@")
+    return f"{local[:1]}***@{dom}" if dom else "***"
 
 
 def per_100(fraud_stopped_inr, orders_flagged):
