@@ -358,6 +358,11 @@ div.vis-tooltip{padding:0!important;border:0!important;background:transparent!im
 .legend .dot.acc{border:2px solid #4DA3FF;box-shadow:0 0 6px #2F7BFF}
 .legend .dot.dev{border:1.5px solid #5CE1FF;border-radius:1px;transform:rotate(45deg) scale(.85);box-shadow:0 0 6px #2FB8FF}
 .legend .dot.ip{background:#8AA8FF!important;width:6px;height:6px;box-shadow:0 0 6px #5C7CFF}
+.scn-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:12px}
+.scn-col{border:1px solid var(--line,#E3E8EF);border-radius:10px;padding:12px}
+.scn-col h4{margin:0 0 6px;font-size:14px}.scn-col ul{margin:6px 0 0;padding-left:18px;font-size:13px}
+.scn-dec{display:inline-block;font-weight:700;border-radius:6px;padding:2px 8px;font-size:13px;text-transform:uppercase;letter-spacing:.02em}
+.scn-dec.approve{background:#D9302522;color:#D93025}.scn-dec.review{background:#F5A62322;color:#B26A00}.scn-dec.block{background:#0070E022;color:#0070E0}
 .legend .dot.pay{background:transparent!important;border:1.5px solid #FFB547;border-radius:1px;width:8px;height:8px;box-shadow:0 0 6px #FFB547}
 .legend .dot.hot{border:2.5px solid #7FD0FF;background:radial-gradient(circle,#E8F4FF 30%,transparent 35%)!important;box-shadow:0 0 8px #3D5BFF,0 0 3px #9FE0FF}
 .rzp-btn{background:#0C2451;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:700;cursor:pointer}.rzp-btn:hover{background:#3395FF}

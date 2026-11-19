@@ -24,6 +24,7 @@ from .drill import defense_drill  # noqa: E402
 from .money import K, rs  # noqa: E402
 from .razorpay import Razorpay, RazorpayError, payer_ids  # noqa: E402
 from .redteam import ATTACKS, run_attack  # noqa: E402
+from .scenario import new_account_joins_ring  # noqa: E402
 from .twin import Twin, _public  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
@@ -277,6 +278,12 @@ def drill_latest():
         "after_policy": d.get("after_policy"),
         "summary": d.get("summary", {}),
     }
+
+
+@app.post("/api/scenario/new-account")
+def scenario_new_account():
+    """A clean new account shares a UPI ID with a known ring, then the agent checks out (on a fork; nothing live)."""
+    return new_account_joins_ring(twin)
 
 
 @app.get("/api/compare")

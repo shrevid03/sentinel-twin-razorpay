@@ -197,3 +197,31 @@ window.renderFlow = (d) => {
       ${panel(460, passA, "After hardening", d ? (d.chosen ? `${money(s.breach_evaded_after_inr)} got through · ${sub(passA)}` : "No better policy found") : "Run a drill to see it", "#003087")}
     </svg>`;
 };
+
+/* Scenario: a clean new account joins a known ring through a shared UPI ID; rules vs GAT vs GAT + neighbours */
+async function runScenario() {
+  const btn = $("#btn-scn"), out = $("#scn-out");
+  btn.disabled = true; btn.innerHTML = `<span class="spin"></span>Running…`;
+  try {
+    const r = await api("/api/scenario/new-account", {});
+    if (r.error) { out.innerHTML = `<p class="muted">${esc(r.error)}</p>`; return; }
+    const dec = (d) => `<span class="scn-dec ${esc(d)}">${esc(d)}</span>`;
+    const col = (title, risk, d, reasons, note) => `<div class="scn-col"><h4>${title}</h4>${dec(d)} <span class="muted">risk ${Number(risk).toFixed(2)}</span>
+      <ul>${reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${note ? `<p class="muted small">${note}</p>` : ""}</div>`;
+    const ns = r.graph.neighbour_signal;
+    out.innerHTML = `<p><b>${esc(r.account.name)}</b> (${esc(r.account.id)}) · ${r.account.age_days} days old · KYC verified · ${esc(r.account.email_domain)} email · own phone and home IP · 2 normal past orders.
+        Pays from <b>${esc(r.ring.shared_upi)}</b>, a UPI ID shared by ${r.ring.accounts_on_upi - 1} accounts in ${esc(r.ring.segment)}, ${r.ring.known_fraud_on_upi} of them already labelled fraud.
+        Order: ${money(r.order.total)} at ${esc(r.order.merchant)}.</p>
+      <div class="scn-grid">
+        ${col("Rules only", r.rules_only.score, r.rules_only.decision, r.rules_only.reasons, "New device, foreign IP, spend jump, velocity, account age.")}
+        ${col("GAT + rules", r.gat_rules.risk, r.gat_rules.decision, [`GAT risk ${Number(r.gat_rules.gat_risk).toFixed(2)}: the account's own features look clean`], "How the engine scored before the neighbour signal was added.")}
+        ${col("GAT + rules + known-fraud neighbours", r.graph.risk, r.graph.decision, r.graph.reasons,
+              `${ns.known_fraud} of ${ns.labelled} labelled linked accounts are known fraud (training labels and frozen accounts only). The shipped engine.`)}
+      </div>
+      <p class="muted small" style="margin-top:10px">Agent checkout receipt ${esc(r.receipt.id || "")}: ${r.receipt.timeline.map(esc).join(" → ")}.
+        GAT attention: ${r.graph.top_neighbours.slice(0, 3).map((n) => `${esc(n.node)} (${esc(n.type)}, ${n.attention.toFixed(2)})`).join(", ")}.</p>`;
+  } catch (e) {
+    out.innerHTML = `<p class="muted">Scenario failed: ${esc(String(e.message || e))}</p>`;
+  } finally { btn.disabled = false; btn.textContent = "Run scenario"; }
+}
+$("#btn-scn").onclick = runScenario;

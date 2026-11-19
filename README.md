@@ -67,8 +67,20 @@ The same orders replayed through three engines: **rules only** (new device, fore
 * **Rules alone are slightly better on card testing**, and the graph adds nothing on account takeover and synthetic identities. There, only the policy layer helps.
 * **Account-level held-out AUC is not evidence for the graph here:** the same node features with no message passing (logistic regression) score 0.99, the same as the GAT and the GAT plus neighbour signal, on 43 held-out synthetic accounts. The GAT's value shows up per transaction, when a new account joins a known ring.
 * **Payment identifiers are what moved the ring number.** Ring members now share a small pool of UPI IDs and cards as well as devices, and the GAT sees those links: fraud-ring interception went from about 51% to 80.5%.
-* **The known-fraud-neighbour signal** ("share of linked accounts that are known fraud", from training labels and investigator-frozen accounts only) is the strongest feature in the real-data tests. It changes nothing in this table, because every red-team ring is brand new and has no labelled neighbours. It is what catches a new account that joins an *existing* ring (the **New account joins a ring** button on the Defense drill tab).
+* **The known-fraud-neighbour signal** ("share of linked accounts that are known fraud", from training labels and investigator-frozen accounts only) is the strongest feature in the real-data tests. It changes nothing in this table, because every red-team ring is brand new and has no labelled neighbours. It is what catches a new account that joins an *existing* ring: see below.
 * **The skip connection stays off in the app.** It helped the GAT on all three real fraud graphs, but on this twin it caught no more attack fraud (84.9% vs 85.2% of unseen attacks over three runs) and blocked one good ₹14,975 order in every run. It is one constant (`GAT_SKIP` in `app/twin.py`).
+
+### One click: a new account joins a fraud ring
+
+The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new-account`, `app/scenario.py`). On a copy of the twin it creates a 45-day-old, KYC-verified account with two normal past orders, its own phone and home IP, and one link to fraud: it pays from a UPI ID that a known ring's mule accounts also use. Then the shopping agent checks out a ₹9,999 keyboard through the normal path (mandate check in code, then the risk gate). On the reference twin (seed 3, 120 epochs):
+
+| Engine | Risk | Decision | Why |
+|---|---|---|---|
+| Rules only | 0.09 | **approve** | its only flag, "amount is 2.6x this buyer's usual spend", is too weak to review |
+| GAT + rules | 0.14 | **approve** | the GAT alone scores the account 0.08: its own features look clean |
+| **GAT + rules + known-fraud neighbours** (shipped) | **0.71** | **review** | "5 of 5 labelled linked accounts are known fraud"; "shares UPI ID with 8 flagged account(s)" |
+
+The agent's checkout is held for review before any Razorpay order exists, and the decision receipt carries those reasons. This is the real-data finding in miniature: for new accounts, the explicit known-fraud-neighbour signal does what the GAT alone does not.
 
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
