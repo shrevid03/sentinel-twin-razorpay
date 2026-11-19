@@ -186,7 +186,7 @@ With no AI key at all, a deterministic **demo brain** drives the same tools, so 
 * **Channel3**: gives the shopping agent real products from 25,000+ retailers (set `CHANNEL3_API_KEY`). Live products go through exactly the same mandate guard and graph risk gate as demo items: a Channel3 gift card is still blocked by the `gift_cards` rule, and over-limit items are still rejected (`tests/test_channel3.py`). Red-team prompt-injection probes keep using the poisoned demo catalog.
 * **AG Grid** (Community): accounts, red-team results, orders, checkouts and API call grids (sorting, filtering, pagination, quick filter, custom cell renderers).
 * **Render**: `render.yaml` blueprint for one-click deploy with a health check.
-* **Postman**: `docs/postman_collection.json` covers all 36 API operations, with sample bodies.
+* **Postman**: `docs/postman_collection.json` covers all 42 API operations, with sample bodies.
 * **APIMatic**: `docs/openapi.json` (OpenAPI 3.1, generated from the API) can be imported into APIMatic to generate SDKs and docs.
 * **Elastic** (optional): set `ELASTIC_URL` / `ELASTIC_API_KEY` and every twin event (orders, decisions, freezes, policy changes) is indexed for Kibana.
 * **Zapier** (optional): set `ZAPIER_WEBHOOK_URL` (a Catch Hook) and every high-risk event is sent to Zapier, for example to Slack or email.
@@ -267,7 +267,7 @@ pytest -q
 
 ```
 app/
-  main.py          FastAPI server, 36 API operations, background traffic simulator, admin guard
+  main.py          FastAPI server, 42 API operations, background traffic simulator, admin guard
   twin.py          digital twin graph, simulator, fork, what-if replay, explanations
   gat.py           graph attention network in NumPy (forward + backward + Adam)
   agents.py        Concierge, Shopping, Investigator, Red Team agents (Claude tool use + demo brain)
