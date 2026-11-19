@@ -1,4 +1,4 @@
-# compliance_rules.yaml: regulation as config (carried over from Abuse-Ring Sentinel).
+# compliance_rules.yaml: regulation as config.
 # The rules live here, not in code, so a regulatory change is a config edit, not a redeploy; app/compliance.py loads
 # this file at start-up and enforces each rule's `enforce` hook in code, and the app refuses to start if a hook is
 # unknown. Grounding: RBI Master Directions on Fraud Risk Management (July 2024), which incorporate the

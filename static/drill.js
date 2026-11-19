@@ -228,3 +228,21 @@ async function runScenario() {
   } finally { btn.disabled = false; btn.textContent = "Run scenario"; }
 }
 $("#btn-scn").onclick = runScenario;
+
+/* Model red team: clean -> attacked -> hardened recall, plus bounded RED/BLUE rounds */
+$("#btn-mrt").onclick = async () => {
+  const b = $("#btn-mrt"), out = $("#mrt-out");
+  b.disabled = true; b.innerHTML = `<span class="spin"></span>Attacking…`;
+  try {
+    const r = await api("/api/model-redteam", {});
+    const f = (v) => (v == null || Number.isNaN(v[0]) ? "–" : `${(v[0] * 100).toFixed(0)}%`);
+    const a = r.robustness.mean_std, m = r.robustness_mixed.mean_std;
+    out.innerHTML = `<table class="dtable"><tr><th>Ring recall on held-out rings</th><th class="n">Clean</th><th class="n">Under attack</th><th class="n">Hardened, fresh attack</th><th class="n">Hardened, clean rings</th><th class="n">Good accounts flagged</th></tr>
+      <tr><td>Hardened on attacked rings only</td><td class="n">${f(a.clean)}</td><td class="n bad">${f(a.attacked)}</td><td class="n">${f(a.hardened)}</td><td class="n">${f(a.hardened_clean)}</td><td class="n">${f(a.hardened_legit_flag_rate)}</td></tr>
+      <tr class="chosen"><td><b>Mixed hardening</b> (half the rings attacked, half clean)</td><td class="n">${f(m.clean)}</td><td class="n bad">${f(m.attacked)}</td><td class="n">${f(m.hardened)}</td><td class="n">${f(m.hardened_clean)}</td><td class="n">${f(m.hardened_legit_flag_rate)}</td></tr></table>
+      <p class="muted small">RED/BLUE rounds (RED picks the perturbation that hurts the current model most; BLUE retrains on a fresh draw):
+      ${r.coevolution.slice(1).map((c) => `round ${c.round}: RED drop ${c.red_drop}, cover ${c.red_cover} → recall ${(c.recall_before_blue * 100).toFixed(0)}%; after BLUE ${(c.fresh_attack_recall_after_blue * 100).toFixed(0)}% on a fresh attack, ${(c.clean_recall_after_blue * 100).toFixed(0)}% on clean rings`).join(" · ")}.
+      ${esc(r.note)} ${r.accounts} accounts, ${r.edges} links, ${r.fraud} fraud.</p>`;
+  } catch (e) { out.innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
+  finally { b.disabled = false; b.textContent = "Attack and harden the model"; }
+};

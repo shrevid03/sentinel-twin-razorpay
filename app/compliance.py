@@ -4,7 +4,7 @@ Every rule in compliance_rules.yaml names an `enforce` hook; each hook below is 
 and loading fails if the file names a hook this module does not implement.
 
 The ledger keeps the model's recommendation and the human's decision as SEPARATE records linked by case_id (the
-accountability spine from Abuse-Ring Sentinel). Each record carries the hash of the previous one, so editing or
+accountability spine). Each record carries the hash of the previous one, so editing or
 deleting any past record breaks verify(). It is written to a JSONL file (LEDGER_PATH) as well as kept in memory.
 """
 from __future__ import annotations

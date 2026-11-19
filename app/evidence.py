@@ -1,4 +1,4 @@
-"""Deterministic evidence investigator (ported from Abuse-Ring Sentinel's review layer).
+"""Deterministic evidence investigator.
 
 The split of responsibilities:
     model (GAT)      detects risk and triages: auto-clear / review / flag
@@ -140,8 +140,11 @@ def evidence_pack(twin, account):
 def embedding(twin, account):
     """The GAT's hidden representation of the account (for precedent search)."""
     nodes, idx, X, mask = twin.build_graph()
-    twin.model.forward(X, mask)
-    h = np.maximum(twin.model._pre[idx[account]], 0)
+    if hasattr(twin.model, "embed"):  # GraphSAGE
+        h = twin.model.embed(X, mask)[idx[account]]
+    else:
+        twin.model.forward(X, mask)
+        h = np.maximum(twin.model._pre[idx[account]], 0)
     return [round(float(v), 4) for v in h]
 
 

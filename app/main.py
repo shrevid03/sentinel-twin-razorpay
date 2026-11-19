@@ -287,6 +287,13 @@ def scenario_new_account():
     return new_account_joins_ring(twin)
 
 
+@app.post("/api/model-redteam")
+def model_redteam():
+    """Attack the detector itself (drop ring edges + cover edges), harden it, and run RED/BLUE rounds (on a copy)."""
+    from .model_redteam import run_on_twin
+    return run_on_twin(twin)
+
+
 @app.get("/api/compare")
 def compare_get():
     """Rules only vs GAT + rules vs GAT + rules hardened, on the latest drill's orders (runs a drill if none yet)."""

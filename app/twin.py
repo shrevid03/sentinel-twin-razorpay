@@ -14,6 +14,7 @@ import copy
 import hashlib
 import json
 import math
+import os
 import random
 import threading
 import time
@@ -44,7 +45,7 @@ FEATURES = ["is_account", "is_device", "is_ip", "is_merchant", "account_age", "o
             "kyc_verified", "disposable_email", "degree", "is_payment_id", "payment_id_count",
             "xfer_out", "xfer_in", "xfer_amount", "xfer_partners"]
 
-# Money-flow ring patterns (absorbed from Abuse-Ring Sentinel): accounts also move money to each other
+# Money-flow ring patterns: accounts also move money to each other
 # (P2P transfers / marketplace payouts). Each member looks ordinary on its own row; the shape gives it away.
 FLOW_PATTERNS = {
     "cycle": "layering: money goes round a closed loop A -> B -> ... -> A",
@@ -462,7 +463,12 @@ class Twin:
             self._split = {"X": X, "y": y, "tr": tr, "va": va, "te": te, "nodes": nodes}
             self.known_labelled = {nodes[i] for i in tr}
             self.known_fraud = {nodes[i] for i in tr if y[i] == 1}
-            self.model = GAT(len(FEATURES), hidden=8, heads=4, skip=GAT_SKIP)
+            kind = os.getenv("TWIN_MODEL", "gat").strip().lower()
+            if kind == "graphsage":  # GraphSAGE in NumPy (app/sage.py)
+                from .sage import SageMaskModel
+                self.model = SageMaskModel(len(FEATURES), hidden=64, seed=7)
+            else:
+                self.model = GAT(len(FEATURES), hidden=8, heads=4, skip=GAT_SKIP)
             hist = self.model.fit(X, mask, y, tr, va, epochs=epochs)
             P = self.model.predict_proba(X, mask)
             te_pred = P[te] >= 0.5
@@ -474,6 +480,7 @@ class Twin:
                 "train_nodes": int(len(tr)), "test_nodes": int(len(te)), "history": hist,
                 "graph": {"nodes": len(nodes), "edges": int((mask.sum() - len(nodes)) / 2)},
                 "heads": self.model.n_heads, "features": FEATURES,
+                "model": getattr(self.model, "kind", "gat"),
             }
             self._dirty = True
             self.refresh()
@@ -511,12 +518,18 @@ class Twin:
         with self.lock:
             self.refresh()
             nodes, idx, X, mask = self.build_graph()
-            self.model.forward(X, mask)
             i = idx[node_id]
-            a1 = np.mean([a[i] for a in self.model.attn1], axis=0)
-            a2 = self.model.attn2[i]
-            att = 0.5 * a1 + 0.5 * a2
-            per_head = [a[i] for a in self.model.attn1]
+            if hasattr(self.model, "attn1"):
+                self.model.forward(X, mask)
+                a1 = np.mean([a[i] for a in self.model.attn1], axis=0)
+                a2 = self.model.attn2[i]
+                att = 0.5 * a1 + 0.5 * a2
+                per_head = [a[i] for a in self.model.attn1]
+            else:  # GraphSAGE weighs neighbours equally (mean aggregator): rank them by their own risk instead
+                deg = max(int(mask[i].sum()) - 1, 1)
+                att = np.array([(1.0 / deg) * (0.5 + self._probs.get(n, 0)) if mask[i, j] and j != i else 0.0
+                                for j, n in enumerate(nodes)])
+                per_head = []
             nb = [j for j in np.argsort(-att) if mask[i, j] and j != i][:top]
             out = []
             for j in nb:
