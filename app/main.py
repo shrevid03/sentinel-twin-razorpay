@@ -309,13 +309,16 @@ def guard_stats():
 
 
 @app.post("/api/redteam/chatbot-injection", dependencies=rate("model-redteam", 4))
-def chatbot_injection():
-    """Throw the injection corpus at the agents on a throwaway copy and report what was blocked or got through."""
+def chatbot_injection(live: bool = False):
+    """Throw the injection corpus at the agents on a throwaway copy and report what was blocked or got through.
+    Uses the built-in demo brain (seconds); live=true runs it against the configured LLM (slower, uses quota)."""
     from .injection import run
 
     def factory():
         t = Team(twin.fork(), Razorpay())
         t.no_live = True
+        if not live:
+            t.brain.client, t.brain.provider = None, "demo"
         return t
     return run(factory)
 

@@ -103,3 +103,11 @@ def test_precedent_surfaces_similar_resolved_case(trained_twin):
     team.casebook.decide(c1["id"], "confirm_fraud", "closed loop", "asha")
     c2 = team.casebook.open_case(next(a for a in team.twin.accounts.values() if a.segment == "cycle-2").id)
     assert c2["precedent"] and c2["precedent"][0]["case_id"] == c1["id"]
+
+
+def test_copilot_summary_and_case_id_citation(trained_twin):
+    team = Team(trained_twin.fork(), Razorpay())
+    case = team.casebook.open_case(next(a.id for a in team.twin.accounts.values() if a.segment == "ring-1"))
+    s = team.casebook.ask(case["id"], "Summarize this case")["answer"]
+    assert s.startswith("Recommendation:")
+    assert team.casebook._cites_only_case_ids(team.casebook.cases[case["id"]], f"{case['id']} concerns {case['account']}")

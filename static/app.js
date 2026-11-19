@@ -31,6 +31,7 @@ const session = "s-" + Math.random().toString(36).slice(2, 9);
 /* ---------------- tabs ---------------- */
 document.querySelectorAll("#tabs button").forEach((b) => b.onclick = () => showTab(b.dataset.tab));
 function showTab(t) {
+  if (window.speechSynthesis) speechSynthesis.cancel();  // never keep talking over another screen
   document.querySelectorAll("#tabs button").forEach((x) => x.classList.toggle("active", x.dataset.tab === t));
   document.querySelectorAll(".tab").forEach((x) => x.classList.toggle("active", x.id === "tab-" + t));
   ({ investigator: loadAccounts, ledger: loadLedger, model: loadModel, whatif: () => initPolicy().then(runWhatIf), redteam: loadRuns })[t]?.();
@@ -352,6 +353,7 @@ function setChips() {
 function addMsg(cls, html) { $("#messages").insertAdjacentHTML("beforeend", `<div class="msg ${cls}">${html}</div>`); $("#messages").scrollTop = 1e9; }
 async function sendChat(text) {
   text = (text || $("#msg").value).trim(); if (!text) return;
+  if (window.speechSynthesis) speechSynthesis.cancel();  // a new message stops the previous spoken reply
   $("#msg").value = ""; addMsg("user", esc(text)); addMsg("sys", "Sentinel is working…");
   try {
     const r = await api("/api/chat", { text, session, lang: $("#lang").value });
@@ -431,28 +433,50 @@ async function renderPay(co) {
   }
 }
 
-/* voice: Web Speech API, works in Chrome / Edge for every Indian language listed */
+/* voice: Web Speech API (Chrome and Edge; Safari partly). The transcript goes through sendChat, so it gets the same
+   prompt-injection screening as typed text, and voice can never approve anything: approvals are on-screen buttons. */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null;
-$("#mic").onclick = () => {
-  if (!SR) { addMsg("sys", "Voice input needs Chrome or Edge."); return; }
-  if (rec) { rec.stop(); return; }
-  rec = new SR(); rec.lang = $("#lang").value; rec.interimResults = true;
-  $("#mic").classList.add("rec");
-  rec.onresult = (e) => { $("#msg").value = Array.from(e.results).map((r) => r[0].transcript).join(""); };
-  rec.onend = () => { $("#mic").classList.remove("rec"); rec = null; if ($("#msg").value.trim()) sendChat(); };
-  rec.onerror = (e) => addMsg("sys", "Mic: " + esc(e.error));
-  rec.start();
+const MIC_ERRORS = {
+  "not-allowed": "Microphone permission was denied. Allow it from the icon in the address bar, or just type.",
+  "service-not-allowed": "This browser blocked speech recognition. You can type instead.",
+  "no-speech": "I didn't hear anything. Tap the mic and speak, or type your message.",
+  "audio-capture": "No microphone was found. Plug one in, or type instead.",
+  "network": "Voice recognition needs an internet connection right now. Please type instead.",
+  "language-not-supported": "This browser can't recognise speech in that language yet. Try English, or type.",
 };
+let rec = null, voiceNoted = false;
+if (!SR) { $("#mic").classList.add("off"); $("#mic").title = "Voice input works in Chrome and Edge. You can type here."; }
+if (!window.speechSynthesis) { const s = $("#speak"); s.checked = false; s.disabled = true; s.parentElement.title = "This browser cannot read replies aloud."; }
+$("#mic").onclick = () => {
+  if (!SR) {
+    if (!voiceNoted) addMsg("sys", "Voice input works in Chrome and Edge. In this browser you can type, and everything else works the same.");
+    voiceNoted = true; return;
+  }
+  if (rec) { rec.stop(); return; }
+  if (window.speechSynthesis) speechSynthesis.cancel();  // don't record our own voice
+  try { rec = new SR(); } catch (e) { addMsg("sys", "Voice input isn't available here. Please type."); return; }
+  rec.lang = $("#lang").value; rec.interimResults = true;
+  $("#mic").classList.add("rec");
+  rec.onresult = (e) => { $("#msg").value = Array.from(e.results).map((r) => r[0].transcript).join("").slice(0, 2000); };
+  rec.onend = () => { $("#mic").classList.remove("rec"); rec = null; if ($("#msg").value.trim()) sendChat(); };
+  rec.onerror = (e) => { if (e.error !== "aborted") addMsg("sys", esc(MIC_ERRORS[e.error] || "Voice input stopped (" + e.error + "). Please type instead.")); };
+  try { rec.start(); } catch (e) { $("#mic").classList.remove("rec"); rec = null; addMsg("sys", "Couldn't start the microphone. Please type instead."); }
+};
+const spokenNoVoice = new Set();
 function speak(text) {
   if (!$("#speak").checked || !window.speechSynthesis) return;
   speechSynthesis.cancel();
+  const lang = $("#lang").value, voices = speechSynthesis.getVoices();
+  const v = voices.find((x) => x.lang === lang) || voices.find((x) => x.lang.startsWith(lang.slice(0, 2)));
+  if (!v && voices.length && !lang.startsWith("en")) {  // no voice for this language: show text only, don't mangle it
+    if (!spokenNoVoice.has(lang)) addMsg("sys", "This browser has no voice installed for this language, so replies are shown as text.");
+    spokenNoVoice.add(lang); return;
+  }
   const u = new SpeechSynthesisUtterance(text.replace(/[*_#`]/g, "").slice(0, 600));
-  const lang = $("#lang").value; u.lang = lang;
-  const v = speechSynthesis.getVoices().find((v) => v.lang === lang) || speechSynthesis.getVoices().find((v) => v.lang.startsWith(lang.slice(0, 2)));
-  if (v) u.voice = v;
-  speechSynthesis.speak(u);
+  u.lang = lang; if (v) u.voice = v;
+  try { speechSynthesis.speak(u); } catch (e) { /* speaking is a nice-to-have */ }
 }
+document.addEventListener("visibilitychange", () => { if (document.hidden && window.speechSynthesis) speechSynthesis.cancel(); });
 
 /* mandate */
 async function loadMandate() {

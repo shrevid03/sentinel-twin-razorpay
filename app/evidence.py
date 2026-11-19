@@ -251,7 +251,7 @@ class CaseBook:
 
     @staticmethod
     def _cites_only_case_ids(case, answer):
-        known = case["account"] + " " + evidence_text(case) + " " + " ".join(p["case_id"] + " " + p["account"]
+        known = case["id"] + " " + case["account"] + " " + evidence_text(case) + " " + " ".join(p["case_id"] + " " + p["account"]
                                                                                for p in case.get("precedent", []))
         ids = re.findall(r"\b(?:A|D|IP|UPI|CARD|CT|T|ORD|EV|HOLD|ACT)-[0-9A-Fa-f]{3,}\b", answer)
         return all(i in known for i in ids)
@@ -259,11 +259,13 @@ class CaseBook:
     @staticmethod
     def _grounded_answer(case, question):
         q = question.lower()
-        words = {w.strip("?.,!") for w in q.split() if len(w) > 3}
+        if any(w in q for w in ("summar", "overview", "why", "explain", "सार", "सारांश")):
+            return deterministic_summary(case)
+        stop = {"this", "that", "case", "account", "with", "what", "does", "have", "there", "about", "from", "they",
+                "were", "which", "tell", "please", "show", "give"}
+        words = {w.strip("?.,!") for w in q.split() if len(w) > 3} - stop
         hits = [s for s in case["reasoning_steps"]
                 if words & {w.strip(".,():") for w in (s["claim"] + " " + s["source"]).lower().split()}]
-        if any(w in q for w in ("summar", "overview", "why")) and not hits:
-            return deterministic_summary(case)
         if not hits:
             return "I don't have that information in the verified evidence for this case."
         return " ".join(f"{s['claim']} (evidence: {', '.join(map(str, s['evidence'][:4]))}; source: {s['source']})"
