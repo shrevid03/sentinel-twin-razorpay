@@ -115,6 +115,8 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 
 **Filming tip:** the investigator takes a few seconds with Gemini; trim the wait.
 
+**Optional extra line (5 seconds):** click **Replay 30 reviewer decisions** on the Reviewer twin card and say: *"And the reviewer twin learns how I decide: it agreed with 24 of 30 decisions before seeing them, and it only advises unless I switch it on."*
+
 ---
 
 ## Scene 7: Closing (2:25–2:50)

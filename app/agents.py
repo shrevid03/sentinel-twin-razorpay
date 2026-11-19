@@ -224,6 +224,8 @@ class Team:
         self.buyer = acc.id
         self.mandate = {"per_order_limit": 12500.0, "monthly_budget": 35000.0, "spent": 0.0,
                         "blocked_categories": ["gift_cards"], "currency": "INR"}
+        from .reviewer_twin import ReviewerTwin
+        self.reviewer_twin = ReviewerTwin(self)  # learns from the human review queue; shadow mode by default
 
     # ================================================================ shopper
     def shopper_tools(self, poisoned=False, attack_log=None):
@@ -344,12 +346,18 @@ class Team:
             hid = "HOLD-" + rc["id"][5:]
             self.holds[hid] = {"id": hid, "receipt_id": rc["id"], "cart": cart, "merchant": merchant, "total": total,
                                "risk": score["risk"], "factors": score["factors"], "status": "pending",
-                               "created_at": rc["created_at"]}
+                               "created_at": rc["created_at"], "account": self.buyer}
             rc["outcome"] = "held_for_review"
             rc["review"] = {"hold_id": hid, "status": "pending"}
             self._stamp(rc, f"held for manual review as {hid}; no Razorpay order yet")
             self.twin._event("guard", f"Agent checkout {rs(total)} held for manual review (risk {score['risk']:.2f}); "
                                       "no Razorpay order created", level="warn")
+            auto = self.reviewer_twin.try_autopilot("hold", self.holds[hid])  # None unless autopilot is on
+            if auto:
+                return {"status": "released_by_reviewer_twin", "hold_id": hid, "total": total, "risk": score["risk"],
+                        "pay_order_id": auto["pay_order_id"], "confidence": auto["confidence"],
+                        "receipt_id": rc["id"], "message": "Released by the reviewer twin's autopilot (undo available). "
+                                                           "The buyer still has to approve the payment."}
             return {"status": "held_for_review", "hold_id": hid, "total": total, "risk": score["risk"],
                     "factors": score["factors"], "receipt_id": rc["id"],
                     "message": "This order needs a human review before any Razorpay payment is started."}
@@ -384,6 +392,8 @@ class Team:
             if co.get("status") == "COMPLETED":
                 # idempotent: a repeated request never charges again or double-counts spend
                 return {"id": order_id, "status": "COMPLETED", "duplicate": True}
+            if co.get("status") == "CANCELLED":
+                raise CaptureRefused(409, f"checkout {order_id} was cancelled ({co.get('cancel_note', 'undone')})")
             remaining = self.mandate["monthly_budget"] - self.mandate["spent"]
             if co["total"] > self.mandate["per_order_limit"] or co["total"] > remaining:
                 self.twin._event("guard", f"Capture of {order_id} ({rs(co['total'])}) refused: mandate exceeded at "
@@ -538,6 +548,7 @@ class Team:
                 raise KeyError(action_id)
             if a["status"] != "pending":  # idempotent: a decided action never runs again
                 return {**a, "duplicate": True}
+            a["twin"] = self.reviewer_twin.observe("action", a, approve, reviewer)["prediction"]
             if approve:
                 a["result"] = self._execute(a)
                 a["status"] = "approved"
@@ -549,7 +560,7 @@ class Team:
                              level="ok" if approve else "info")
             return a
 
-    def decide_hold(self, hold_id, release, reviewer, note=""):
+    def decide_hold(self, hold_id, release, reviewer, note="", learn=True):
         """Release a held checkout (creates the Razorpay order) or reject it. Each hold is decided once."""
         with self._review_lock:
             h = self.holds.get(hold_id)
@@ -562,6 +573,8 @@ class Team:
             if release and (h["total"] > self.mandate["per_order_limit"] or h["total"] > remaining):
                 raise CaptureRefused(409, f"cannot release: {rs(h['total'])} now exceeds the mandate "
                                           f"(remaining {rs(remaining, 2)})")
+            if learn:  # the reviewer twin predicts first, then learns from the human's decision
+                h["twin"] = self.reviewer_twin.observe("hold", h, release, reviewer)["prediction"]
             h["decision"] = {"by": reviewer, "note": note, "at": time.strftime("%Y-%m-%d %H:%M:%S")}
             if release:
                 h["status"] = "released"
@@ -581,6 +594,30 @@ class Team:
             self.twin._event("review", f"{reviewer} {h['status']} held checkout {hold_id} ({rs(h['total'])})",
                              level="ok" if release else "info")
             return h
+
+    def cancel_released_hold(self, hold_id, note):
+        """Undo a release: cancel its Razorpay checkout before the buyer pays (capture is then refused)."""
+        with self._review_lock:
+            h = self.holds.get(hold_id)
+            if not h:
+                raise KeyError(hold_id)
+            if h["status"] != "released":
+                raise CaptureRefused(409, f"{hold_id} is {h['status']}, not released")
+            co = self.checkouts.get(h.get("pay_order_id"), {})
+            if co.get("status") == "COMPLETED":
+                raise CaptureRefused(409, f"{hold_id}: the buyer already paid, so this can only be refunded by a human")
+            co["status"], co["cancel_note"] = "CANCELLED", note
+            for o in self.twin.orders:
+                if o["id"] == co.get("twin_order"):
+                    o["status"] = "cancelled"
+            h["status"] = "rejected"
+            rc = self.receipts.get(h["receipt_id"])
+            if rc:
+                rc["outcome"] = "release_undone"
+                self._stamp(rc, f"release undone ({note}); checkout cancelled, nothing was charged")
+            self._audit("hold", hold_id, "undone", "merchant", note, {"pay_order_id": h.get("pay_order_id")})
+            self.twin._event("review", f"Release of {hold_id} undone: checkout cancelled before payment", level="info")
+            return {"hold_id": hold_id, "status": "cancelled", "pay_order_id": h.get("pay_order_id")}
 
     def investigate(self, target=None, trace=None, lang="en-IN"):
         trace = trace if trace is not None else []

@@ -393,8 +393,41 @@ class ReviewIn(BaseModel):
 @app.get("/api/actions")
 def actions():
     """The review queue: investigator proposals, held agent checkouts, and the audit trail."""
-    return {"actions": list(team.actions.values())[::-1], "holds": list(team.holds.values())[::-1],
-            "audit": team.audit[::-1]}
+    rt = team.reviewer_twin
+    acts = [{**a, "twin": rt.predict("action", a)} if a["status"] == "pending" else a for a in team.actions.values()]
+    holds = [{**h, "twin": rt.predict("hold", h)} if h["status"] == "pending" else h for h in team.holds.values()]
+    return {"actions": acts[::-1], "holds": holds[::-1], "audit": team.audit[::-1],
+            "reviewer_twin": {"label": rt.status()["label"], "agreement": rt.agreement(),
+                              "mode": "autopilot" if rt.autopilot["enabled"] else "shadow"}}
+
+
+class AutopilotIn(BaseModel):
+    enabled: bool | None = None
+    max_inr: float | None = None
+    min_confidence: float | None = None
+
+
+@app.get("/api/reviewer-twin")
+def reviewer_twin():
+    """The reviewer twin: what it was trained on, agreement with the human, model weights, autopilot state."""
+    return team.reviewer_twin.status()
+
+
+@app.post("/api/reviewer-twin/replay", dependencies=ADMIN)
+def reviewer_twin_replay():
+    """Demo: a simulated reviewer works 30 synthetic cases; the twin predicts each before it is decided."""
+    return team.reviewer_twin.replay(30)
+
+
+@app.post("/api/reviewer-twin/autopilot", dependencies=ADMIN)
+def reviewer_twin_autopilot(body: AutopilotIn):
+    """Off by default. Only ever releases held checkouts under the cap at confidence >= 0.95."""
+    return team.reviewer_twin.set_autopilot(body.enabled, body.max_inr, body.min_confidence)
+
+
+@app.post("/api/reviewer-twin/undo/{hold_id}", dependencies=ADMIN)
+def reviewer_twin_undo(hold_id: str):
+    return _review(team.reviewer_twin.undo, hold_id)
 
 
 def _review(fn, item_id, *args):

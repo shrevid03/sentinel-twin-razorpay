@@ -85,6 +85,15 @@ The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new
 
 The agent's checkout is held for review before any Razorpay order exists, and the decision receipt carries those reasons. This is the real-data finding in miniature: for new accounts, the explicit known-fraud-neighbour signal does what the GAT alone does not.
 
+### Reviewer twin: a digital twin of the human reviewer
+
+The **Investigator** tab has a **Reviewer twin** card (`app/reviewer_twin.py`, `GET /api/reviewer-twin`). Every approve or reject in the review queue (held agent checkouts and investigator proposals) is recorded with the case as it looked at decision time: risk score, signals fired, known-fraud-neighbour share, ₹ amount, action type, account age and linked flagged accounts. Only numbers and synthetic ids are stored, never names, emails, phone numbers or payment identifiers. A small logistic regression learns P(the reviewer approves), with separate terms for held checkouts and proposals (high risk argues against releasing a hold but for approving a restriction).
+
+* **Shadow mode by default.** Each queue item shows "Your twin would approve (94%) because account age 900 days; signals fired 0; …", and the queue is sorted so the cases it is least sure about come first.
+* **Honest agreement.** Each prediction is stored *before* the human decides, and the model is refit only afterwards. Cold start: it begins from 40 clearly labelled synthetic decisions drawn from a written policy, and always says "trained on N real + M replayed + K seeded decisions".
+* **Demo:** **Replay 30 reviewer decisions** has a simulated reviewer (a stricter version of the seed policy: wary of big carts on young accounts) work 30 synthetic cases. The twin agrees on **80%** of them (24 of 30), predicting each one before it is decided. These are labelled "replayed", never mixed with real decisions.
+* **Autopilot is off by default.** When switched on, it may only *release held checkouts* (reversible: the buyer still has to pay in Razorpay Checkout, and **undo** cancels the checkout so it can never be captured), at confidence ≥ 0.95 and up to ₹5,000 (capped at the ₹12,500 mandate). It never refunds, restricts or captures, never learns from its own decisions, and every release is in the audit trail with an undo link.
+
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
 * The spending mandate (a Reserve Pay-style consent: approve a limit once, the agent spends inside it) and the risk gate run in code, never in the prompt. A prompt-injected agent cannot buy blocked gift cards.
