@@ -15,7 +15,7 @@ Sentinel Twin is a safety layer for agentic payments. A shopping agent (Gemini t
 - **Risk for AI-led transactions.** Razorpay's Agentic Payments page lists "Advanced Risk & Compliance: real-time fraud detection, authentication, and compliance built for AI-led transactions". Sentinel Twin is a working version of that layer: a graph attention network scores every agent-proposed order on the would-be graph before a Razorpay order exists, and a red team plus defense drill keep the policy honest.
 - **A Reserve Pay-style mandate.** The buyer approves a limit once (per order and per month) and the agent spends inside it, like UPI Reserve Pay. It is enforced in code and re-checked at capture. Honest caveat: the demo simulates this consent on standard Razorpay test checkout; it does not call UPI Reserve Pay.
 - **A dispute agent.** A signed `payment.dispute.created` webhook opens an investigation automatically. The investigator agent gathers graph evidence, files a case and proposes refunds or restrictions that a human approves: the kind of dispute-management agent Razorpay's Agent Studio lists. Refunds use the real Razorpay Refunds API in test mode; account restrictions are simulated inside the twin.
-- Agentic payments need guardrails that live outside the model: mandate checks, risk gates, manual capture and human approval, all enforced in code and covered by 30 tests.
+- Agentic payments need guardrails that live outside the model: mandate checks, risk gates, manual capture and human approval, all enforced in code and covered by 107 tests.
 - It uses the Razorpay primitives the way a merchant would: Orders, Standard Checkout, signature verification, payment capture, refunds and webhook HMAC verification.
 - It is built for Indian merchants: UPI-first checkout, INR charges, and voice in Hindi, Tamil, Telugu, Bengali, Marathi, Kannada, Gujarati, Malayalam and Punjabi.
 
@@ -23,5 +23,8 @@ Sentinel Twin is a safety layer for agentic payments. A shopping agent (Gemini t
 I built it with AI coding agents as pair programmers: architecture, the NumPy GAT with gradient checks, the agent tool loops, and the test suite, then ported the payment layer from PayPal to Razorpay in a day. Results I report are the ones I measured, including where the graph does not beat simple rules (see the README's "Rules vs graph").
 
 ## Numbers
-- Unseen seeded attacks (₹8,04,989): rules only intercept 41.8%, GAT + rules 84.3%, GAT + hardened policy 94.8%. Linking accounts through UPI IDs and cards lifted fraud-ring interception from about 51% to 80.5%.
-- Defense drill: unseen attack money that got through fell from ₹1,85,742 to ₹36,452 (of ₹4,87,889 attempted), for 5 more good customers sent to review (7 of 344) and no good orders blocked.
+- Unseen seeded attacks (₹14,46,140 across eight playbooks, including layering cycles, mule fan-out and collusion): rules only intercept 22.4%, GAT + rules 86.7%, GAT + hardened policy 93.9%.
+- Defense drill: unseen attack money that got through fell from ₹1,44,435 to ₹85,851 (of ₹5,92,817 attempted), for 5 more good customers sent to review (8 of 324) and no good orders blocked.
+- A new account that pays from a known ring's UPI ID: rules approve (0.09), the GAT alone approves (0.07), the shipped engine holds it for review (0.66).
+- Investigation is evidence-first: the model triages, deterministic graph checks gather evidence with record ids, an LLM copilot only explains that evidence, and a person decides with a reason. RBI-grounded rules are enforced in code and every decision lands in a hash-chained ledger.
+- Prompt injection: 20 attempts (multilingual, encoded, indirect through listings and account names) on a throwaway copy, 0 got through; no model can reach a capture, refund, restriction or approval.

@@ -593,6 +593,79 @@
         }
       }
     },
+    "/api/guard": {
+      "get": {
+        "summary": "Guard Stats",
+        "description": "Prompt-injection guard counters: blocked inputs, scrubbed tool outputs, blocked replies, refused tool calls.",
+        "operationId": "guard_stats_api_guard_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/redteam/chatbot-injection": {
+      "post": {
+        "summary": "Chatbot Injection",
+        "description": "Throw the injection corpus at the agents on a throwaway copy and report what was blocked or got through.\nUses the built-in demo brain (seconds); live=true runs it against the configured LLM (slower, uses quota).",
+        "operationId": "chatbot_injection_api_redteam_chatbot_injection_post",
+        "parameters": [
+          {
+            "name": "live",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Live"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/model-redteam": {
+      "post": {
+        "summary": "Model Redteam",
+        "description": "Attack the detector itself (drop ring edges + cover edges), harden it, and run RED/BLUE rounds (on a copy).",
+        "operationId": "model_redteam_api_model_redteam_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/compare": {
       "get": {
         "summary": "Compare Get",
@@ -923,6 +996,211 @@
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/evidence/{account_id}": {
+      "post": {
+        "summary": "Open Evidence Case",
+        "description": "Model triage + deterministic graph evidence (claim, evidence, source) + precedent. Recorded in the ledger.",
+        "operationId": "open_evidence_case_api_evidence__account_id__post",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/evidence": {
+      "get": {
+        "summary": "Evidence Cases",
+        "operationId": "evidence_cases_api_evidence_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/evidence/{case_id}/decide": {
+      "post": {
+        "summary": "Decide Evidence Case",
+        "description": "The human's decision: confirm_fraud, clear or monitor. Reason and reviewer are required (RBI-ACC-03).",
+        "operationId": "decide_evidence_case_api_evidence__case_id__decide_post",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          },
+          {
+            "name": "x-admin-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Admin-Token"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecideIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/evidence/{case_id}/ask": {
+      "post": {
+        "summary": "Ask Copilot",
+        "description": "Grounded copilot: answers only from the case's verified evidence and never decides.",
+        "operationId": "ask_copilot_api_evidence__case_id__ask_post",
+        "parameters": [
+          {
+            "name": "case_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Case Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ledger": {
+      "get": {
+        "summary": "Ledger",
+        "description": "The append-only, hash-chained ledger: model recommendations and human decisions as separate records.",
+        "operationId": "ledger_api_ledger_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -1456,6 +1734,19 @@
   },
   "components": {
     "schemas": {
+      "AskIn": {
+        "properties": {
+          "question": {
+            "type": "string",
+            "title": "Question"
+          }
+        },
+        "type": "object",
+        "required": [
+          "question"
+        ],
+        "title": "AskIn"
+      },
       "AttackIn": {
         "properties": {
           "attack": {
@@ -1576,6 +1867,29 @@
         "type": "object",
         "title": "CheckoutResult",
         "description": "What Razorpay Checkout's success handler returns. Empty in demo mode (the server simulates Checkout)."
+      },
+      "DecideIn": {
+        "properties": {
+          "decision": {
+            "type": "string",
+            "title": "Decision"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "default": ""
+          },
+          "reviewer": {
+            "type": "string",
+            "title": "Reviewer",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "decision"
+        ],
+        "title": "DecideIn"
       },
       "DrillIn": {
         "properties": {

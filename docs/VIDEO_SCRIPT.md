@@ -89,9 +89,9 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 **On screen:** scroll down to **5 · Why a graph?** and point at the chart. Then scroll up and click **Apply hardened policy to live**.
 
 **Say:**
-> "Why a graph at all? Same orders, three engines. Rules alone catch about forty-two percent. Add the graph and it's eighty-four. With the hardened policy, ninety-five. The graph wins on rings and device farms, the fraud rules can't see. I apply it, and the very next checkout is safer."
+> "Why a graph at all? Same orders, three engines. Rules alone catch about twenty-two percent. Add the graph and it's eighty-seven. With the hardened policy, ninety-four. The graph wins on rings, money-laundering loops, mule networks and device farms, the fraud rules can't see. I apply it, and the very next checkout is safer."
 
-**Filming tip:** if your screen shows different numbers, say yours. Don't round up. (The drill is now reproducible, so a fresh server shows 41.8% / 84.3% / 94.8%.)
+**Filming tip:** if your screen shows different numbers, say yours. Don't round up. (The drill is reproducible, so a fresh server shows 22.4% / 86.7% / 93.9%.)
 
 ---
 
@@ -100,7 +100,7 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 **On screen:** still on the Defense drill tab, scroll to **New account joins a fraud ring** and click **Run scenario**. Point at the three columns from left to right: red **APPROVE**, red **APPROVE**, amber **REVIEW**.
 
 **Say:**
-> "Here's a brand-new account. Clean history, KYC done. Rules approve it. Even the GAT alone approves it. But it pays from a UPI ID five known fraudsters use, and the full engine holds it for review."
+> "Here's a brand-new account. Clean history, KYC done. Rules approve it. Even the GAT alone approves it. But it pays from a UPI ID four known fraudsters use, and the full engine holds it for review."
 
 **Filming tip:** this adds 10 seconds; to stay under 3:00, trim a sentence from Scene 3 or Scene 7. It runs on a copy of the twin, so it never changes your live numbers or creates a Razorpay order.
 

@@ -52,8 +52,8 @@ cd ~/sentinel-twin
 
 ## Results to quote (read your own screen on the day)
 
-- Rules vs graph, same orders (19 Nov, reproducible): **rules only 41.8%** of unseen attack traffic intercepted, **GAT + rules 84.3%** (fraud rings 80.5%, up from about 51% before UPI ID / card links), **GAT + hardened policy 94.8%**.
-- A drill on 19 Nov (seed 7, identical on every run): attack ₹ that got through **₹1,26,396 → ₹41,888**; intercept rate **95.9% → 98.7%**; good orders blocked ₹0.
+- Rules vs graph, same orders (20 Nov, reproducible, eight playbooks incl. money-flow rings): **rules only 22.4%** of unseen attack traffic intercepted, **GAT + rules 86.7%**, **GAT + hardened policy 93.9%**.
+- A drill on 20 Nov (seed 7, identical on every run): attack ₹ that got through **₹1,92,062 → ₹88,027**; intercept rate **92.2% → 96.0%**; good orders blocked ₹0.
 - GAT test AUC is ~0.99 on this synthetic data.
 
 ## Tests

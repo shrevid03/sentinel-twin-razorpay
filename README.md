@@ -25,53 +25,54 @@ Tested on three public fraud graphs plus the app's own twin. Full tables, protoc
 
 ## One click: Defense drill (policy hardening on synthetic attack traffic)
 
-The **Defense drill** tab runs the whole loop in about 4 seconds, on one frozen copy of the twin so before and after compare like with like. It hardens the **decision policy**; the GAT itself is not retrained.
+The **Defense drill** tab runs the whole loop in about 15-25 seconds, on one frozen copy of the twin so before and after compare like with like. It hardens the **decision policy**; the model itself is hardened separately (see **Model red team** below).
 
-1. **Red team attacks.** Five playbooks with fixed seeds, then it mutates the ones that were intercepted and records *why* it adapted (for example "fraud_ring intercepted at 68% (size 6, shared_devices 2, amount 33600, age_days 10) -> fewer accounts, smaller amounts, older accounts").
+1. **Red team attacks.** Eight playbooks with fixed seeds: fraud rings, card testing, account takeover, synthetic identity, device farms, and three money-flow patterns (layering cycles, mule fan-out, buyer-seller collusion). It then mutates the ones that were intercepted and records *why* it adapted (for example "fraud_ring intercepted at 84% -> fewer accounts, smaller amounts, older accounts").
 2. **Simulator searches.** It tests 216 policies on replayed traffic plus those attack orders. Score = fraud ₹ intercepted minus false-positive cost (₹336 per good order sent to review, plus the full value of good orders blocked). Any policy that reviews more than 8% of good customers is rejected.
 3. **Same attack replayed.** The identical seeded attacks run again under the winning policy. **Unseen attacks** (fresh seeds, never tuned on) run under *both* policies on the same frozen twin.
 4. **Scorecard**, then **Apply** or **Roll back** on the live twin.
-5. **Why a graph?** The same orders through rules only, GAT + rules, and GAT + rules hardened.
+5. **Why a graph?** The same orders through rules only, the GAT only, GAT + rules, and GAT + rules hardened.
 
 "Intercepted" always means blocked **or** sent to review; the screens show the two separately.
 
-| Result (seed 7, fresh twin plus 30 ticks of live traffic, 19 Nov 2026) | Before | After |
+| Result (seed 7, fresh twin plus 30 ticks of live traffic, 20 Nov 2026) | Before | After |
 |---|---|---|
-| Attack ₹ that got through (same seeded attacks) | ₹1,26,396 | ₹41,888 |
-| **Unseen attacks that got through** (fresh seeds, never tuned on) | ₹1,19,149 | ₹43,276 (of ₹4,89,342) |
-| Intercept rate (replayed traffic plus attacks) | 95.9% | 98.7% |
-| Good customers sent to review (of 344) | 3 | 9 |
+| Attack ₹ that got through (same seeded attacks) | ₹1,92,062 | ₹88,027 |
+| **Unseen attacks that got through** (fresh seeds, never tuned on) | ₹1,44,435 | ₹85,851 (of ₹5,92,817) |
+| Intercept rate (replayed traffic plus attacks) | 92.2% | 96.0% |
+| Good customers sent to review (of 324) | 3 | 8 |
 | Good orders blocked | ₹0 | ₹0 |
-| False-positive cost | ₹1,008 | ₹3,024 |
-| **Fraud ₹ stopped per 100 orders flagged** (blocked or sent to review) | ₹38,28,269 (78 flagged) | ₹29,52,459 (104 flagged) |
+| False-positive cost | ₹1,008 | ₹2,688 |
+| **Fraud ₹ stopped per 100 orders flagged** (blocked or sent to review) | ₹24,73,731 (140 flagged) | ₹23,57,172 (153 flagged) |
 
-The per-100 figure is what a review team's effort buys. It falls after hardening because the new policy flags 26 more orders, mostly small ones, to catch fraud the old one let through: total fraud stopped goes up, the average value of each flag goes down. The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹3,45,329 of the replayed attack fraud is blocked and ₹1,21,535 is sent to review. What still gets through is mostly synthetic-identity warm-up orders under about ₹5,000: they look like normal shopping, and catching them would cost more good customers than they're worth.
+The per-100 figure is what a review team's effort buys; it dips after hardening because the new policy flags 13 more, mostly smaller, orders to catch fraud the old one let through. The fix chosen: review at risk 0.3 (was 0.5), auto-approve only up to ₹33,600 (was ₹84,000), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹2,72,518 of the replayed attack fraud is blocked and ₹2,38,205 is sent to review. What still gets through is mostly synthetic-identity warm-up orders and some layering-cycle cash-outs: they look like normal shopping one order at a time.
 
-**Reproducible.** The twin now iterates devices, IPs and payment identifiers in sorted order, so these numbers are identical on every run (earlier versions depended on Python's hash seed: the "before" figure ranged from ₹1,51,858 to ₹2,20,836). Compared with the version before UPI ID / card links (same seed, averaged over three hash seeds), unseen-attack ₹ that got through before hardening fell from ₹1,85,742 to ₹1,19,149. The drill is tested in `tests/test_drill.py`.
+**Reproducible.** The twin iterates devices, IPs and payment identifiers in sorted order, so these numbers are identical on every run. The drill is tested in `tests/test_drill.py`.
 
 ## Rules vs graph: why a GAT?
 
-The same orders replayed through three engines: **rules only** (new device, foreign IP, spend jump, velocity and account age, at full 0-1 scale, the fairest baseline), **GAT + rules** (the shipped engine) and **GAT + rules under the hardened policy**. The headline uses only the red team's attack orders, from fresh accounts the GAT never saw a label for.
+The same orders replayed through four engines: **rules only** (new device, foreign IP, spend jump, velocity and account age, at full 0-1 scale), **GAT only**, **GAT + rules** (the shipped engine: GAT score, the strongest neighbouring device's risk, a known-fraud-neighbour signal and the rules) and **GAT + rules under the hardened policy**. The headline uses only the red team's attack orders, from fresh accounts the GAT never saw a label for.
 
-| Unseen attack traffic (₹8,04,989 attempted, seeded, 19 Nov 2026) | Rules only | GAT + rules | GAT + rules, hardened |
-|---|---|---|---|
-| **All attacks intercepted** | **41.8%** | **84.3%** | **94.8%** |
-| Fraud rings (new accounts sharing devices, UPI IDs and cards) | 0% | 80.5% | 97.9% |
-| Device farms (one proxy IP) | 15% | 100% | 100% |
-| Card testing | **98%** | 95% | 100% |
-| Account takeover | 83% | 83% | 100% |
-| Synthetic identity | 68% | 68% | 80% |
+| Unseen attack traffic (₹14,46,140 attempted, seeded, 20 Nov 2026) | Rules only | GAT only | GAT + rules | GAT + rules, hardened |
+|---|---|---|---|---|
+| **All attacks intercepted** | **22.4%** | **86.7%** | **86.7%** | **93.9%** |
+| Fraud rings (new accounts sharing devices, UPI IDs and cards) | 0% | 82.5% | 82.5% | 100% |
+| Layering cycles (money round a closed loop) | 0% | 80.2% | 80.2% | 89.9% |
+| Mule fan-out (a hub pays fresh mules, which cash out) | 0% | 96.8% | 96.8% | 96.8% |
+| Buyer-seller collusion | 0% | 87.6% | 87.6% | 87.6% |
+| Device farms (one proxy IP) | 15% | 100% | 100% | 100% |
+| Card testing | 83% | 100% | 100% | 100% |
+| Account takeover | 83% | 83% | 83% | 100% |
+| Synthetic identity | 68% | 68% | 68% | 80% |
 
-Per 100 orders flagged across all replayed orders (live traffic plus attacks), rules only stop ₹21,00,721 of fraud, GAT + rules ₹36,93,630 and GAT + rules hardened ₹24,41,541: the graph engine flags fewer orders that turn out to be good.
+What this honestly shows:
 
-"GAT + rules" is the shipped engine: GAT score, the strongest neighbouring device's risk, a known-fraud-neighbour signal and the rules. Before accounts were linked through UPI IDs and cards, the same engine caught 34-67% of fraud rings (51% averaged over three runs) and 72-81% of all attacks. What this honestly shows:
-
-* **The graph earns its place on connected fraud.** Fresh ring and device-farm accounts look clean one by one; the GAT catches them through the devices and IPs they share.
-* **Rules alone are slightly better on card testing**, and the graph adds nothing on account takeover and synthetic identities. There, only the policy layer helps.
-* **Account-level held-out AUC is not evidence for the graph here:** the same node features with no message passing (logistic regression) score 0.99, the same as the GAT and the GAT plus neighbour signal, on 43 held-out synthetic accounts. The GAT's value shows up per transaction, when a new account joins a known ring.
-* **Payment identifiers are what moved the ring number.** Ring members now share a small pool of UPI IDs and cards as well as devices, and the GAT sees those links: fraud-ring interception went from about 51% to 80.5%.
-* **The known-fraud-neighbour signal** ("share of linked accounts that are known fraud", from training labels and investigator-frozen accounts only) is the strongest feature in the real-data tests. It changes nothing in this table, because every red-team ring is brand new and has no labelled neighbours. It is what catches a new account that joins an *existing* ring: see below.
-* **The skip connection stays off in the app.** It helped the GAT on all three real fraud graphs, but on this twin it caught no more attack fraud (84.9% vs 85.2% of unseen attacks over three runs) and blocked one good ₹14,975 order in every run. It is one constant (`GAT_SKIP` in `app/twin.py`).
+* **The graph earns its place on connected fraud.** Ring, money-flow and device-farm accounts look clean one by one; rules catch none of them. The GAT catches them through the devices, IPs, payment identifiers and transfers they share.
+* **The graph adds nothing on account takeover and synthetic identities.** There, only the policy layer helps.
+* **Held-out accounts:** on 50 accounts the GAT never saw a label for, the same node features with no message passing (logistic regression) score AUC 0.893; the GAT scores 0.974, and 0.976 with the known-fraud-neighbour signal.
+* **The known-fraud-neighbour signal** ("share of linked accounts that are known fraud", from training labels and investigator-frozen accounts only) changes nothing in this table, because every red-team ring is brand new and has no labelled neighbours. It is what catches a new account that joins an *existing* ring: see below.
+* **The skip connection stays off in the app.** On this twin it caught no more attack fraud and blocked a good order. It is one constant (`GAT_SKIP` in `app/twin.py`).
+* Caveat: the money-flow rings are synthetic. Honest hard negatives are included (flatmates paying rent to one person, friends passing money along, and about a third of accounts never transfer), and a 2-layer GNN spots a tight new cluster of transfer-linked accounts rather than proving a loop is closed. The evidence investigator does that part.
 
 ### One click: a new account joins a fraud ring
 
@@ -80,10 +81,10 @@ The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new
 | Engine | Risk | Decision | Why |
 |---|---|---|---|
 | Rules only | 0.09 | **approve** | its only flag, "amount is 2.6x this buyer's usual spend", is too weak to review |
-| GAT + rules | 0.14 | **approve** | the GAT alone scores the account 0.08: its own features look clean |
-| **GAT + rules + known-fraud neighbours** (shipped) | **0.71** | **review** | "5 of 5 labelled linked accounts are known fraud"; "shares UPI ID with 8 flagged account(s)" |
+| GAT + rules | 0.07 | **approve** | the GAT alone scores the account 0.003: its own features look clean |
+| **GAT + rules + known-fraud neighbours** (shipped) | **0.66** | **review** | "4 of 4 labelled linked accounts are known fraud"; "shares UPI ID with 8 flagged account(s)" |
 
-The agent's checkout is held for review before any Razorpay order exists, and the decision receipt carries those reasons. This is the real-data finding in miniature: for new accounts, the explicit known-fraud-neighbour signal does what the GAT alone does not.
+The agent's checkout is held for review before any Razorpay order exists, and the decision receipt carries those reasons. For new accounts, the explicit known-fraud-neighbour signal does what the GAT alone does not.
 
 ### Reviewer twin: a digital twin of the human reviewer
 
@@ -94,6 +95,67 @@ The **Investigator** tab has a **Reviewer twin** card (`app/reviewer_twin.py`, `
 * **Demo:** **Replay 30 reviewer decisions** has a simulated reviewer (a stricter version of the seed policy: wary of big carts on young accounts) work 30 synthetic cases. The twin agrees on **80%** of them (24 of 30), predicting each one before it is decided. These are labelled "replayed", never mixed with real decisions.
 * **Autopilot is off by default.** When switched on, it may only *release held checkouts* (reversible: the buyer still has to pay in Razorpay Checkout, and **undo** cancels the checkout so it can never be captured), at confidence ≥ 0.95 and up to ₹5,000 (capped at the ₹12,500 mandate). It never refunds, restricts or captures, never learns from its own decisions, and every release is in the audit trail with an undo link.
 
+### Money-flow rings
+
+Accounts also move money to each other (P2P transfers and marketplace payouts), and the twin injects three money-flow patterns alongside the device and UPI rings: **layering cycles** (money goes round a closed loop), **mule fan-out** (one hub pays many fresh accounts in a short window) and **buyer-seller collusion** (a cluster of buyers all pay a cluster of colluding sellers). Each member looks ordinary on its own: aged, KYC'd, normal amounts. Transfers are graph edges for the GAT plus four per-account features, and each pattern has a red-team playbook in the drill.
+
+### Evidence cases: the model detects, the evidence explains, a person decides
+
+The **Investigator** tab has an **Evidence case** card (`app/evidence.py`, `POST /api/evidence/{account}`):
+
+1. **The model triages** the account: auto-clear (< 0.35), human review, or flag (≥ 0.75).
+2. **Deterministic graph checks gather evidence** with NetworkX, each step a *claim*, its *evidence* (record ids: devices, UPI IDs, transfer ids, order ids) and its *source*: shared devices and payment identifiers, a closed money loop through the account, a fan-out hub, a dense two-sided collusion block, known-fraud neighbours, orders, and the model score. A step with no evidence is not shown. On the twin it names the right pattern for 13 of 13 cycle members, 16 of 16 fan-out members and 6 of 8 colluders, and makes no cycle, fan-out or collusion claim about honest accounts.
+3. **The copilot explains** that evidence in plain language and answers questions about it. It answers only from the case's evidence, may only cite ids that exist in the case, says "I don't have that information" otherwise, and never decides.
+4. **A person decides**: confirm fraud, monitor or clear, always with a reason.
+
+**Precedent:** each case shows the three most similar resolved cases (by the GAT's embedding), with who decided what and why.
+
+**Compliance as config.** `compliance_rules.yaml` holds four RBI-grounded rules (from the RBI Master Directions on Fraud Risk Management, 2024, including the natural-justice requirement: an opportunity to be heard before an account is classified as fraud). `app/compliance.py` loads them at start-up and enforces each in code, and refuses to start if the file names an unknown hook:
+
+* **No machine classifies fraud.** The model, the reviewer twin and its autopilot can only recommend; a model "flag" is routed to human review, and confirming fraud or approving a restriction needs a named person.
+* **Reason and reviewer on every decision.** The review queue and evidence cases refuse a decision without both.
+* **Append-only, hash-chained ledger.** The model's recommendation and the human's decision are separate records linked by case id; each record carries the previous record's hash, so editing any past record fails verification (`GET /api/ledger`).
+* **Reportable flag** on human-confirmed fraud, with the date.
+
+### GraphSAGE option
+
+`app/sage.py` is GraphSAGE in NumPy (two mean-aggregator layers, 64 hidden units, dropout 0.3, class-weighted cross-entropy, Adam), gradient-checked like the GAT. Set `TWIN_MODEL=graphsage` to run the twin on it; the GAT stays the default. `scripts/ring_holdout_eval.py` evaluates both on the twin with whole rings held out, inductive training and a no-edges control.
+
+### Model red team: attack the detector itself
+
+The drill hardens the policy; **Attack and harden the model** on the Defense drill tab (`POST /api/model-redteam`, `app/model_redteam.py`) hardens the detector. On a copy of the twin's account graph (248 accounts), held-out rings drop 70% of their internal links and add 4 cover links each to honest accounts, then GraphSAGE is retrained on a perturbed graph and tested on a fresh perturbation (3 seeds):
+
+| Ring recall on held-out rings | Clean | Under attack | Hardened, fresh attack | Hardened, on clean rings | Good accounts flagged |
+|---|---|---|---|---|---|
+| Hardened on attacked rings only | 93% | 43% | 85% | 64% | 9% |
+| **Mixed hardening** (half the rings attacked, half clean) | 93% | 43% | 74% | 88% | 16% |
+
+Hardening only on attacked rings recovers most attack recall but loses clean rings; mixed hardening keeps clean rings at the cost of more good accounts flagged. Both rows are shown because neither is free. A bounded RED/BLUE loop follows: each round RED tries five perturbations against the current model and keeps the one that hurts most, and BLUE retrains on a fresh draw of it (round 1: RED's best attack cut recall to 67%; after BLUE, 100% on a fresh attack).
+
+### Razorpay payments feed the model
+
+At capture (and on `payment.captured` webhooks) the payer's UPI ID, card (Razorpay's card fingerprint when present, else network + last4 + issuer), phone/email, and the device and IP the merchant's checkout put in the payment notes become salted-hash nodes linked to the account. The account is re-scored straight away, so the next payment from the same UPI ID, card, device or IP is linked; a link to flagged accounts raises an event, and the receipt records the risk before and after. Raw values are never stored. "Flagged" means known fraud, frozen or model risk ≥ 0.5: a clean account attaching itself to a ring can dilute the ring's model score, but labels and freezes do not move.
+
+### Prompt-injection protection
+
+Every model surface (concierge chat and voice, the shopping agent, the investigator, the red team agent and the case copilot) is protected in layers, with the real guarantee in code rather than in the prompt (`app/guard.py`):
+
+* **Privilege separation.** Each agent has a tool allowlist. No tool a model can call captures, refunds, restricts, approves, switches autopilot or changes the policy: those are human UI actions with a reviewer and a reason. Mandate limits are checked in code.
+* **Data, not instructions.** Tool results reach the model inside `<untrusted_data>` blocks; strings in them that look like instructions (a poisoned product listing, an account name) are removed first.
+* **Input screening.** Text is normalised (NFKC; zero-width, control and hidden Unicode tag characters stripped), length-capped, base64/hex blobs decoded, and checked for injection patterns in English, Hinglish, Hindi, Tamil, Telugu, Bengali, Marathi, Gujarati, Kannada, Malayalam and Punjabi, including instructions split across turns. A hit gets a polite refusal in the user's language and a hashed ledger record (no raw text).
+* **Output checks.** A secret canary sits in every system prompt; a reply containing it, a piece of the prompt, or a key-like string is blocked.
+* **Rate limits** per client on chat and the heavy endpoints.
+
+The **Chatbot injection** playbook on the Red team tab throws 20 attempts at the agents on a throwaway copy (direct, multilingual, encoded, hidden characters, multi-turn, and indirect through an account name, a product listing and webhook notes) plus 6 normal questions: 0 got through, 0 canary leaks, 0 normal questions refused. It uses the demo brain by default and the configured LLM with `?live=true`.
+
+### Voice
+
+Concierge takes voice in all ten languages (Web Speech API in Chrome and Edge) and can read replies aloud. A denied microphone, silence, a missing microphone, network trouble or an unsupported language each get a clear message; other browsers get a text-only notice. Speaking stops when you send a new message, switch tabs or start the mic. The transcript goes through exactly the same screening as typed text, and voice can never approve anything: approvals are on-screen buttons.
+
+### Reliability
+
+The test suite (107 tests) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, nothing charged, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
+
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
 * The spending mandate (a Reserve Pay-style consent: approve a limit once, the agent spends inside it) and the risk gate run in code, never in the prompt. A prompt-injected agent cannot buy blocked gift cards.
@@ -103,6 +165,9 @@ The **Investigator** tab has a **Reviewer twin** card (`app/reviewer_twin.py`, `
 * Orders are created with **manual capture**, so money only moves after the server says so. A payment is captured only if its **Checkout signature verifies** (`HMAC-SHA256("order_id|payment_id", key_secret)`) and the payment fetched from Razorpay **belongs to that order**; a forged signature never even reaches the Razorpay API (`tests/test_razorpay.py`).
 * A capture happens **at most once**: repeated requests never charge again or double-count spend. The mandate is **re-checked at capture time**, and only agent-created orders can be captured. If the re-check fails, the authorized payment is simply never captured and Razorpay releases it automatically.
 * Only **signed** Razorpay webhooks can change state: `X-Razorpay-Signature` must equal `HMAC-SHA256(raw body, webhook secret)`, checked on the exact raw bytes before parsing. (`ALLOW_UNVERIFIED_WEBHOOKS=1` is a local testing switch that works only in demo mode, without Razorpay keys.)
+* **Every human decision needs a reviewer and a reason, and no machine can classify fraud** (`compliance_rules.yaml`, `tests/test_compliance.py`); model recommendations and human decisions sit in a hash-chained ledger.
+* **Webhook replays are processed once** (`X-Razorpay-Event-Id`), and parallel captures or decisions happen exactly once (`tests/test_concurrency.py`).
+* **No model can reach a privileged action**: tool allowlists per agent, injection screening on chat and voice, canary checks on replies (`tests/test_guard.py`).
 * **Live keys are refused** (`rzp_live_...` drops to demo mode) unless you deliberately set `RAZORPAY_ALLOW_LIVE=1`.
 * **Public demos stay clean**: set `ADMIN_TOKEN` and policy changes, retraining, reset and review decisions need the `X-Admin-Token` header. **Reset demo** rebuilds everything from the seed.
 
@@ -186,7 +251,7 @@ With no AI key at all, a deterministic **demo brain** drives the same tools, so 
 * **Channel3**: gives the shopping agent real products from 25,000+ retailers (set `CHANNEL3_API_KEY`). Live products go through exactly the same mandate guard and graph risk gate as demo items: a Channel3 gift card is still blocked by the `gift_cards` rule, and over-limit items are still rejected (`tests/test_channel3.py`). Red-team prompt-injection probes keep using the poisoned demo catalog.
 * **AG Grid** (Community): accounts, red-team results, orders, checkouts and API call grids (sorting, filtering, pagination, quick filter, custom cell renderers).
 * **Render**: `render.yaml` blueprint for one-click deploy with a health check.
-* **Postman**: `docs/postman_collection.json` covers all 42 API operations, with sample bodies.
+* **Postman**: `docs/postman_collection.json` covers all 50 API operations, with sample bodies.
 * **APIMatic**: `docs/openapi.json` (OpenAPI 3.1, generated from the API) can be imported into APIMatic to generate SDKs and docs.
 * **Elastic** (optional): set `ELASTIC_URL` / `ELASTIC_API_KEY` and every twin event (orders, decisions, freezes, policy changes) is indexed for Kibana.
 * **Zapier** (optional): set `ZAPIER_WEBHOOK_URL` (a Catch Hook) and every high-risk event is sent to Zapier, for example to Slack or email.
@@ -267,13 +332,22 @@ pytest -q
 
 ```
 app/
-  main.py          FastAPI server, 42 API operations, background traffic simulator, admin guard
+  main.py          FastAPI server, 50 API operations, background traffic simulator, admin guard
   twin.py          digital twin graph, simulator, fork, what-if replay, explanations
   gat.py           graph attention network in NumPy (forward + backward + Adam)
   agents.py        Concierge, Shopping, Investigator, Red Team agents (Claude tool use + demo brain)
   redteam.py       attack playbooks run on twin forks, scorecard
   drill.py         one-click defense drill: attack, policy search with priced false positives, identical and unseen replays, rules-vs-graph comparison
   razorpay.py      Razorpay client (Orders, Checkout signature check, manual capture, refunds, webhook HMAC)
+  evidence.py      evidence cases: deterministic graph evidence, grounded copilot, precedent
+  compliance.py    compliance_rules.yaml enforcement and the hash-chained ledger
+  guard.py         prompt-injection defences, tool allowlists, rate limiter
+  injection.py     chatbot-injection playbook
+  sage.py          GraphSAGE in NumPy (TWIN_MODEL=graphsage)
+  model_redteam.py attack and harden the detector, RED/BLUE rounds
+  reviewer_twin.py the reviewer twin
+  scenario.py      "new account joins a fraud ring"
+compliance_rules.yaml  RBI-grounded rules, loaded as config
   catalog.py       demo store catalog (plus a poisoned listing for the injection attack)
   integrations.py  Elastic and Zapier sinks
 static/            single-page app (vis-network, AG Grid, Chart.js, vendored, no build step); drill.js, receipts.js, review.js
@@ -287,13 +361,15 @@ tests/
 * The twin's population is synthetic (seeded), because test accounts don't produce realistic fraud. Real Razorpay test-mode orders made through the app are mirrored into it.
 * The GAT is transductive over a dense adjacency mask, which is fine up to a few thousand nodes. A production version would use sparse attention and mini-batching.
 * Voice depends on the browser: Chrome and Edge support all ten locales.
-* The defense drill hardens the decision policy; it does not retrain or improve the GAT. The simulator replays stored risk scores.
-* The GAT's high account-level AUC is on synthetic data, and a no-graph model matches it there. Its measurable advantage is on new accounts joining a ring (see Rules vs graph).
+* The defense drill hardens the decision policy and replays stored risk scores; the model red team hardens a GraphSAGE copy on the twin's account graph, not the live GAT.
+* All twin results are on synthetic data, including the money-flow rings. The GAT detects tight new clusters of linked accounts; proving a loop is closed or a block is collusion is the evidence investigator's job.
 * On the real Amazon fraud graph the plain GAT's edges lower AUC (0.96 features only vs 0.87-0.91 with relations) because fraudsters there are camouflaged among honest neighbours. With the opt-in skip connection the edges no longer hurt (0.968), but the gain over logistic regression (0.962) is within noise (see [docs/REAL_DATA.md](docs/REAL_DATA.md)).
 * On Elliptic (Bitcoin) a random forest on the same local features is still clearly best (F1 0.77). The GAT's best AUC (0.898, with skip) is only a hair above it, and its F1 at 0.5 is 0.51 at most.
 * On T-Finance the skip GAT is level with logistic regression on AUC (0.958 vs 0.956), and the skip-plus-filter GAT catches the most fraud in the riskiest 5% (83% vs 75%). But the test splits are small (about 23 anomalous accounts), and the random forest has a better F1.
 * The skip connection and neighbour filter are opt-in options (`GAT(skip=True, filter_keep=0.5)`). The app's own model still uses the original setting, and the filter did not help on Amazon or Elliptic. Elliptic was run with one seed.
 * In the new-account and hybrid tests, a random forest with simple neighbour features matches or beats the GAT (T-Finance new accounts: 0.955 vs 0.935 AUC; Amazon: 0.82 vs 0.69). The GAT's own score adds little once those features are present. On Amazon no graph feature beats the plain random forest. These tests used 3 seeds (Elliptic one), and new accounts keep their links, the graph's best case.
+* Prompt-injection screening is heuristic: the guarantee is that no model can reach a privileged action, not that every odd phrasing is caught.
+* The ledger lives in memory (and in `LEDGER_PATH` if set); it is tamper-evident, not stored on write-once media.
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
 * State is in memory: a restart (or Reset demo) starts from the seed again.
 
