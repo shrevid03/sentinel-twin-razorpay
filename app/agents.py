@@ -406,6 +406,9 @@ class Team:
                     rc["payment"].update(status="COMPLETED", approval="approved by buyer", capture_id=_capture_id(res))
                     self._stamp(rc, f"buyer approved; Razorpay capture COMPLETED ({_capture_id(res)})")
                 self.mandate["spent"] = round(self.mandate["spent"] + co["total"], 2)
+                linked = self.twin.link_pay_ids(self.buyer, res.get("payer_ids") or [], source=f"payment {payment_id}")
+                if rc and linked:
+                    self._stamp(rc, f"mirrored {len(linked)} payer identifier(s) into the twin (salted hashes only)")
                 for o in self.twin.orders:
                     if o["id"] == co["twin_order"]:
                         o["status"] = "captured"

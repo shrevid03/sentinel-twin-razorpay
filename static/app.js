@@ -113,6 +113,10 @@ function painter(n) {  // neon-sign tubes: hollow outlines with glow; risk = bri
           ctx.shadowColor = hot ? "#9FE0FF" : "#2FB8FF"; ctx.shadowBlur = hot ? 14 : 10;
           ctx.strokeStyle = hot ? "#E8F4FF" : "#5CE1FF"; ctx.lineWidth = (hot ? 1.8 : 1.4) * SIZE_K;
           ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
+        } else if (n.type === "upi" || n.type === "card" || n.type === "contact") {
+          ctx.shadowColor = "#FFB547"; ctx.shadowBlur = hot ? 14 : 8;
+          ctx.strokeStyle = hot ? "#FFE3B0" : "#FFB547"; ctx.lineWidth = (hot ? 1.8 : 1.4) * SIZE_K;
+          ctx.strokeRect(x - r * 0.7, y - r * 0.7, r * 1.4, r * 1.4);
         } else if (n.type === "ip") {
           ctx.shadowColor = "#5C7CFF"; ctx.shadowBlur = 8; ctx.fillStyle = hot ? "#DDE8FF" : "#8AA8FF";
           ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, 6.283); ctx.fill();

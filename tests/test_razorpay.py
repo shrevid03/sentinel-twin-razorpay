@@ -65,7 +65,7 @@ def test_payment_from_another_order_is_refused(monkeypatch):
     monkeypatch.setattr(rp, "_req", fake)
     with pytest.raises(RazorpayError, match="does not belong"):
         rp.capture_order("order_A", "pay_B", _sig("s3cret", "order_A|pay_B"))
-    assert calls == [("GET", "/v1/payments/pay_B")]  # fetched, never captured
+    assert calls == [("GET", "/v1/payments/pay_B?expand[]=card")]  # fetched, never captured
 
 
 def test_live_capture_flow_captures_authorized_payment_once(monkeypatch):
@@ -87,7 +87,7 @@ def test_live_capture_flow_captures_authorized_payment_once(monkeypatch):
     assert calls[0][2]["payment"]["capture"] == "manual"
     res = rp.capture_order(o["id"], "pay_B", _sig("s3cret", "order_A|pay_B"))
     assert res["status"] == "COMPLETED" and res["capture_id"] == "pay_B"
-    assert [c[:2] for c in calls[1:]] == [("GET", "/v1/payments/pay_B"), ("POST", "/v1/payments/pay_B/capture")]
+    assert [c[:2] for c in calls[1:]] == [("GET", "/v1/payments/pay_B?expand[]=card"), ("POST", "/v1/payments/pay_B/capture")]
 
 
 def test_demo_checkout_end_to_end(trained_twin):

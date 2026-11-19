@@ -1,7 +1,8 @@
 """The digital twin: a live graph model of a Razorpay merchant ecosystem.
 
-Every buyer account, device, IP address and merchant is a node. Edges link an
-account to the devices and IPs it uses and to the merchants it buys from.
+Every buyer account, device, IP address, payment identifier and merchant is a node. Edges link an
+account to the devices and IPs it uses, the payment identifiers it pays with (UPI ID, card fingerprint,
+hashed contact) and the merchants it buys from.
 Orders created through the app (and Razorpay webhooks) are mirrored into
 the twin, a GAT scores every account from its neighbourhood, and the twin can
 be forked so red-team attacks and what-if policies run without touching the
@@ -40,7 +41,11 @@ MERCHANTS = [
 ]
 FEATURES = ["is_account", "is_device", "is_ip", "is_merchant", "account_age", "order_count",
             "avg_amount", "max_amount", "velocity", "device_count", "ip_count", "geo_mismatch",
-            "kyc_verified", "disposable_email", "degree"]
+            "kyc_verified", "disposable_email", "degree", "is_payment_id", "payment_id_count"]
+
+# Payment identifiers, linked to accounts the way devices and IPs are. Node ids never contain raw PII:
+# synthetic ones are counters, real ones (mirrored from Razorpay payments) are salted hashes.
+PAY_KINDS = {"UPI": "UPI ID", "CARD": "card", "CT": "phone/email"}
 
 DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amount": 1000.0 * K,
                   "review_new_device_over": 300.0 * K, "review_spend_multiple": 0.0}
@@ -59,6 +64,7 @@ class Account:
     status: str = "active"
     devices: set = field(default_factory=set)
     ips: set = field(default_factory=set)
+    pay_ids: set = field(default_factory=set)
 
 
 class Twin:
@@ -69,6 +75,9 @@ class Twin:
         self.accounts: dict[str, Account] = {}
         self.devices: set[str] = set()
         self.ips: dict[str, str] = {}  # ip -> country
+        self.pay_ids: set[str] = set()  # UPI-…, CARD-…, CT-… nodes
+        # payment identifiers draw from their own RNG so adding them leaves the rest of the seeded world unchanged
+        self.prng = random.Random(seed * 7919 + 1)
         self.merchants = {m[0]: {"id": m[0], "name": m[1], "category": m[2]} for m in MERCHANTS}
         self.orders: list[dict] = []
         self.events: list[dict] = []
@@ -77,12 +86,12 @@ class Twin:
         self.metrics: dict = {}
         self._probs: dict[str, float] = {}
         self._dirty = True
-        self._n = {"A": 0, "D": 0, "IP": 0, "O": 0}
+        self._n = {"A": 0, "D": 0, "IP": 0, "O": 0, "UPI": 0, "CARD": 0, "CT": 0}
         self._populate()
 
     # ----------------------------------------------------------- id helpers
     def _next(self, kind):
-        self._n[kind] += 1
+        self._n[kind] = self._n.get(kind, 0) + 1
         return f"{kind}-{self._n[kind]:03d}" if kind != "O" else f"ORD-{self._n[kind]:05d}"
 
     def new_device(self):
@@ -94,6 +103,35 @@ class Twin:
         ip = self._next("IP")
         self.ips[ip] = country
         return ip
+
+    def new_pay_id(self, kind):
+        """A synthetic payment identifier node: kind is UPI, CARD or CT (contact)."""
+        pid = self._next(kind)
+        self.pay_ids.add(pid)
+        return pid
+
+    def give_pay_ids(self, acc, upi=0.85, card=0.6, contact=1.0):
+        r = self.prng
+        if r.random() < upi:
+            acc.pay_ids.add(self.new_pay_id("UPI"))
+        if r.random() < card:
+            acc.pay_ids.add(self.new_pay_id("CARD"))
+        if r.random() < contact:
+            acc.pay_ids.add(self.new_pay_id("CT"))
+
+    def link_pay_ids(self, account, ids, source="razorpay"):
+        """Mirror payment identifiers (already hashed node ids) onto an account, e.g. from a captured payment."""
+        with self.lock:
+            acc = self.accounts[account]
+            new = [i for i in ids if i and i.split("-")[0] in PAY_KINDS and i not in acc.pay_ids]
+            for i in new:
+                self.pay_ids.add(i)
+                acc.pay_ids.add(i)
+            if new:
+                self._dirty = True
+                self._event("razorpay", f"Mirrored {len(new)} payment identifier(s) from {source} onto {account} "
+                                        f"({', '.join(PAY_KINDS[i.split('-')[0]] for i in new)}; hashed, no raw PII)")
+            return new
 
     def new_account(self, *, country=None, age_days=None, fraud=False, segment="legit",
                     disposable=False, kyc=None, name=None):
@@ -137,12 +175,17 @@ class Twin:
                 acc = self.new_account(country=fam.country)
                 acc.devices |= set(list(fam.devices)[:1])
                 acc.ips |= set(fam.ips)
+                fam_cards = sorted(i for i in fam.pay_ids if i.startswith("CARD-"))
+                if fam_cards and self.prng.random() < 0.4:  # a shared family card: a hard negative
+                    acc.pay_ids.add(fam_cards[0])
+                self.give_pay_ids(acc, card=0.3)
             else:
                 acc = self.new_account()
                 acc.devices.add(self.new_device())
                 if r.random() < 0.3:
                     acc.devices.add(self.new_device())
                 acc.ips.add(self.new_ip(acc.country))
+                self.give_pay_ids(acc)
                 households.append(acc)
             if r.random() < 0.12:
                 acc.ips.add(r.choice(cafe_ips))
@@ -154,6 +197,7 @@ class Twin:
             acc = self.new_account(age_days=r.randint(60, 300), fraud=True, segment="synthetic", kyc=True)
             acc.devices.add(self.new_device())
             acc.ips.add(self.new_ip(acc.country))
+            self.give_pay_ids(acc, upi=1.0)
             for _ in range(r.randint(2, 4)):
                 self._hist_order(acc, next(iter(acc.devices)), next(iter(acc.ips)),
                                  amount=r.uniform(80 * K, 400 * K), fraud=True)
@@ -165,18 +209,29 @@ class Twin:
         devs = [self.new_device() for _ in range(shared_devices)]
         ipc = country or r.choice(RISKY_COUNTRIES + ["US"])
         ips = [self.new_ip(ipc) for _ in range(shared_ips)]
+        pr = self.prng
+        upis = [self.new_pay_id("UPI") for _ in range(pr.randint(1, 2))]
+        cards = [self.new_pay_id("CARD")]
+        contacts = [self.new_pay_id("CT")]
         members = []
         for _ in range(size):
             acc = self.new_account(country=r.choice(COUNTRIES), age_days=r.randint(*age_range), fraud=True,
                                    segment=label, disposable=r.random() < disposable_rate, kyc=r.random() < 0.3)
             acc.devices.update(r.sample(devs, k=min(len(devs), r.randint(1, 2))))
             acc.ips.update(r.sample(ips, k=min(len(ips), r.randint(1, 2))))
+            if pr.random() < 0.8:
+                acc.pay_ids.add(pr.choice(upis))
+            if pr.random() < 0.5:
+                acc.pay_ids.add(cards[0])
+            if pr.random() < 0.4:
+                acc.pay_ids.add(contacts[0])
             members.append(acc)
             if history:
                 for _ in range(r.randint(2, 5)):
                     self._hist_order(acc, r.choice(list(acc.devices)), r.choice(list(acc.ips)),
                                      amount=r.uniform(*amount_range), fraud=True,
                                      merchant=r.choice(["M-02", "M-07", "M-09", "M-02"]))
+        self.last_ring_pay_ids = upis + cards + contacts
         return members, devs, ips
 
     def _hist_order(self, acc, device, ip, amount=None, fraud=False, merchant=None):
@@ -204,7 +259,18 @@ class Twin:
         order that is scored without being committed.
         """
         accs = list(self.accounts.values())
-        nodes = [a.id for a in accs] + sorted(self.devices) + sorted(self.ips) + list(self.merchants)
+        # a payment identifier only adds information when two or more accounts share it, so single-holder ones stay
+        # out of the dense graph (they still count in the account's payment_id_count feature)
+        holders = {}
+        for a in accs:
+            for pid in a.pay_ids:
+                holders[pid] = holders.get(pid, 0) + 1
+        extra_ids = set((extra or {}).get("pay_ids") or [])
+        if extra:
+            for pid in extra_ids - self.accounts[extra["account"]].pay_ids:
+                holders[pid] = holders.get(pid, 0) + 1
+        shared_pay = sorted(pid for pid, c in holders.items() if c >= 2)
+        nodes = [a.id for a in accs] + sorted(self.devices) + sorted(self.ips) + shared_pay + list(self.merchants)
         idx = {n: i for i, n in enumerate(nodes)}
         N = len(nodes)
         mask = np.eye(N, dtype=bool)
@@ -228,6 +294,9 @@ class Twin:
                 link(a.id, d)
             for ip in ips:
                 link(a.id, ip)
+            for pid in a.pay_ids | (extra_ids if extra and extra["account"] == a.id else set()):
+                if pid in idx:
+                    link(a.id, pid)
             for o in by.get(a.id, []):
                 link(a.id, o["merchant"])
 
@@ -243,6 +312,7 @@ class Twin:
                           math.log1p(np.mean(amts) / K) / 8, math.log1p(max(amts) / K) / 8, min(recent / 5, 1),
                           n_dev / 4, len(a.ips) / 4, mism, float(a.kyc),
                           float(a.email.split("@")[1] in DISPOSABLE)]
+            X[i, 16] = len(a.pay_ids) / 4
         deg = mask.sum(axis=1) - 1
         X[:, 14] = np.log1p(deg) / 5
         nA = len(accs)
@@ -251,6 +321,7 @@ class Twin:
             X[i, 1] = n.startswith("D-")
             X[i, 2] = n.startswith("IP-")
             X[i, 3] = n.startswith("M-")
+            X[i, 15] = n.split("-")[0] in PAY_KINDS
             if not X[i, 3]:  # devices / IPs summarise the accounts behind them
                 nb = np.where(mask[i, :nA])[0]
                 if len(nb):
@@ -353,6 +424,7 @@ class Twin:
             P = self.model.predict_proba(X, mask)
             g_now = float(P[idx[account]])
             before = self.risk(account)
+            shared_ids = self.shared_identifiers(account, extra_device=device)
             dev_others = [a for a in self.accounts.values() if device in a.devices and a.id != account]
             dev_risk = max((self._probs.get(a.id, 0) for a in dev_others), default=0.0)
             hist = [o for o in self.orders if o["account"] == account and o["status"] != "blocked"]
@@ -384,6 +456,9 @@ class Twin:
             g = max(g_now, 0.9 * dev_risk)
             if dev_risk > 0.5:
                 factors.append(f"device shared with {len(dev_others)} account(s), highest GAT risk {dev_risk:.2f}")
+            for s_ in shared_ids:
+                if s_["kind"] != "device" and s_["flagged"]:
+                    factors.append(f"shares {s_['label']} with {s_['flagged']} flagged account(s)")
             if g_now - before > 0.1:
                 factors.append(f"GAT risk jumps {before:.2f} -> {g_now:.2f} once this order's links are added")
             elif g_now > 0.5:
@@ -391,6 +466,24 @@ class Twin:
             risk = 1 - (1 - g) * (1 - min(t, 1) * 0.75)
             return {"risk": round(float(risk), 3), "spend_ratio": round(float(ratio), 2), "gat_risk": round(g_now, 3), "gat_before": round(before, 3),
                     "device_risk": round(dev_risk, 3), "txn_score": round(min(t, 1), 3), "factors": factors}
+
+    def shared_identifiers(self, account, extra_device=None):
+        """Devices and payment identifiers this account shares, and how many of the sharers are flagged.
+
+        Flagged = GAT risk >= 0.5 or frozen by an investigator. IPs are left out: shared wifi makes them noisy."""
+        acc = self.accounts[account]
+        out = []
+        ids = sorted(acc.devices | ({extra_device} if extra_device else set())) + sorted(acc.pay_ids)
+        for i in ids:
+            kind = "device" if i.startswith("D-") else i.split("-")[0]
+            others = [b for b in self.accounts.values() if b.id != account and (i in b.devices or i in b.pay_ids)]
+            if not others:
+                continue
+            flagged = [b for b in others if b.status == "frozen" or self._probs.get(b.id, 0) >= 0.5]
+            out.append({"id": i, "kind": _ntype(i),
+                        "label": "device" if kind == "device" else PAY_KINDS[kind], "accounts": len(others),
+                        "flagged": len(flagged)})
+        return out
 
     def decide(self, risk, amount, new_device, policy=None, spend_ratio=0.0):
         p = {**DEFAULT_POLICY, **(policy or self.policy)}
@@ -600,7 +693,7 @@ class Twin:
                 for b in self.accounts.values():
                     if b.id in seen:
                         continue
-                    shared = (a.devices & b.devices) | (a.ips & b.ips)
+                    shared = (a.devices & b.devices) | (a.ips & b.ips) | (a.pay_ids & b.pay_ids)
                     if shared:
                         seen.add(b.id)
                         via[b.id] = sorted(shared)
@@ -614,6 +707,7 @@ class Twin:
         orders = [o for o in self.orders if o["account"] == account]
         return {"id": a.id, "name": a.name, "country": a.country, "age_days": a.age_days, "email": a.email,
                 "kyc_verified": a.kyc, "status": a.status, "devices": sorted(a.devices), "ips": sorted(a.ips),
+                "payment_ids": sorted(a.pay_ids), "shared_identifiers": self.shared_identifiers(account),
                 "risk": round(self.risk(account), 3), "order_count": len(orders),
                 "total_spend": round(sum(o["amount"] for o in orders), 2),
                 "recent_orders": [_public(o) for o in orders[-8:]]}
@@ -637,6 +731,7 @@ class Twin:
         acc_risk = [self._probs.get(a, 0) for a in self.accounts]
         return {
             "accounts": len(self.accounts), "devices": len(self.devices), "ips": len(self.ips),
+            "payment_ids": len(self.pay_ids),
             "merchants": len(self.merchants), "orders": len(self.orders), "live_orders": len(live),
             "approved": sum(o["decision"] == "approve" for o in live),
             "review": sum(o["decision"] == "review" for o in live),
@@ -662,7 +757,8 @@ class Twin:
             a = self.accounts[aid]
             nodes.append({"id": aid, "label": a.name.split()[0], "type": "account",
                           "risk": round(self._probs.get(aid, 0), 3), "status": a.status})
-            for d in a.devices | a.ips:
+            shared_pay = {p for p in a.pay_ids if sum(p in b.pay_ids for b in self.accounts.values()) >= 2}
+            for d in a.devices | a.ips | shared_pay:
                 if d not in seen:
                     seen.add(d)
                     nodes.append({"id": d, "label": d, "type": _ntype(d), "risk": round(self._probs.get(d, 0), 3)})
@@ -683,8 +779,8 @@ class Twin:
 
 
 def _ntype(n):
-    return "account" if n.startswith("A-") else "device" if n.startswith("D-") else "ip" if n.startswith(
-        "IP-") else "merchant"
+    p = n.split("-")[0]
+    return {"A": "account", "D": "device", "IP": "ip", "UPI": "upi", "CARD": "card", "CT": "contact"}.get(p, "merchant")
 
 
 def _public(o):

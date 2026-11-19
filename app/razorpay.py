@@ -31,6 +31,31 @@ class RazorpayError(Exception):
     pass
 
 
+def _h(kind: str, value: str) -> str:
+    """Salted, truncated SHA-256 so the same payer links across payments without storing the raw value."""
+    salt = os.getenv("PAYER_HASH_SALT", "sentinel-twin")
+    return f"{kind}-" + hashlib.sha256(f"{salt}|{kind}|{value}".encode()).hexdigest()[:12]
+
+
+def payer_ids(p: dict) -> list[str]:
+    """Twin node ids for the payer behind a Razorpay payment entity: UPI ID (vpa), card (network + last4 +
+    issuer) and contact phone/email. Only salted hashes leave this function; raw values are never stored."""
+    out = []
+    vpa = (p.get("vpa") or (p.get("upi") or {}).get("vpa") or "").strip().lower()
+    if vpa:
+        out.append(_h("UPI", vpa))
+    card = p.get("card") or {}
+    if isinstance(card, dict) and card.get("last4"):
+        out.append(_h("CARD", f"{card.get('network', '')}|{card['last4']}|{card.get('issuer', '')}".lower()))
+    contact = "".join(ch for ch in str(p.get("contact") or "") if ch.isdigit())[-10:]
+    if contact:
+        out.append(_h("CT", contact))
+    email = str(p.get("email") or "").strip().lower()
+    if email and email != "void@razorpay.com":  # Razorpay's placeholder when no email was collected
+        out.append(_h("CT", email))
+    return out
+
+
 def _sig(secret: str, message: bytes | str) -> str:
     if isinstance(message, str):
         message = message.encode()
@@ -129,7 +154,8 @@ class Razorpay:
         o = self.get_order(order_id)
         pid = "pay_DEMO" + uuid.uuid4().hex[:10].upper()
         self._demo_payments[pid] = {"id": pid, "entity": "payment", "order_id": order_id, "amount": o["amount"],
-                                    "currency": o["currency"], "status": "authorized", "method": "upi"}
+                                    "currency": o["currency"], "status": "authorized", "method": "upi",
+                                    "vpa": "demo.buyer@okaxis", "contact": "+919900000001"}
         return {"razorpay_order_id": order_id, "razorpay_payment_id": pid, "razorpay_signature": "demo"}
 
     def capture_order(self, order_id, payment_id, signature):
@@ -137,12 +163,13 @@ class Razorpay:
         if self.live:
             if not self.verify_payment_signature(order_id, payment_id, signature):
                 raise RazorpayError("payment signature verification failed")
-            p = self._req("GET", f"/v1/payments/{payment_id}")
+            p = self._req("GET", f"/v1/payments/{payment_id}?expand[]=card")
         else:
             p = self._demo_payments.get(payment_id)
             if not p:
                 raise RazorpayError(f"payment {payment_id} not found")
             self._log("GET", f"/v1/payments/{payment_id}", 200)
+        ids = payer_ids(p)  # hashed before anything else sees the payment entity
         if p.get("order_id") != order_id:
             raise RazorpayError(f"payment {payment_id} does not belong to order {order_id}")
         if p.get("status") == "authorized":
@@ -154,7 +181,8 @@ class Razorpay:
                 self._log("POST", f"/v1/payments/{payment_id}/capture", 200)
         status = "COMPLETED" if p.get("status") == "captured" else str(p.get("status", "unknown")).upper()
         return {"id": order_id, "status": status, "payment_id": payment_id, "capture_id": payment_id,
-                "amount": p.get("amount"), "currency": p.get("currency"), "method": p.get("method")}
+                "amount": p.get("amount"), "currency": p.get("currency"), "method": p.get("method"),
+                "payer_ids": ids}
 
     def refund_capture(self, payment_id, amount_inr=None, note="Refund issued by Sentinel Twin investigator"):
         body = {"notes": {"reason": note[:250]}, "speed": "normal"}
