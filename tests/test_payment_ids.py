@@ -73,3 +73,39 @@ def test_shared_upi_with_flagged_account_is_explained(trained_twin):
     assert any(l["account"] == ring.id for l in t.linked_accounts(acc.id, hops=1))
     s = t.score_order(acc.id, "M-02", 3000, next(iter(acc.devices)), next(iter(acc.ips)))
     assert any(f.startswith("shares ") and "flagged account" in f for f in s["factors"])
+
+
+def test_known_fraud_signal_reads_only_training_labels_and_frozen_accounts(trained_twin):
+    t = trained_twin.fork()
+    held_out = [a for a in t.accounts.values() if a.fraud and a.id not in t.known_labelled]
+    trained = [a for a in t.accounts.values() if a.id in t.known_fraud]
+    assert held_out and trained
+
+    def newcomer(partner):
+        acc = t.new_account(age_days=40, kyc=True)
+        acc.devices.add(t.new_device())
+        acc.ips.add(t.new_ip(acc.country))
+        acc.pay_ids.add(t.new_pay_id("UPI"))
+        partner.pay_ids |= {next(iter(acc.pay_ids))}
+        return acc
+
+    # linked only to a held-out fraudster (through a fresh UPI ID): that label is never read
+    assert t.known_fraud_signal(newcomer(held_out[0]).id) == {"share": 0.0, "known_fraud": 0, "labelled": 0, "linked": 1}
+    acc = newcomer(trained[0])
+    sig = t.known_fraud_signal(acc.id)
+    assert sig["known_fraud"] >= 1 and sig["share"] > 0
+    other = held_out[0]
+    acc2 = newcomer(other)  # again linked only to the held-out fraudster
+    before = t.known_fraud_signal(acc2.id)["known_fraud"]
+    t.freeze(other.id, "investigator confirmed")
+    assert t.known_fraud_signal(acc2.id)["known_fraud"] == before + 1  # a frozen account counts as known fraud
+
+
+def test_twin_is_reproducible_across_hash_seeds():
+    import subprocess
+    import sys
+    code = ("from app.twin import Twin; t = Twin(seed=3); t.train(20); "
+            "print(sorted(t.accounts['A-005'].devices), round(t.risk('A-005'), 6), len(t.orders))")
+    outs = {subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                           env={"PYTHONHASHSEED": h, "PATH": ""}).stdout for h in ("0", "1")}
+    assert len(outs) == 1 and next(iter(outs)).strip()

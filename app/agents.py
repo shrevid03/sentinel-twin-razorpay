@@ -326,7 +326,7 @@ class Team:
             return {"status": "rejected_by_mandate_guard", "total": total, "reasons": problems, "receipt_id": rc["id"]}
         merchant = cart[0].get("twin_merchant") or cart[0]["merchant"]
         acc = self.twin.accounts[self.buyer]
-        score = self.twin.score_order(self.buyer, merchant, total, next(iter(acc.devices)), next(iter(acc.ips)))
+        score = self.twin.score_order(self.buyer, merchant, total, min(acc.devices), min(acc.ips))
         decision = self.twin.decide(score["risk"], total, False)
         rc["risk"] = {"score": score["risk"], "gat_part": score["gat_risk"], "rules_part": score["txn_score"],
                       "device_risk": score.get("device_risk"), "factors": score["factors"], "decision": decision,

@@ -47,6 +47,15 @@ FEATURES = ["is_account", "is_device", "is_ip", "is_merchant", "account_age", "o
 # synthetic ones are counters, real ones (mirrored from Razorpay payments) are salted hashes.
 PAY_KINDS = {"UPI": "UPI ID", "CARD": "card", "CT": "phone/email"}
 
+# Hybrid risk: how much the known-fraud-neighbour share can add on top of the GAT. The real-data tests
+# (docs/REAL_DATA.md) found a "share of neighbours that are known fraud" feature the strongest single graph
+# signal for new accounts; it reads only labels the model trained on plus investigator-frozen accounts.
+NEIGHBOUR_WEIGHT = 0.8
+# The skip connection (A @ Z + Z) helped the GAT on all three real fraud graphs, but on this twin it adds nothing
+# to unseen-attack interception (84.9% vs 85.2%) and blocks one good ₹14,975 order in every run, so the app keeps
+# it off. Flip to True to compare; the drill and rules-vs-graph numbers in the README are with it off.
+GAT_SKIP = False
+
 DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amount": 1000.0 * K,
                   "review_new_device_over": 300.0 * K, "review_spend_multiple": 0.0}
 
@@ -85,6 +94,8 @@ class Twin:
         self.model: GAT | None = None
         self.metrics: dict = {}
         self._probs: dict[str, float] = {}
+        self.known_labelled: set[str] = set()  # accounts whose label the model trained on
+        self.known_fraud: set[str] = set()  # ...of which fraud
         self._dirty = True
         self._n = {"A": 0, "D": 0, "IP": 0, "O": 0, "UPI": 0, "CARD": 0, "CT": 0}
         self._populate()
@@ -173,7 +184,7 @@ class Twin:
             if households and r.random() < 0.2:  # family members share a device and IP
                 fam = r.choice(households)
                 acc = self.new_account(country=fam.country)
-                acc.devices |= set(list(fam.devices)[:1])
+                acc.devices |= set(sorted(fam.devices)[:1])
                 acc.ips |= set(fam.ips)
                 fam_cards = sorted(i for i in fam.pay_ids if i.startswith("CARD-"))
                 if fam_cards and self.prng.random() < 0.4:  # a shared family card: a hard negative
@@ -190,7 +201,7 @@ class Twin:
             if r.random() < 0.12:
                 acc.ips.add(r.choice(cafe_ips))
             for _ in range(r.randint(1, 6)):
-                self._hist_order(acc, r.choice(list(acc.devices)), r.choice(list(acc.ips)))
+                self._hist_order(acc, r.choice(sorted(acc.devices)), r.choice(sorted(acc.ips)))
         for ring in range(5):
             self.spawn_ring(size=r.randint(5, 8), label=f"ring-{ring + 1}", history=True)
         for _ in range(10):  # low-and-slow synthetic identities: look clean alone
@@ -199,7 +210,7 @@ class Twin:
             acc.ips.add(self.new_ip(acc.country))
             self.give_pay_ids(acc, upi=1.0)
             for _ in range(r.randint(2, 4)):
-                self._hist_order(acc, next(iter(acc.devices)), next(iter(acc.ips)),
+                self._hist_order(acc, min(acc.devices), min(acc.ips),
                                  amount=r.uniform(80 * K, 400 * K), fraud=True)
         self.orders.sort(key=lambda o: o["ts"])
 
@@ -228,7 +239,7 @@ class Twin:
             members.append(acc)
             if history:
                 for _ in range(r.randint(2, 5)):
-                    self._hist_order(acc, r.choice(list(acc.devices)), r.choice(list(acc.ips)),
+                    self._hist_order(acc, r.choice(sorted(acc.devices)), r.choice(sorted(acc.ips)),
                                      amount=r.uniform(*amount_range), fraud=True,
                                      merchant=r.choice(["M-02", "M-07", "M-09", "M-02"]))
         self.last_ring_pay_ids = upis + cards + contacts
@@ -346,8 +357,10 @@ class Twin:
 
             (ptr, pva, pte), (ntr, nva, nte) = split(pos), split(neg)
             tr, va, te = np.r_[ptr, ntr], np.r_[pva, nva], np.r_[pte, nte]
-            self._split = {"X": X, "y": y, "tr": tr, "va": va, "te": te}
-            self.model = GAT(len(FEATURES), hidden=8, heads=4)
+            self._split = {"X": X, "y": y, "tr": tr, "va": va, "te": te, "nodes": nodes}
+            self.known_labelled = {nodes[i] for i in tr}
+            self.known_fraud = {nodes[i] for i in tr if y[i] == 1}
+            self.model = GAT(len(FEATURES), hidden=8, heads=4, skip=GAT_SKIP)
             hist = self.model.fit(X, mask, y, tr, va, epochs=epochs)
             P = self.model.predict_proba(X, mask)
             te_pred = P[te] >= 0.5
@@ -454,6 +467,10 @@ class Twin:
                 t = 1.0
                 factors.append("account is frozen by an investigator")
             g = max(g_now, 0.9 * dev_risk)
+            nbs = self.known_fraud_signal(account, extra_ids=(device, ip))
+            g = 1 - (1 - g) * (1 - NEIGHBOUR_WEIGHT * nbs["share"])
+            if nbs["known_fraud"]:
+                factors.append(f"{nbs['known_fraud']} of {nbs['labelled']} labelled linked accounts are known fraud")
             if dev_risk > 0.5:
                 factors.append(f"device shared with {len(dev_others)} account(s), highest GAT risk {dev_risk:.2f}")
             for s_ in shared_ids:
@@ -465,7 +482,21 @@ class Twin:
                 factors.append(f"GAT flags this account's neighbourhood ({g_now:.2f})")
             risk = 1 - (1 - g) * (1 - min(t, 1) * 0.75)
             return {"risk": round(float(risk), 3), "spend_ratio": round(float(ratio), 2), "gat_risk": round(g_now, 3), "gat_before": round(before, 3),
-                    "device_risk": round(dev_risk, 3), "txn_score": round(min(t, 1), 3), "factors": factors}
+                    "device_risk": round(dev_risk, 3), "neighbour_signal": nbs, "graph_risk": round(float(g), 3),
+                    "txn_score": round(min(t, 1), 3), "factors": factors}
+
+    def known_fraud_signal(self, account, extra_ids=()):
+        """Share of this account's linked accounts (shared device, IP or payment identifier) that are known fraud.
+
+        "Known" = labelled in the GAT's training split, or frozen by an investigator. Held-out and new accounts'
+        labels are never read, so the signal is fair on unseen accounts. Smoothed: fraud / (labelled + 1)."""
+        acc = self.accounts[account]
+        ids = acc.devices | acc.ips | acc.pay_ids | {i for i in extra_ids if i}
+        nb = [b for b in self.accounts.values() if b.id != account and (b.devices | b.ips | b.pay_ids) & ids]
+        labelled = [b for b in nb if b.id in self.known_labelled or b.status == "frozen"]
+        fraud = [b for b in labelled if b.id in self.known_fraud or b.status == "frozen"]
+        return {"share": round(len(fraud) / (len(labelled) + 1), 3), "known_fraud": len(fraud),
+                "labelled": len(labelled), "linked": len(nb)}
 
     def shared_identifiers(self, account, extra_device=None):
         """Devices and payment identifiers this account shares, and how many of the sharers are flagged.
@@ -499,8 +530,8 @@ class Twin:
                     fraud=None, pay_order_id=None, items=None):
         with self.lock:
             acc = self.accounts[account]
-            device = device or next(iter(acc.devices), None) or self.new_device()
-            ip = ip or next(iter(acc.ips), None) or self.new_ip(acc.country)
+            device = device or min(acc.devices, default=None) or self.new_device()
+            ip = ip or min(acc.ips, default=None) or self.new_ip(acc.country)
             if device not in self.devices:
                 self.devices.add(device)
             if ip not in self.ips:
@@ -558,9 +589,9 @@ class Twin:
                         amt = round(amt * r.uniform(3, 8), 2)
                     elif roll < 0.10:  # and buy from a new phone
                         out.append(self.place_order(a.id, m, round(amt * r.uniform(1, 6), 2), self.new_device(),
-                                                    r.choice(list(a.ips))))
+                                                    r.choice(sorted(a.ips))))
                         continue
-                out.append(self.place_order(a.id, m, amt, r.choice(list(a.devices)), r.choice(list(a.ips))))
+                out.append(self.place_order(a.id, m, amt, r.choice(sorted(a.devices)), r.choice(sorted(a.ips))))
         return out
 
     def what_if(self, policy, last_n=400, extra_orders=None):
@@ -680,8 +711,14 @@ class Twin:
             w -= 0.1 * (Z[tr].T @ g / len(tr) + 1e-3 * w)
             b -= 0.1 * g.mean()
         rules_p = 1 / (1 + np.exp(-(Z[te] @ w + b)))
-        return {"test_accounts": int(len(te)), "features_only_no_graph": round(float(auc(y[te], rules_p)), 4),
-                "gat": self.metrics.get("test_auc")}
+        out = {"test_accounts": int(len(te)), "features_only_no_graph": round(float(auc(y[te], rules_p)), 4),
+               "gat": self.metrics.get("test_auc")}
+        nodes = sp.get("nodes")
+        if nodes:
+            g = np.array([self._probs.get(nodes[i], 0.0) for i in te])
+            share = np.array([self.known_fraud_signal(nodes[i])["share"] for i in te])
+            out["gat_plus_known_fraud_neighbours"] = round(float(auc(y[te], 1 - (1 - g) * (1 - NEIGHBOUR_WEIGHT * share))), 4)
+        return out
 
     # ------------------------------------------------------ investigation
     def linked_accounts(self, account, hops=2):

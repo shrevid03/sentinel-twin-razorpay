@@ -21,7 +21,7 @@ Tested on three public fraud graphs plus the app's own twin. Full tables, protoc
 | **T-Finance** transactions (3 seeds) | Random forest + neighbour features, F1 **0.868**, AUC 0.980 | Where links connect fraud to fraud, the hybrid beats both the forest (0.735) and the GAT (0.641) |
 | **New accounts** with no history (T-Finance) | GAT 0.935 / forest + neighbour features 0.955 AUC | Feature-only models are blind (AUC 0.5); links recover almost everything. Random links: back to chance (0.46) |
 
-**In one line:** the graph matters most for new accounts that share infrastructure with known fraud, exactly the case an agent-payments risk layer has to catch, and the strongest design combines graph signals with a strong feature model.
+**In one line:** the graph matters most for new accounts that share infrastructure with known fraud, exactly the case an agent-payments risk layer has to catch, and the strongest design combines graph signals with a strong feature model. The app follows that: accounts link through devices, IPs, **UPI IDs, cards and hashed contacts**, and the GAT's score is combined with a **known-fraud-neighbour signal** on top of the rules (see [Rules vs graph](#rules-vs-graph-why-a-gat)).
 
 ## One click: Defense drill (policy hardening on synthetic attack traffic)
 
@@ -35,35 +35,40 @@ The **Defense drill** tab runs the whole loop in about 4 seconds, on one frozen 
 
 "Intercepted" always means blocked **or** sent to review; the screens show the two separately.
 
-| Result (seed 7, fresh twin plus 30 ticks of live traffic, 18 Nov 2026) | Before | After |
+| Result (seed 7, fresh twin plus 30 ticks of live traffic, 19 Nov 2026) | Before | After |
 |---|---|---|
-| Attack ₹ that got through (same seeded attacks) | ₹1,51,858 | ₹37,191 |
-| **Unseen attacks that got through** (fresh seeds, never tuned on) | ₹1,85,742 | ₹36,452 (of ₹4,87,889) |
-| Intercept rate (replayed traffic plus attacks) | 95.1% | 98.8% |
-| Good customers sent to review (of 344) | 2 | 7 |
+| Attack ₹ that got through (same seeded attacks) | ₹1,26,396 | ₹41,888 |
+| **Unseen attacks that got through** (fresh seeds, never tuned on) | ₹1,19,149 | ₹43,276 (of ₹4,89,342) |
+| Intercept rate (replayed traffic plus attacks) | 95.9% | 98.7% |
+| Good customers sent to review (of 344) | 3 | 9 |
 | Good orders blocked | ₹0 | ₹0 |
-| False-positive cost | ₹672 | ₹2,352 |
+| False-positive cost | ₹1,008 | ₹3,024 |
 
-The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹3,10,238 of the replayed attack fraud is blocked and ₹1,46,656 is sent to review. What still gets through is synthetic-identity warm-up orders under about ₹5,000: they look like normal shopping, and catching them would cost more good customers than they're worth. The "before" figure moves with live traffic and GAT training (₹1,51,858 to ₹2,20,836 across our runs); the drill is tested in `tests/test_drill.py`.
+The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹3,45,329 of the replayed attack fraud is blocked and ₹1,21,535 is sent to review. What still gets through is mostly synthetic-identity warm-up orders under about ₹5,000: they look like normal shopping, and catching them would cost more good customers than they're worth.
+
+**Reproducible.** The twin now iterates devices, IPs and payment identifiers in sorted order, so these numbers are identical on every run (earlier versions depended on Python's hash seed: the "before" figure ranged from ₹1,51,858 to ₹2,20,836). Compared with the version before UPI ID / card links (same seed, averaged over three hash seeds), unseen-attack ₹ that got through before hardening fell from ₹1,85,742 to ₹1,19,149. The drill is tested in `tests/test_drill.py`.
 
 ## Rules vs graph: why a GAT?
 
 The same orders replayed through three engines: **rules only** (new device, foreign IP, spend jump, velocity and account age, at full 0-1 scale, the fairest baseline), **GAT + rules** (the shipped engine) and **GAT + rules under the hardened policy**. The headline uses only the red team's attack orders, from fresh accounts the GAT never saw a label for.
 
-| Unseen attack traffic (₹7,90,356 attempted, seeded) | Rules only | GAT + rules | GAT + rules, hardened |
+| Unseen attack traffic (₹8,04,989 attempted, seeded, 19 Nov 2026) | Rules only | GAT + rules | GAT + rules, hardened |
 |---|---|---|---|
-| **All attacks intercepted** | **42.5%** | **72% to 81%** | **95.3%** |
-| Fraud rings (new accounts sharing devices) | 0% | 34% to 67% | 100% |
+| **All attacks intercepted** | **41.8%** | **84.3%** | **94.8%** |
+| Fraud rings (new accounts sharing devices, UPI IDs and cards) | 0% | 80.5% | 97.9% |
 | Device farms (one proxy IP) | 15% | 100% | 100% |
 | Card testing | **98%** | 95% | 100% |
 | Account takeover | 83% | 83% | 100% |
 | Synthetic identity | 68% | 68% | 80% |
 
-Ranges are across our runs on 12 Nov 2026 (GAT training and live traffic vary). What this honestly shows:
+"GAT + rules" is the shipped engine: GAT score, the strongest neighbouring device's risk, a known-fraud-neighbour signal and the rules. Before accounts were linked through UPI IDs and cards, the same engine caught 34-67% of fraud rings (51% averaged over three runs) and 72-81% of all attacks. What this honestly shows:
 
 * **The graph earns its place on connected fraud.** Fresh ring and device-farm accounts look clean one by one; the GAT catches them through the devices and IPs they share.
 * **Rules alone are slightly better on card testing**, and the graph adds nothing on account takeover and synthetic identities. There, only the policy layer helps.
-* **Account-level held-out AUC is not evidence for the graph here:** the same node features with no message passing (logistic regression) score 0.99, the same as the GAT, on 43 held-out synthetic accounts. The GAT's value shows up per transaction, when a new account joins a known ring.
+* **Account-level held-out AUC is not evidence for the graph here:** the same node features with no message passing (logistic regression) score 0.99, the same as the GAT and the GAT plus neighbour signal, on 43 held-out synthetic accounts. The GAT's value shows up per transaction, when a new account joins a known ring.
+* **Payment identifiers are what moved the ring number.** Ring members now share a small pool of UPI IDs and cards as well as devices, and the GAT sees those links: fraud-ring interception went from about 51% to 80.5%.
+* **The known-fraud-neighbour signal** ("share of linked accounts that are known fraud", from training labels and investigator-frozen accounts only) is the strongest feature in the real-data tests. It changes nothing in this table, because every red-team ring is brand new and has no labelled neighbours. It is what catches a new account that joins an *existing* ring (the **New account joins a ring** button on the Defense drill tab).
+* **The skip connection stays off in the app.** It helped the GAT on all three real fraud graphs, but on this twin it caught no more attack fraud (84.9% vs 85.2% of unseen attacks over three runs) and blocked one good ₹14,975 order in every run. It is one constant (`GAT_SKIP` in `app/twin.py`).
 
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 

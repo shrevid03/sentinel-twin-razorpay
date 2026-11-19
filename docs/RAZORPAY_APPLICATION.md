@@ -23,5 +23,5 @@ Sentinel Twin is a safety layer for agentic payments. A shopping agent (Gemini t
 I built it with AI coding agents as pair programmers: architecture, the NumPy GAT with gradient checks, the agent tool loops, and the test suite, then ported the payment layer from PayPal to Razorpay in a day. Results I report are the ones I measured, including where the graph does not beat simple rules (see the README's "Rules vs graph").
 
 ## Numbers
-- Unseen seeded attacks (₹7,90,356): rules only intercept 42.5%, GAT + rules 72-81%, GAT + hardened policy 95.3%.
+- Unseen seeded attacks (₹8,04,989): rules only intercept 41.8%, GAT + rules 84.3%, GAT + hardened policy 94.8%. Linking accounts through UPI IDs and cards lifted fraud-ring interception from about 51% to 80.5%.
 - Defense drill: unseen attack money that got through fell from ₹1,85,742 to ₹36,452 (of ₹4,87,889 attempted), for 5 more good customers sent to review (7 of 344) and no good orders blocked.
