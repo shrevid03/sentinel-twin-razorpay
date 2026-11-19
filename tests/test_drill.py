@@ -69,3 +69,15 @@ def test_red_team_records_who_decided():
     run = team.red_team()
     adapted = [r for r in run["results"] if r.get("why_adapted")]
     assert adapted and all(r["decided_by"] == "scripted fallback" for r in run["results"])
+
+
+def test_rupees_stopped_per_100_flagged_orders():
+    from app.twin import per_100
+
+    assert per_100(50000, 0) == 0.0 and per_100(12345.0, 50) == 24690.0
+    res = defense_drill(_twin(), seed=7)
+    s, b = res["summary"], res["baseline"]
+    assert s["orders_flagged_before"] == b["review"] + b["blocked"] > 0
+    assert s["per_100_flagged_before_inr"] == per_100(b["fraud_caught_inr"], s["orders_flagged_before"])
+    for e in res["compare"]["engines"].values():
+        assert e["fraud_stopped_per_100_flagged_inr"] == per_100(e["fraud_intercepted_inr"], e["orders_flagged"])

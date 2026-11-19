@@ -143,7 +143,8 @@ def defense_drill(twin, seed=7, apply=False, log=None):
         "baseline": baseline, "chosen": best,
         "top_candidates": [{k: c[k] for k in ("policy", "catch_rate", "fraud_caught_inr", "good_reviewed",
                                                "good_blocked_inr", "false_positive_cost_inr", "net_benefit_inr",
-                                               "legit_review_rate")} for c in ok[:6]],
+                                               "legit_review_rate", "fraud_stopped_per_100_flagged_inr")}
+                           for c in ok[:6]],
         "verify": [_slim(r) for r in verify], "fresh": [_slim(r) for r in fresh],
         "fresh_before": [_slim(r) for r in fresh_before], "compare": compare,
         "summary": {
@@ -155,6 +156,10 @@ def defense_drill(twin, seed=7, apply=False, log=None):
             "breach_reviewed_after_inr": tot(verify, "reviewed_inr") if best else None,
             "fresh_attempted_inr": tot(fresh, "fraud_inr") if best else None,
             "catch_rate_before": baseline["catch_rate"], "catch_rate_after": best["catch_rate"] if best else None,
+            "per_100_flagged_before_inr": baseline["fraud_stopped_per_100_flagged_inr"],
+            "per_100_flagged_after_inr": best["fraud_stopped_per_100_flagged_inr"] if best else None,
+            "orders_flagged_before": baseline["orders_flagged"],
+            "orders_flagged_after": best["orders_flagged"] if best else None,
             "fp_cost_before_inr": baseline["false_positive_cost_inr"],
             "fp_cost_after_inr": best["false_positive_cost_inr"] if best else None,
             "legit_reviewed_before": baseline["good_reviewed"],

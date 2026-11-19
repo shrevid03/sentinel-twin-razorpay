@@ -549,7 +549,7 @@ $("#btn-campaign").onclick = async (e) => {
   finally { e.target.disabled = false; }
 };
 async function loadRuns() { const rs = await api("/api/redteam/runs"); if (rs[0] && !rtGrid) renderRun(rs[0]); }
-$("#btn-to-whatif").onclick = async () => { showTab("whatif"); await initPolicy(); setPolicy({ review_threshold: 0.35, block_threshold: 0.75, max_auto_amount: 600, review_new_device_over: 150, review_spend_multiple: 3.5 }); runWhatIf(); };
+$("#btn-to-whatif").onclick = async () => { showTab("whatif"); await initPolicy(); setPolicy({ review_threshold: 0.35, block_threshold: 0.75, max_auto_amount: 50400, review_new_device_over: 12600, review_spend_multiple: 3.5 }); runWhatIf(); };
 
 /* ---------------- what-if ---------------- */
 const POLICY_FIELDS = [
@@ -577,7 +577,9 @@ async function runWhatIf() {
   if (wiChart) { wiChart.data = data; wiChart.update(); } else wiChart = new Chart($("#wi-chart"), { type: "bar", data,
     options: { plugins: { legend: { labels: { color: "#001435" } } }, scales: { x: { ticks: { color: "#5B6B82" } }, y: { ticks: { color: "#5B6B82" }, grid: { color: "#E3E8EF" } } } } });
   $("#wi-kpis").innerHTML = [kpi("intercept rate now", Math.round(r.current.catch_rate * 100) + "%"), kpi("intercept rate proposed", Math.round(r.proposed.catch_rate * 100) + "%", "ok"),
-    kpi("good orders to review", `${r.current.good_reviewed} → ${r.proposed.good_reviewed}`, "warn"), kpi("orders replayed", r.orders_replayed)].join("");
+    kpi("good orders to review", `${r.current.good_reviewed} → ${r.proposed.good_reviewed}`, "warn"),
+    kpi("fraud ₹ stopped per 100 orders flagged", `${money(r.current.fraud_stopped_per_100_flagged_inr)} → ${money(r.proposed.fraud_stopped_per_100_flagged_inr)}`, "ok"),
+    kpi("orders replayed", r.orders_replayed)].join("");
   $("#wi-note").textContent = `Replayed ${r.orders_replayed} orders, including ${r.attack_orders} red-team attack orders.`;
 }
 $("#btn-whatif").onclick = runWhatIf;

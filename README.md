@@ -43,8 +43,9 @@ The **Defense drill** tab runs the whole loop in about 4 seconds, on one frozen 
 | Good customers sent to review (of 344) | 3 | 9 |
 | Good orders blocked | ₹0 | ₹0 |
 | False-positive cost | ₹1,008 | ₹3,024 |
+| **Fraud ₹ stopped per 100 orders flagged** (blocked or sent to review) | ₹38,28,269 (78 flagged) | ₹29,52,459 (104 flagged) |
 
-The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹3,45,329 of the replayed attack fraud is blocked and ₹1,21,535 is sent to review. What still gets through is mostly synthetic-identity warm-up orders under about ₹5,000: they look like normal shopping, and catching them would cost more good customers than they're worth.
+The per-100 figure is what a review team's effort buys. It falls after hardening because the new policy flags 26 more orders, mostly small ones, to catch fraud the old one let through: total fraud stopped goes up, the average value of each flag goes down. The fix chosen: review at risk 0.3 (was 0.5), review new-device orders over ₹12,600 (was ₹25,200), and review orders 4x the buyer's usual spend. After the fix, ₹3,45,329 of the replayed attack fraud is blocked and ₹1,21,535 is sent to review. What still gets through is mostly synthetic-identity warm-up orders under about ₹5,000: they look like normal shopping, and catching them would cost more good customers than they're worth.
 
 **Reproducible.** The twin now iterates devices, IPs and payment identifiers in sorted order, so these numbers are identical on every run (earlier versions depended on Python's hash seed: the "before" figure ranged from ₹1,51,858 to ₹2,20,836). Compared with the version before UPI ID / card links (same seed, averaged over three hash seeds), unseen-attack ₹ that got through before hardening fell from ₹1,85,742 to ₹1,19,149. The drill is tested in `tests/test_drill.py`.
 
@@ -60,6 +61,8 @@ The same orders replayed through three engines: **rules only** (new device, fore
 | Card testing | **98%** | 95% | 100% |
 | Account takeover | 83% | 83% | 100% |
 | Synthetic identity | 68% | 68% | 80% |
+
+Per 100 orders flagged across all replayed orders (live traffic plus attacks), rules only stop ₹21,00,721 of fraud, GAT + rules ₹36,93,630 and GAT + rules hardened ₹24,41,541: the graph engine flags fewer orders that turn out to be good.
 
 "GAT + rules" is the shipped engine: GAT score, the strongest neighbouring device's risk, a known-fraud-neighbour signal and the rules. Before accounts were linked through UPI IDs and cards, the same engine caught 34-67% of fraud rings (51% averaged over three runs) and 72-81% of all attacks. What this honestly shows:
 

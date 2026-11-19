@@ -623,6 +623,8 @@ class Twin:
                 if k.endswith("inr"):
                     res[k] = round(res[k], 2)
             res["catch_rate"] = round(res["fraud_caught_inr"] / max(res["fraud_total_inr"], 1), 3)
+            res["orders_flagged"] = res["review"] + res["blocked"]
+            res["fraud_stopped_per_100_flagged_inr"] = per_100(res["fraud_caught_inr"], res["orders_flagged"])
             return res
 
         merged = {**self.policy, **policy}
@@ -652,10 +654,11 @@ class Twin:
                "engines": {}, "by_attack": {}}
         for name, (score, pol) in engines.items():
             m = {"fraud_total_inr": 0.0, "fraud_blocked_inr": 0.0, "fraud_reviewed_inr": 0.0, "fraud_missed_inr": 0.0,
-                 "good_total": 0, "good_reviewed": 0, "good_blocked": 0, "good_blocked_inr": 0.0}
+                 "good_total": 0, "good_reviewed": 0, "good_blocked": 0, "good_blocked_inr": 0.0, "orders_flagged": 0}
             per = {}
             for o in orders:
                 d = self.decide(score(o), o["amount"], o.get("new_device", False), pol, o.get("spend_ratio", 0))
+                m["orders_flagged"] += d != "approve"
                 if o["fraud"]:
                     m["fraud_total_inr"] += o["amount"]
                     key = {"block": "fraud_blocked_inr", "review": "fraud_reviewed_inr", "approve": "fraud_missed_inr"}[d]
@@ -676,6 +679,7 @@ class Twin:
             m["fraud_intercepted_inr"] = round(m["fraud_blocked_inr"] + m["fraud_reviewed_inr"], 2)
             m["intercept_rate"] = round(m["fraud_intercepted_inr"] / max(m["fraud_total_inr"], 1), 3)
             m["false_positive_cost_inr"] = round(m["good_blocked_inr"] + review_cost * m["good_reviewed"], 2)
+            m["fraud_stopped_per_100_flagged_inr"] = per_100(m["fraud_intercepted_inr"], m["orders_flagged"])
             out["engines"][name] = m
             for k, v in per.items():
                 out["by_attack"].setdefault(k, {"total_inr": round(v["total_inr"], 2)})[name] = round(
@@ -813,6 +817,11 @@ class Twin:
             twin = copy.deepcopy(self, memo)
             twin.on_event = None
             return twin
+
+
+def per_100(fraud_stopped_inr, orders_flagged):
+    """₹ of fraud stopped per 100 orders flagged (blocked or sent to review): what a review team's effort buys."""
+    return round(100 * fraud_stopped_inr / orders_flagged, 2) if orders_flagged else 0.0
 
 
 def _ntype(n):

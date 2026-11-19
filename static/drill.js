@@ -34,11 +34,11 @@ async function runDrill() {
       `. Score = fraud ₹ intercepted (blocked or sent to review) minus false-positive cost (${money(d.review_cost_inr)} per good order reviewed, plus the full value of good orders blocked).`;
     const base = d.before_policy;
     const rows = [{ policy: base, ...d.baseline, today: true }, ...d.top_candidates];
-    $("#d-cands").innerHTML = `<table class="dtable"><tr><th>Policy (changed knobs)</th><th class="n">Intercept rate</th><th class="n">Good orders reviewed</th><th class="n">FP cost</th><th class="n">Net benefit</th></tr>
+    $("#d-cands").innerHTML = `<table class="dtable"><tr><th>Policy (changed knobs)</th><th class="n">Intercept rate</th><th class="n">Good orders reviewed</th><th class="n">FP cost</th><th class="n">₹ stopped per 100 flagged</th><th class="n">Net benefit</th></tr>
       ${rows.map((c, i) => {
         const chosen = !c.today && i === 1 && d.chosen;
         return `<tr class="${chosen ? "chosen" : ""}"><td>${c.today ? "<b>Today's policy</b>" : esc(changed(c.policy, base))}${chosen ? ' <span class="tag">chosen</span>' : ""}</td>
-        <td class="n">${pct(c.catch_rate)}</td><td class="n">${c.good_reviewed}</td><td class="n">${money(c.false_positive_cost_inr)}</td><td class="n">${money(c.net_benefit_inr)}</td></tr>`;
+        <td class="n">${pct(c.catch_rate)}</td><td class="n">${c.good_reviewed}</td><td class="n">${money(c.false_positive_cost_inr)}</td><td class="n">${money(c.fraud_stopped_per_100_flagged_inr)}</td><td class="n">${money(c.net_benefit_inr)}</td></tr>`;
       }).join("")}</table>`;
     $("#ds-2").classList.add("show");
     await sleep(600);
@@ -67,9 +67,11 @@ async function runDrill() {
       kpi(`Good customers sent to review<small>of ${s.legit_orders} good orders · blocked ${money(s.legit_blocked_before_inr)} → ${money(s.legit_blocked_after_inr)}</small>`,
         arrow(s.legit_reviewed_before, s.legit_reviewed_after), "warn"),
       kpi(`False-positive cost<small>${money(d.review_cost_inr)} per review plus blocked value</small>`, arrow(money(s.fp_cost_before_inr), after(s.fp_cost_after_inr, money)), "warn"),
+      kpi(`Fraud ₹ stopped per 100 orders flagged<small>blocked or sent to review · ${s.orders_flagged_before} → ${s.orders_flagged_after ?? "–"} orders flagged</small>`,
+        arrow(money(s.per_100_flagged_before_inr), after(s.per_100_flagged_after_inr, money)), "ok"),
     ].join("");
     $("#ds-4").classList.add("show");  // show before drawing so Chart.js can measure the canvas
-    const data = { labels: ["Attack $ that got through", "False-positive cost $"], datasets: [
+    const data = { labels: ["Attack ₹ that got through", "False-positive cost ₹"], datasets: [
       { label: "Before", data: [s.breach_evaded_before_inr, s.fp_cost_before_inr], backgroundColor: "#003087" },
       { label: "After", data: [s.breach_evaded_after_inr ?? 0, s.fp_cost_after_inr ?? 0], backgroundColor: "#009CDE" }] };
     if (drillChart) { drillChart.data = data; drillChart.update(); } else {
@@ -98,11 +100,11 @@ function renderCompare(c) {
   if (!c) return;
   const names = Object.keys(c.engines);
   $("#d-engines").innerHTML = `<table class="dtable"><tr><th>Engine</th><th class="n">Unseen attacks intercepted</th><th class="n">All fraud intercepted</th>
-    <th class="n">Fraud blocked / reviewed</th><th class="n">Good orders reviewed</th><th class="n">Good $ blocked</th><th class="n">FP cost</th></tr>
+    <th class="n">Fraud blocked / reviewed</th><th class="n">Good orders reviewed</th><th class="n">Good ₹ blocked</th><th class="n">FP cost</th><th class="n" title="fraud ₹ intercepted per 100 orders blocked or sent to review">₹ stopped per 100 flagged</th></tr>
     ${names.map((n) => { const e = c.engines[n], u = c.unseen_attacks[n]; return `<tr class="${n === "gat_rules_hardened" ? "chosen" : ""}"><td>${ENGINE[n]}</td>
       <td class="n"><b>${pct(u.intercept_rate)}</b> <small class="muted">of ${money(u.total_inr)}</small></td><td class="n">${pct(e.intercept_rate)}</td>
       <td class="n">${money(e.fraud_blocked_inr)} / ${money(e.fraud_reviewed_inr)}</td><td class="n">${e.good_reviewed} of ${e.good_total}</td>
-      <td class="n">${money(e.good_blocked_inr)}</td><td class="n">${money(e.false_positive_cost_inr)}</td></tr>`; }).join("")}</table>`;
+      <td class="n">${money(e.good_blocked_inr)}</td><td class="n">${money(e.false_positive_cost_inr)}</td><td class="n">${money(e.fraud_stopped_per_100_flagged_inr)}</td></tr>`; }).join("")}</table>`;
   const kinds = Object.keys(c.by_attack).filter((k) => k !== "live fraud traffic");
   const colors = { rules_only: "#B8C4D6", gat_rules: "#0070E0", gat_rules_hardened: "#003087" };
   const data = { labels: kinds.map((k) => ATTACK_LABEL[k] || k), datasets: names.map((n) => ({ label: ENGINE[n],
