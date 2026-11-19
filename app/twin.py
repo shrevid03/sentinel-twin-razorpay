@@ -41,7 +41,16 @@ MERCHANTS = [
 ]
 FEATURES = ["is_account", "is_device", "is_ip", "is_merchant", "account_age", "order_count",
             "avg_amount", "max_amount", "velocity", "device_count", "ip_count", "geo_mismatch",
-            "kyc_verified", "disposable_email", "degree", "is_payment_id", "payment_id_count"]
+            "kyc_verified", "disposable_email", "degree", "is_payment_id", "payment_id_count",
+            "xfer_out", "xfer_in", "xfer_amount", "xfer_partners"]
+
+# Money-flow ring patterns (absorbed from Abuse-Ring Sentinel): accounts also move money to each other
+# (P2P transfers / marketplace payouts). Each member looks ordinary on its own row; the shape gives it away.
+FLOW_PATTERNS = {
+    "cycle": "layering: money goes round a closed loop A -> B -> ... -> A",
+    "fanout": "bust-out: one hub pays out to many fresh mule accounts in a short window",
+    "collusion": "fake demand: a cluster of buyers all pay a cluster of colluding sellers",
+}
 
 # Payment identifiers, linked to accounts the way devices and IPs are. Node ids never contain raw PII:
 # synthetic ones are counters, real ones (mirrored from Razorpay payments) are salted hashes.
@@ -87,6 +96,9 @@ class Twin:
         self.pay_ids: set[str] = set()  # UPI-…, CARD-…, CT-… nodes
         # payment identifiers draw from their own RNG so adding them leaves the rest of the seeded world unchanged
         self.prng = random.Random(seed * 7919 + 1)
+        self.xrng = random.Random(seed * 104729 + 3)  # money-flow world: its own RNG, like payment ids
+        self.transfers: list[dict] = []  # {"src", "dst", "amount", "ts", "pattern"}
+        self.xfer_nb: dict[str, set] = {}  # account -> accounts it has sent money to or received from
         self.merchants = {m[0]: {"id": m[0], "name": m[1], "category": m[2]} for m in MERCHANTS}
         self.orders: list[dict] = []
         self.events: list[dict] = []
@@ -212,7 +224,86 @@ class Twin:
             for _ in range(r.randint(2, 4)):
                 self._hist_order(acc, min(acc.devices), min(acc.ips),
                                  amount=r.uniform(80 * K, 400 * K), fraud=True)
+        self._populate_flows()
         self.orders.sort(key=lambda o: o["ts"])
+
+    # ---------------------------------------------------------- money flows
+    def add_transfer(self, src, dst, amount, ts=None, pattern="none"):
+        if src == dst:
+            return
+        self.transfers.append({"src": src, "dst": dst, "amount": round(float(amount), 2),
+                               "ts": self.clock if ts is None else ts, "pattern": pattern})
+        self.xfer_nb.setdefault(src, set()).add(dst)
+        self.xfer_nb.setdefault(dst, set()).add(src)
+        self._dirty = True
+
+    def _flow_amount(self, r):
+        return round(r.lognormvariate(7.6, 0.8), 2)  # about ₹2,000, the same for rings and ordinary accounts
+
+    def _ring_member(self, label, r, device_pool=None, share=0.3):
+        """An ordinary-looking ring member: aged, KYC'd, normal email, own phone and IP, normal payment ids."""
+        acc = self.new_account(age_days=r.randint(60, 1200), fraud=True, segment=label, kyc=r.random() < 0.85)
+        acc.devices.add(device_pool if device_pool and r.random() < share else self.new_device())
+        acc.ips.add(self.new_ip(acc.country))
+        self.give_pay_ids(acc)
+        for _ in range(r.randint(1, 3)):
+            self._hist_order(acc, min(acc.devices), min(acc.ips), amount=r.uniform(20 * K, 60 * K), fraud=True)
+        return acc
+
+    def spawn_flow_ring(self, pattern, size=8, label=None, history=True, hub=None, sellers=None):
+        """Inject one money-flow ring. Returns its member accounts (and, for collusion, buyers then sellers)."""
+        r = self.rng
+        label = label or pattern
+        pool = self.new_device()
+        t0 = -r.uniform(0, 60 * 24 * 20) if history else self.clock
+        if pattern == "cycle":
+            members = [self._ring_member(label, r, pool) for _ in range(size)]
+            for i in range(size):
+                self.add_transfer(members[i].id, members[(i + 1) % size].id, self._flow_amount(r), t0 + i * 3, pattern)
+        elif pattern == "fanout":
+            h = hub or self._ring_member(label, r, pool)
+            mules = [self._ring_member(label, r, pool) for _ in range(size)]
+            for m in mules:
+                self.add_transfer(h.id, m.id, self._flow_amount(r), t0 + r.uniform(0, 30), pattern)
+            members = ([h] if hub is None else []) + mules
+        elif pattern == "collusion":
+            nb = max(2, size // 2)
+            buyers = [self._ring_member(label, r, pool, 0.2) for _ in range(nb)]
+            sell = sellers or [self._ring_member(label, r, pool, 0.2) for _ in range(size - nb)]
+            for b in buyers:
+                for s_ in sell:
+                    if r.random() < 0.8:
+                        self.add_transfer(b.id, s_.id, self._flow_amount(r), t0 + r.uniform(0, 40), pattern)
+            members = buyers + ([] if sellers else sell)
+        else:
+            raise ValueError(f"unknown flow pattern {pattern}")
+        return members
+
+    def _populate_flows(self):
+        """Ordinary transfers between legit accounts, plus cycle, fan-out and collusion rings."""
+        saved, self.rng = self.rng, self.xrng  # keep the rest of the seeded world exactly as it was
+        try:
+            r = self.rng
+            legit = [a for a in self.accounts.values() if not a.fraud]
+            others = [a for a in self.accounts.values() if a.fraud]  # device rings and synthetic identities
+            # many people never use P2P transfers at all; the rest send money to a friend or two. Fraud accounts of
+            # the older kinds transfer at the same rate, so "has no transfers" is not itself a fraud signal.
+            for a in legit + others:
+                for _ in range(r.choice([0, 0, 0, 0, 1, 1, 2])):
+                    self.add_transfer(a.id, r.choice(legit + others).id, self._flow_amount(r), -r.uniform(0, 60 * 24 * 30))
+            # honest hard negatives: flatmates paying one person for rent (fan-in) and friends passing money along
+            pool = [a for a in legit if a.age_days > 60]
+            for g in range(10):
+                group = r.sample(pool, r.randint(3, 6))
+                for j, a in enumerate(group[1:]):
+                    dst = group[0] if g % 2 == 0 else group[j]  # even groups: rent to one payer; odd: a chain
+                    self.add_transfer(a.id, dst.id, self._flow_amount(r), -r.uniform(0, 60 * 24 * 30), "honest-group")
+            for i in range(2):
+                self.spawn_flow_ring("cycle", size=r.randint(6, 8), label=f"cycle-{i + 1}")
+                self.spawn_flow_ring("fanout", size=r.randint(6, 8), label=f"fanout-{i + 1}")
+            self.spawn_flow_ring("collusion", size=8, label="collusion-1")
+        finally:
+            self.rng = saved
 
     def spawn_ring(self, size=6, label="ring", history=False, shared_devices=2, shared_ips=2,
                    country=None, age_range=(1, 40), amount_range=(150 * K, 900 * K), disposable_rate=0.6):
@@ -310,8 +401,17 @@ class Twin:
                     link(a.id, pid)
             for o in by.get(a.id, []):
                 link(a.id, o["merchant"])
+            for b in self.xfer_nb.get(a.id, ()):  # money moved between the two accounts
+                if b in idx:
+                    link(a.id, b)
 
         X = np.zeros((N, len(FEATURES)))
+        xstat = {}
+        for t in self.transfers:
+            o_ = xstat.get(t["src"], (0, 0, 0.0))
+            xstat[t["src"]] = (o_[0] + 1, o_[1], o_[2] + t["amount"])
+            i_ = xstat.get(t["dst"], (0, 0, 0.0))
+            xstat[t["dst"]] = (i_[0], i_[1] + 1, i_[2] + t["amount"])
         X[:, 0] = [1 if n.startswith("A-") else 0 for n in nodes]
         for i, a in enumerate(accs):
             os_ = by.get(a.id, [])
@@ -324,6 +424,8 @@ class Twin:
                           n_dev / 4, len(a.ips) / 4, mism, float(a.kyc),
                           float(a.email.split("@")[1] in DISPOSABLE)]
             X[i, 16] = len(a.pay_ids) / 4
+            xo, xi, xa = xstat.get(a.id, (0, 0, 0.0))
+            X[i, 17:21] = [min(xo / 5, 2), min(xi / 5, 2), math.log1p(xa / K) / 8, len(self.xfer_nb.get(a.id, ())) / 6]
         deg = mask.sum(axis=1) - 1
         X[:, 14] = np.log1p(deg) / 5
         nA = len(accs)
@@ -476,6 +578,9 @@ class Twin:
             for s_ in shared_ids:
                 if s_["kind"] != "device" and s_["flagged"]:
                     factors.append(f"shares {s_['label']} with {s_['flagged']} flagged account(s)")
+            mf = self.money_flow_links(account)
+            if mf["flagged"]:
+                factors.append(f"moved money with {mf['flagged']} flagged account(s)")
             if g_now - before > 0.1:
                 factors.append(f"GAT risk jumps {before:.2f} -> {g_now:.2f} once this order's links are added")
             elif g_now > 0.5:
@@ -492,6 +597,8 @@ class Twin:
         labels are never read, so the signal is fair on unseen accounts. Smoothed: fraud / (labelled + 1)."""
         acc = self.accounts[account]
         ids = acc.devices | acc.ips | acc.pay_ids | {i for i in extra_ids if i}
+        # money-transfer partners are left out on purpose: honest people pay random others, and including them
+        # lowered held-out AUC (0.976 -> 0.967). The GAT still sees transfers as graph edges.
         nb = [b for b in self.accounts.values() if b.id != account and (b.devices | b.ips | b.pay_ids) & ids]
         labelled = [b for b in nb if b.id in self.known_labelled or b.status == "frozen"]
         fraud = [b for b in labelled if b.id in self.known_fraud or b.status == "frozen"]
@@ -515,6 +622,12 @@ class Twin:
                         "label": "device" if kind == "device" else PAY_KINDS[kind], "accounts": len(others),
                         "flagged": len(flagged)})
         return out
+
+    def money_flow_links(self, account):
+        """Accounts this one moved money with, and how many of them are flagged."""
+        partners = sorted(self.xfer_nb.get(account, ()))
+        flagged = [b for b in partners if self.accounts[b].status == "frozen" or self._probs.get(b, 0) >= 0.5]
+        return {"partners": len(partners), "flagged": len(flagged)}
 
     def decide(self, risk, amount, new_device, policy=None, spend_ratio=0.0):
         p = {**DEFAULT_POLICY, **(policy or self.policy)}
@@ -642,6 +755,7 @@ class Twin:
         orders = recent + [o for o in (extra_orders or []) if o.get("txn_score") is not None]
         engines = {
             "rules_only": (lambda o: o["txn_score"], dict(DEFAULT_POLICY)),  # rules at full 0-1 scale: the fairest baseline
+            "gat_only": (lambda o: o.get("gat_risk") or 0.0, dict(DEFAULT_POLICY)),  # the GAT's own score, no rules
             "gat_rules": (lambda o: o["risk"], dict(DEFAULT_POLICY)),
         }
         if hardened_policy:
@@ -735,6 +849,8 @@ class Twin:
                     if b.id in seen:
                         continue
                     shared = (a.devices & b.devices) | (a.ips & b.ips) | (a.pay_ids & b.pay_ids)
+                    if b.id in self.xfer_nb.get(a.id, ()):
+                        shared = shared | {"money transfer"}
                     if shared:
                         seen.add(b.id)
                         via[b.id] = sorted(shared)
@@ -804,6 +920,12 @@ class Twin:
                     seen.add(d)
                     nodes.append({"id": d, "label": d, "type": _ntype(d), "risk": round(self._probs.get(d, 0), 3)})
                 edges.append({"from": aid, "to": d})
+        pairs = set()
+        for t in self.transfers:  # money moved between two shown accounts (one edge per pair)
+            key = tuple(sorted((t["src"], t["dst"])))
+            if t["src"] in ids and t["dst"] in ids and key not in pairs:
+                pairs.add(key)
+                edges.append({"from": t["src"], "to": t["dst"], "kind": "money"})
         return {"nodes": nodes, "edges": edges}
 
     def fork(self):

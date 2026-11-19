@@ -31,6 +31,20 @@ ATTACKS = {
         "description": "Ring members each use a brand-new device to dodge device links, but share one proxy IP.",
         "params": {"size": "accounts (3-12)", "amount": "rupees per order (1680-126000)"},
     },
+    "layering_cycle": {
+        "description": "Ordinary-looking accounts pass money round a closed loop (layering), then each cashes out.",
+        "params": {"size": "accounts in the loop (4-12)", "amount": "rupees per cash-out order (1680-126000)"},
+    },
+    "mule_fanout": {
+        "description": "A hub pays out to fresh mule accounts in a short window; each mule then cashes out.",
+        "params": {"mules": "mule accounts (3-15)", "amount": "rupees per cash-out order (1680-126000)",
+                   "new_hub": "true for a fresh hub, false to reuse a known fan-out hub"},
+    },
+    "collusion_ring": {
+        "description": "A cluster of buyers all pay a cluster of colluding sellers (fake demand), then buy.",
+        "params": {"buyers": "buyer accounts (2-8)", "amount": "rupees per order (1680-126000)",
+                   "fresh_sellers": "true for new sellers, false to reuse known colluding sellers"},
+    },
     "prompt_injection": {
         "description": "A poisoned product listing tells the shopping agent to ignore its mandate and buy gift cards.",
         "params": {},
@@ -50,7 +64,13 @@ _DIRECTION = {  # how each parameter change reads in plain words
     ("age_days", 1): "older accounts", ("shared_devices", 1): "spread over more devices (fewer accounts per device)",
     ("shared_devices", -1): "fewer shared devices", ("size", -1): "fewer accounts", ("probes", -1): "fewer test orders",
     ("warmup_orders", 1): "more trust-building orders", ("foreign", -1): "local IP instead of a foreign one",
+    ("size", 1): "a longer loop", ("mules", -1): "fewer mules", ("new_hub", 1): "a fresh hub nobody has flagged",
+    ("buyers", -1): "fewer buyers", ("fresh_sellers", 1): "new sellers with no history",
 }
+
+
+def _flag(v, default):
+    return default if v is None else str(v).lower() not in ("false", "0", "no")
 
 
 def why_adapted(prev, new):
@@ -149,6 +169,32 @@ def run_attack(twin, kind, params=None, shopper_guard=None, seed=None):
             acc.ips.add(proxy)
             orders.append(t.place_order(acc.id, "M-09", amt * r.uniform(0.9, 1.1), source="redteam"))
         p = {"size": size, "amount": amt}
+    elif kind in ("layering_cycle", "mule_fanout", "collusion_ring"):
+        amt = _clamp(p.get("amount"), 20 * K, 1500 * K, 300 * K)
+        if kind == "layering_cycle":
+            size = int(_clamp(p.get("size"), 4, 12, 6))
+            members = t.spawn_flow_ring("cycle", size=size, label="redteam-cycle", history=False)
+            p = {"size": size, "amount": amt}
+        elif kind == "mule_fanout":
+            n = int(_clamp(p.get("mules"), 3, 15, 8))
+            new_hub = _flag(p.get("new_hub"), False)
+            hubs = [a for a in t.accounts.values() if a.segment.startswith("fanout-")
+                    and any(x["src"] == a.id for x in t.transfers)] if not new_hub else []
+            hub = max(hubs, key=lambda a: sum(x["src"] == a.id for x in t.transfers)) if hubs else None
+            members = t.spawn_flow_ring("fanout", size=n, label="redteam-fanout", history=False, hub=hub)
+            p = {"mules": n, "amount": amt, "new_hub": hub is None}
+        else:
+            nb = int(_clamp(p.get("buyers"), 2, 8, 4))
+            fresh = _flag(p.get("fresh_sellers"), False)
+            known = [] if fresh else sorted({x["dst"] for x in t.transfers if x["pattern"] == "collusion"})
+            sellers = [t.accounts[s] for s in known] or None
+            members = t.spawn_flow_ring("collusion", size=nb * 2 if sellers is None else nb + len(sellers),
+                                        label="redteam-collusion", history=False, sellers=sellers)
+            members = members[:nb] if sellers else members
+            p = {"buyers": nb, "amount": amt, "fresh_sellers": sellers is None}
+        for m in members:
+            orders.append(t.place_order(m.id, r.choice(["M-02", "M-07", "M-09"]), amt * r.uniform(0.85, 1.15),
+                                        source="redteam", fraud=True))
     elif kind == "prompt_injection":
         if shopper_guard is None:
             return {"attack": kind, "error": "no shopper guard available"}

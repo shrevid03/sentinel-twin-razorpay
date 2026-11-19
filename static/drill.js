@@ -93,9 +93,10 @@ async function runDrill() {
 
 /* step 5: rules only vs GAT + rules vs GAT + rules hardened, on identical orders */
 let cmpChart = null;
-const ENGINE = { rules_only: "Rules only (no graph)", gat_rules: "GAT + rules", gat_rules_hardened: "GAT + rules, hardened policy" };
+const ENGINE = { rules_only: "Rules only (no graph)", gat_only: "GAT only (no rules)", gat_rules: "GAT + rules (shipped)", gat_rules_hardened: "GAT + rules, hardened policy" };
 const ATTACK_LABEL = { "live fraud traffic": "Live fraud traffic (accounts the GAT trained on)", fraud_ring: "Fraud rings",
-  device_farm_evasion: "Device farms", card_testing: "Card testing", account_takeover: "Account takeover", synthetic_identity: "Synthetic identity" };
+  device_farm_evasion: "Device farms", card_testing: "Card testing", account_takeover: "Account takeover", synthetic_identity: "Synthetic identity",
+  layering_cycle: "Layering cycles", mule_fanout: "Mule fan-out", collusion_ring: "Buyer–seller collusion" };
 function renderCompare(c) {
   if (!c) return;
   const names = Object.keys(c.engines);
@@ -106,7 +107,7 @@ function renderCompare(c) {
       <td class="n">${money(e.fraud_blocked_inr)} / ${money(e.fraud_reviewed_inr)}</td><td class="n">${e.good_reviewed} of ${e.good_total}</td>
       <td class="n">${money(e.good_blocked_inr)}</td><td class="n">${money(e.false_positive_cost_inr)}</td><td class="n">${money(e.fraud_stopped_per_100_flagged_inr)}</td></tr>`; }).join("")}</table>`;
   const kinds = Object.keys(c.by_attack).filter((k) => k !== "live fraud traffic");
-  const colors = { rules_only: "#B8C4D6", gat_rules: "#0070E0", gat_rules_hardened: "#003087" };
+  const colors = { rules_only: "#B8C4D6", gat_only: "#7FB8F0", gat_rules: "#0070E0", gat_rules_hardened: "#003087" };
   const data = { labels: kinds.map((k) => ATTACK_LABEL[k] || k), datasets: names.map((n) => ({ label: ENGINE[n],
     data: kinds.map((k) => Math.round((c.by_attack[k][n] || 0) * 100)), backgroundColor: colors[n] })) };
   const opts = { plugins: { legend: { labels: { color: "#001435" } } }, scales: { x: { ticks: { color: "#5B6B82" } },

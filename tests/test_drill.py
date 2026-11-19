@@ -38,7 +38,7 @@ def test_compare_engines_on_identical_orders():
     twin = _twin()
     res = defense_drill(twin, seed=7)
     c = res["compare"]
-    assert set(c["engines"]) == {"rules_only", "gat_rules", "gat_rules_hardened"}
+    assert set(c["engines"]) == {"rules_only", "gat_only", "gat_rules", "gat_rules_hardened"}
     totals = {e["fraud_total_inr"] for e in c["engines"].values()}
     assert len(totals) == 1  # every engine saw the same orders
     for e in c["engines"].values():

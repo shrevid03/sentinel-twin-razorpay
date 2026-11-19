@@ -21,6 +21,7 @@ MAX_LEGIT_REVIEW_RATE = 0.08  # never accept a policy that reviews more than 8% 
 PROBES = [  # round 1: the standard playbooks
     ("fraud_ring", {}), ("card_testing", {}), ("account_takeover", {}),
     ("synthetic_identity", {}), ("device_farm_evasion", {}),
+    ("layering_cycle", {}), ("mule_fanout", {}), ("collusion_ring", {}),  # money-flow patterns
 ]
 ADAPT = {  # round 2: how the red team mutates a playbook that got caught
     "fraud_ring": {"size": 3, "shared_devices": 3, "amount": 60 * K, "age_days": 200},
@@ -28,6 +29,9 @@ ADAPT = {  # round 2: how the red team mutates a playbook that got caught
     "account_takeover": {"amount": 250 * K, "foreign": False},
     "synthetic_identity": {"warmup_orders": 8, "bust_amount": 250 * K},
     "device_farm_evasion": {"size": 3, "amount": 80 * K},
+    "layering_cycle": {"size": 10, "amount": 100 * K},
+    "mule_fanout": {"mules": 4, "amount": 100 * K, "new_hub": True},
+    "collusion_ring": {"buyers": 3, "amount": 100 * K, "fresh_sellers": True},
 }
 GRID = {
     "review_threshold": [0.5, 0.4, 0.3],
