@@ -36,7 +36,21 @@ twin = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
 twin.on_event = integrations.publish
 twin.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
 razorpay = Razorpay()
-team = Team(twin, razorpay)
+def _db_url():
+    """DATABASE_URL (Postgres in production), else a SQLite file next to the app so payments survive a restart."""
+    url = os.getenv("DATABASE_URL", "").strip()
+    if url:
+        return url
+    d = Path(__file__).resolve().parent.parent / "data"
+    d.mkdir(exist_ok=True)
+    return f"sqlite:///{d / 'sentinel.db'}"
+
+
+from .store import Store  # noqa: E402
+
+store = Store(_db_url())
+team = Team(twin, razorpay, store=store)
+team.reconcile()  # startup: resolve captures that were in flight when the last process stopped
 
 
 def require_admin(x_admin_token: str | None = Header(default=None)):
@@ -69,8 +83,15 @@ app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
 def _traffic():
+    ticks = 0
     while True:
         time.sleep(5)
+        ticks += 1
+        if ticks % 12 == 0:  # about once a minute: resolve in-flight captures, release abandoned reservations
+            try:
+                team.reconcile()
+            except Exception as e:  # noqa: BLE001 - keep the loop alive; the next pass retries
+                print("reconcile error", type(e).__name__)
         if auto["on"]:
             try:
                 twin.tick(auto["n"], fraud_rate=0.12)
@@ -354,7 +375,8 @@ def reset():
         t.on_event = integrations.publish
         t.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
         razorpay.calls.clear()
-        twin, team = t, Team(t, razorpay)
+        store.reset()
+        twin, team = t, Team(t, razorpay, store=store)
         LAST_DRILL.clear()
         twin._event("system", "Demo reset: fresh twin, default policy, empty queues", level="info")
     return {"ok": True, "seed": int(os.getenv("TWIN_SEED", "3")), "policy": twin.policy}
@@ -399,8 +421,7 @@ def get_mandate():
 
 @app.post("/api/mandate")
 def set_mandate(body: MandateIn):
-    team.mandate.update(body.model_dump())
-    return team.mandate
+    return team.set_mandate(**body.model_dump())
 
 
 # ---------------------------------------------------------------- razorpay
@@ -602,10 +623,6 @@ def checkouts():
     return list(team.checkouts.values())[::-1]
 
 
-_seen_events: dict[str, float] = {}
-_webhook_lock = threading.Lock()
-
-
 @app.post("/api/razorpay/webhook")
 async def webhook(request: Request, bg: BackgroundTasks):
     raw = await request.body()  # the signature covers the exact raw bytes, so verify before parsing
@@ -625,37 +642,48 @@ async def webhook(request: Request, bg: BackgroundTasks):
     if not trusted:
         twin._event("razorpay", f"Webhook {etype} ignored: signature not verified", level="warn")
         return {"received": True, "verified": False, "processed": False}
-    # replay / duplicate safety: Razorpay may deliver the same event more than once (X-Razorpay-Event-Id)
+    # 1) dedupe deliveries by event id, in the database (survives restarts). 2) The business action is idempotent
+    # anyway: every effect is a forward-only state transition, so a duplicate, stale or out-of-order event is a no-op.
     eid = request.headers.get("x-razorpay-event-id") or hashlib.sha256(raw).hexdigest()
-    with _webhook_lock:
-        if eid in _seen_events:
-            return {"received": True, "verified": verified, "processed": False, "duplicate": True}
-        _seen_events[eid] = time.time()
-        while len(_seen_events) > 5000:
-            _seen_events.pop(next(iter(_seen_events)))
+    if not store.first_delivery(eid, etype):
+        return {"received": True, "verified": verified, "processed": False, "duplicate": True}
     twin._event("razorpay", f"Webhook {etype} ({'verified' if verified else 'unverified, demo testing'})",
                 level="bad" if etype.startswith("payment.dispute") else "info")
+    pay_ent, ref_ent = ent("payment"), ent("refund")
+    oid = pay_ent.get("order_id")
+    if not oid and (ref_ent.get("payment_id") or pay_ent.get("id")):
+        row = store.payment_by_payment_id(ref_ent.get("payment_id") or pay_ent.get("id"))
+        oid = row["order_id"] if row else None
+    result = None
+    if oid and store.payment(oid):
+        if etype == "payment.authorized":
+            result = store.transition(oid, "authorized", "webhook payment.authorized", pay_ent.get("id"))
+        elif etype == "payment.captured":
+            result = team._record_capture(oid, pay_ent.get("id"), "webhook payment.captured")
+            o = next((x for x in twin.orders if x.get("pay_order_id") == oid), None)
+            if o:  # mirror the payer's identifiers (hashed) onto the account behind the order
+                twin.link_payer(o["account"], payer_links(pay_ent), source="webhook payment.captured")
+        elif etype == "payment.failed":
+            result = store.transition(oid, "failed", "webhook payment.failed")
+        elif etype in ("refund.processed", "payment.refunded"):
+            result = store.transition(oid, "refunded", f"webhook {etype}")
     if etype.startswith("payment.dispute.created"):
         # a chargeback is ground truth arriving from Razorpay: label the order and open an investigation
-        pid = ent("dispute").get("payment_id") or ent("payment").get("id")
+        pid = ent("dispute").get("payment_id") or pay_ent.get("id")
         for o in twin.orders:
             if pid and o.get("capture_id") == pid:
                 o["fraud"] = True
                 bg.add_task(team.investigate, o["account"])
     if etype in ("refund.processed", "payment.refunded"):
-        pid = ent("refund").get("payment_id") or ent("payment").get("id")
+        pid = ref_ent.get("payment_id") or pay_ent.get("id")
         for o in twin.orders:
             if pid and o.get("capture_id") == pid:
                 o["status"] = "refunded"
-    if etype == "payment.captured":
-        # mirror the payer's identifiers (hashed) onto the account behind the order, so later payments link
-        p = ent("payment")
-        for o in twin.orders:
-            if p.get("order_id") and o.get("pay_order_id") == p.get("order_id"):
-                twin.link_payer(o["account"], payer_links(p), source="webhook payment.captured")
     if etype == "payment.failed":
-        oid = ent("payment").get("order_id")
         for o in twin.orders:
             if oid and o.get("pay_order_id") == oid and o["status"] == "awaiting_payment":
                 o["status"] = "payment_failed"
+    if result is not None:
+        return {"received": True, "verified": verified, "processed": True,
+                "state": result.get("state"), "applied": result.get("applied")}
     return {"received": True, "verified": verified, "processed": True}

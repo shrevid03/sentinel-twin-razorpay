@@ -86,6 +86,19 @@ There are two honest decision points:
 
 Regression tests (`tests/test_replay.py`): a fraud link and a freeze added after checkout leave the replayed decision identical; the current payment's UPI ID appears only in the pre-capture decision; a new model going live is detected (the replay uses the stored version), and a lost model version makes the decision "not replayable" rather than wrong.
 
+### Crash-safe payments
+
+Payment and mandate state live in a database (`app/store.py`, SQLAlchemy): **Postgres in production** via `DATABASE_URL` (`render.yaml` adds a free Render Postgres; it expires 30 days after creation, then a 14-day grace period before deletion, 1 GB, no backups, one per workspace) and a SQLite file in `data/` locally, so a restart loses nothing. The rules:
+
+* **Money is integer paise**, never floats.
+* **Risk state and payment state are separate.** Risk: approved / review / blocked. Payment: created -> authorized -> capture_requested (-> unconfirmed) -> captured -> refunded, or not_captured / failed / cancelled. States only move forward, through an explicit transition table applied with a conditional `UPDATE ... WHERE pay_state IN (...)`, so a duplicate, stale or out-of-order event is a no-op.
+* **Budget is reserved atomically before checkout opens** (`UPDATE mandates SET reserved = reserved + :a WHERE monthly_budget - spent - reserved >= :a`): with ₹2,000 left, two simultaneous ₹1,500 checkouts get exactly one reservation. A reservation becomes spend exactly once on capture, is released exactly once if the payment fails, is not captured or is abandoned (30 minutes), and is credited back exactly once on refund.
+* **"capture_requested" is written before Razorpay is asked to capture.** A reconciler runs at startup and about once a minute: it asks Razorpay what actually happened to every in-flight capture and records it once, or finishes a capture that never left the process.
+* **Honest messages.** "Nothing was charged" appears only when that is known (the payment was never captured, or no payment started). If a capture's outcome is unknown, the customer sees "payment status is being confirmed; you will not be charged twice".
+* **Webhooks**: deliveries are deduplicated by event id in the database (so a restart remembers them), and every business effect is a forward-only state transition anyway, because deduplicating deliveries alone does not protect the action.
+
+Tests (`tests/test_payments.py`, 12): exactly one of two concurrent reservations, and exactly 6 of 12 for a budget that fits 6, using separate database connections; captured before authorized and refund before capture converge; **the worker dies after Razorpay accepted the capture, before recording it**: on restart the reconciler records the capture once, debits the mandate once, Razorpay was asked to capture once, and a retry tells the customer it is complete; a lost capture response says "confirming", then reconciles; a crash before the capture call is finished by the reconciler; an abandoned checkout releases its budget; duplicate, out-of-order and replayed webhooks record one capture and one refund. The same tests run against Postgres with `TEST_DATABASE_URL=postgresql://... pytest tests/test_payments.py`.
+
 ### One click: a new account joins a fraud ring
 
 The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new-account`, `app/scenario.py`), on a copy of the twin, with both decision points:
@@ -382,6 +395,7 @@ app/
   model_redteam.py attack and harden the detector, RED/BLUE rounds
   reviewer_twin.py the reviewer twin
   scenario.py      "new account joins a fraud ring"
+  store.py         durable payment and mandate state (Postgres / SQLite), forward-only transitions, reservations
   seqformer.py     transaction-sequence transformer (TWIN_SEQ=1), off by default
 compliance_rules.yaml  RBI-grounded rules, loaded as config
   catalog.py       demo store catalog (plus a poisoned listing for the injection attack)

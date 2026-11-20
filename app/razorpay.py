@@ -105,7 +105,8 @@ class Razorpay:
             r = httpx.request(method, f"{self.base}{path}", json=json, auth=(self.key_id, self.key_secret), timeout=30)
         except httpx.HTTPError as e:  # network down, DNS, timeout: a clean error, never a crash or a hang
             self._log(method, path, 0)
-            raise RazorpayError(f"Razorpay is unreachable ({type(e).__name__}); nothing was charged") from None
+            # deliberately no "nothing was charged" here: for a capture call the outcome is unknown until reconciled
+            raise RazorpayError(f"Razorpay is unreachable ({type(e).__name__})") from None
         self._log(method, path, r.status_code)
         if r.status_code >= 400:
             raise RazorpayError(f"{method} {path} -> {r.status_code}: {r.text[:300]}")
@@ -209,6 +210,16 @@ class Razorpay:
         return {"id": order_id, "status": status, "payment_id": payment_id, "capture_id": payment_id,
                 "amount": p.get("amount"), "currency": p.get("currency"), "method": p.get("method"),
                 "payer_ids": links["pay_ids"], "payer_links": links}
+
+    def get_payment(self, payment_id):
+        """Fetch a payment's current state (the reconciler asks Razorpay what actually happened)."""
+        if not self.live:
+            self._log("GET", f"/v1/payments/{payment_id}", 200)
+            p = self._demo_payments.get(payment_id)
+            if not p:
+                raise RazorpayError(f"payment {payment_id} not found")
+            return dict(p)
+        return self._req("GET", f"/v1/payments/{payment_id}?expand[]=card")
 
     def refund_capture(self, payment_id, amount_inr=None, note="Refund issued by Sentinel Twin investigator"):
         body = {"notes": {"reason": note[:250]}, "speed": "normal"}

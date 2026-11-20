@@ -13,3 +13,8 @@ for _k in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", 
 # The server's background traffic thread keeps ticking the live twin once any test imports app.main; in the test
 # process it only competes for the CPU (and makes later tests slow), so it is off here.
 os.environ["AUTO_TRAFFIC"] = "0"
+
+# The server's default database is a file in data/; tests use a throwaway SQLite file instead.
+import tempfile  # noqa: E402
+
+os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(prefix="sentinel-test-"), "test.db")

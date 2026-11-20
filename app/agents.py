@@ -20,6 +20,7 @@ import time
 
 from . import catalog, compliance, channel3, guard
 from .money import K, rs
+from .razorpay import RazorpayError
 from .redteam import ATTACKS, run_attack, scorecard, why_adapted
 
 
@@ -223,8 +224,15 @@ def _t(desc, props=None, required=None):
                                              "additionalProperties": False}}
 
 
+class WorkerCrash(Exception):
+    """Fault injection: the worker dies right after Razorpay accepted a capture, before anything is recorded."""
+
+
 class Team:
-    def __init__(self, twin, gateway):
+    def __init__(self, twin, gateway, store=None):
+        from .store import Store
+        self.store = store or Store("sqlite://")  # durable payment + mandate state (Postgres via DATABASE_URL)
+        self._fault = None
         self.twin = twin
         self.pp = gateway  # Razorpay client
         self.brain = Brain()
@@ -243,8 +251,7 @@ class Team:
         acc.devices.add(twin.new_device())
         acc.ips.add(twin.new_ip("IN"))
         self.buyer = acc.id
-        self.mandate = {"per_order_limit": 12500.0, "monthly_budget": 35000.0, "spent": 0.0,
-                        "blocked_categories": ["gift_cards"], "currency": "INR"}
+        self.store.ensure_mandate(self.buyer, 12500.0, 35000.0)
         from .evidence import CaseBook
         from .reviewer_twin import ReviewerTwin
         self.reviewer_twin = ReviewerTwin(self)  # learns from the human review queue; shadow mode by default
@@ -253,6 +260,21 @@ class Team:
         guard.LEDGER = self.ledger
         twin.ledger = self.ledger
         self._recent_turns: dict[str, list] = {}
+
+    # ================================================================ mandate
+    @property
+    def mandate(self):
+        """The buyer's spending mandate, read from the durable store (spent and reserved survive a restart)."""
+        m = self.store.mandate(self.buyer)
+        if m is None:
+            self.store.ensure_mandate(self.buyer, 12500.0, 35000.0)
+            m = self.store.mandate(self.buyer)
+        return m
+
+    def set_mandate(self, per_order_limit=None, monthly_budget=None, blocked_categories=None, **_):
+        self.mandate  # make sure the row exists
+        self.store.set_limits(self.buyer, per_order_limit, monthly_budget, blocked_categories)
+        return self.mandate
 
     # ================================================================ shopper
     def shopper_tools(self, poisoned=False, attack_log=None):
@@ -270,7 +292,7 @@ class Team:
 
         def get_mandate():
             m = self.mandate
-            return {**m, "remaining_budget": round(m["monthly_budget"] - m["spent"], 2)}
+            return {**m, "remaining_budget": m["remaining"]}
 
         def checkout(items: list, note: str = ""):
             return self.guarded_checkout(items, note, dry_run=attack_log is not None, log=attack_log)
@@ -311,6 +333,7 @@ class Team:
         receipt["timeline"].append({"at": time.strftime("%H:%M:%S"), "event": event})
 
     def guarded_checkout(self, items, note="", dry_run=False, log=None):
+        mnd = self.mandate
         cart, problems, unknown = [], [], []
         for it in items or []:
             p = catalog.by_sku(str(it.get("sku")))
@@ -320,12 +343,12 @@ class Team:
                 continue
             qty = max(1, min(int(it.get("qty", 1) or 1), 10))
             cart.append({**p, "qty": qty})
-            if p["category"] in self.mandate["blocked_categories"]:
+            if p["category"] in mnd["blocked_categories"]:
                 problems.append(f"category '{p['category']}' is blocked by the buyer's mandate")
         total = round(sum(c["price"] * c["qty"] for c in cart), 2)
-        remaining = self.mandate["monthly_budget"] - self.mandate["spent"]
-        if total > self.mandate["per_order_limit"]:
-            problems.append(f"total {rs(total)} exceeds per-order limit {rs(self.mandate['per_order_limit'])}")
+        remaining = mnd["remaining"]
+        if total > mnd["per_order_limit"]:
+            problems.append(f"total {rs(total)} exceeds per-order limit {rs(mnd['per_order_limit'])}")
         if total > remaining:
             problems.append(f"total {rs(total)} exceeds remaining budget {rs(remaining)}")
         if log is not None:
@@ -337,13 +360,13 @@ class Team:
                 return {"status": "rejected_by_mandate_guard", "total": total, "reasons": problems}
             return {"status": "would_create_order", "total": total}
         rc = self._new_receipt(cart, total)
-        blocked_cats = sorted({c["category"] for c in cart if c["category"] in self.mandate["blocked_categories"]})
+        blocked_cats = sorted({c["category"] for c in cart if c["category"] in mnd["blocked_categories"]})
         rc["mandate_checks"] = [
             {"check": "all items exist in the catalog", "pass": not unknown,
              "detail": ", ".join(unknown) or "ok"},
             {"check": "no blocked categories", "pass": not blocked_cats, "detail": ", ".join(blocked_cats) or "none"},
-            {"check": f"total <= per-order limit {rs(self.mandate['per_order_limit'])}",
-             "pass": total <= self.mandate["per_order_limit"], "detail": f"total {rs(total, 2)}"},
+            {"check": f"total <= per-order limit {rs(mnd['per_order_limit'])}",
+             "pass": total <= mnd["per_order_limit"], "detail": f"total {rs(total, 2)}"},
             {"check": f"total <= remaining monthly budget {rs(remaining, 2)}", "pass": total <= remaining,
              "detail": f"total {rs(total, 2)}"},
         ]
@@ -397,11 +420,26 @@ class Team:
 
     def _create_razorpay_order(self, cart, merchant, total, risk, rc):
         ref = f"twin-{int(time.time())}"
-        order = self.pp.create_order([{"name": c["name"], "price": c["price"], "qty": c["qty"], "sku": c["sku"]}
-                                      for c in cart], ref)
+        # reserve the budget atomically BEFORE opening checkout: two concurrent checkouts cannot both fit
+        rid = self.store.reserve(self.buyer, total)
+        if rid is None:
+            m = self.mandate
+            rc["outcome"] = "rejected_by_mandate_guard"
+            self._stamp(rc, f"budget reservation refused: {rs(total)} does not fit (remaining {rs(m['remaining'], 2)}, "
+                            f"{rs(m['reserved'], 2)} reserved by other open checkouts); no Razorpay order")
+            return {"status": "rejected_by_mandate_guard", "total": total, "receipt_id": rc["id"],
+                    "reasons": [f"remaining budget {rs(m['remaining'], 2)} after open checkouts is less than {rs(total)}"]}
+        try:
+            order = self.pp.create_order([{"name": c["name"], "price": c["price"], "qty": c["qty"], "sku": c["sku"]}
+                                          for c in cart], ref)
+        except Exception as e:
+            self.store.release(rid)
+            raise RazorpayError(f"{e}; no payment was started, so nothing was charged") from None
         tw = self.twin.place_order(self.buyer, merchant, total, source="agent", pay_order_id=order["id"],
                                    items=[c["sku"] for c in cart])
         tw["status"] = "awaiting_payment"
+        self.store.create_payment(order["id"], self.buyer, total, "approved", rid, receipt_id=rc["id"],
+                                  twin_order=tw["id"], merchant=merchant, currency=order.get("currency") or "INR")
         self.checkouts[order["id"]] = {"pay_order_id": order["id"], "twin_order": tw["id"], "total": total,
                                        "cart": cart, "risk": risk, "status": order.get("status"),
                                        "receipt_id": rc["id"], "amount": order.get("amount"),
@@ -416,30 +454,46 @@ class Team:
                 "message": "The buyer must approve this payment in Razorpay Checkout shown in the chat."}
 
     def capture(self, order_id, payment_id=None, signature=None):
-        """Verify the Razorpay payment and capture it exactly once, re-checking the mandate at capture time."""
+        """Verify the Razorpay payment, run the pre-capture risk check, then capture it exactly once.
+
+        Payment state lives in the durable store and only moves forward. "capture_requested" is written BEFORE
+        Razorpay is called, so if the worker dies mid-capture the reconciler can find out what happened."""
         with self._capture_lock:
+            pay = self.store.payment(order_id)
             co = self.checkouts.get(order_id)
-            if not co:
+            if not pay:
                 raise CaptureRefused(404, f"unknown order {order_id}: only agent-created checkouts can be captured")
-            if co.get("status") == "COMPLETED":
-                # idempotent: a repeated request never charges again or double-counts spend
+            if co is None:  # after a restart: rebuild what we need from the durable record
+                co = self.checkouts[order_id] = {"pay_order_id": order_id, "twin_order": pay["twin_order"],
+                                                 "total": pay["amount"] / 100, "cart": [], "risk": None,
+                                                 "receipt_id": pay["receipt_id"], "merchant": pay["merchant"],
+                                                 "payment_id": pay["payment_id"], "status": pay["pay_state"]}
+            st = pay["pay_state"]
+            if st == "captured":  # idempotent: a repeated request never charges again or double-counts spend
                 return {"id": order_id, "status": "COMPLETED", "duplicate": True}
-            if co.get("status") == "CANCELLED":
-                raise CaptureRefused(409, f"checkout {order_id} was cancelled ({co.get('cancel_note', 'undone')})")
-            remaining = self.mandate["monthly_budget"] - self.mandate["spent"]
-            if co["total"] > self.mandate["per_order_limit"] or co["total"] > remaining:
+            if st == "refunded":
+                return {"id": order_id, "status": "REFUNDED", "duplicate": True}
+            if st in ("capture_requested", "unconfirmed"):  # a capture is in flight: ask Razorpay, never re-charge
+                return self.reconcile_one(order_id)
+            if st in ("not_captured", "failed", "cancelled"):
+                note = co.get("cancel_note", "undone") if st == "cancelled" else st.replace("_", " ")
+                raise CaptureRefused(409, f"checkout {order_id} was {st.replace('_', ' ')} ({note})")
+            m = self.mandate
+            if co["total"] > m["per_order_limit"] or m["remaining"] < 0:  # mandate tightened after checkout opened
+                self.store.transition(order_id, "not_captured", "mandate tightened before capture")
                 self.twin._event("guard", f"Capture of {order_id} ({rs(co['total'])}) refused: mandate exceeded at "
                                           "capture time", level="bad")
                 if self.receipts.get(co.get("receipt_id")):
                     self._stamp(self.receipts[co["receipt_id"]], "capture refused: mandate exceeded at capture time")
                 raise CaptureRefused(409, f"capture refused: {rs(co['total'])} exceeds the buyer's mandate "
-                                          f"(remaining {rs(remaining, 2)})")
+                                          f"(per-order limit {rs(m['per_order_limit'])}). Nothing was charged.")
             if payment_id is None and not self.pp.live:  # demo mode: stand in for Razorpay Checkout
                 d = self.pp.demo_pay(order_id, getattr(self, "_demo_payer", None))
                 payment_id, signature = d["razorpay_payment_id"], d["razorpay_signature"]
             if not payment_id:
                 raise CaptureRefused(400, "razorpay_payment_id and razorpay_signature from Checkout are required")
             p, links = self.pp.fetch_payment(order_id, payment_id, signature)
+            self.store.transition(order_id, "authorized", "checkout success handler", payment_id)
             co["payment_id"] = payment_id
             rc = self.receipts.get(co.get("receipt_id"))
             # pre-capture decision: the payment is authorized but not captured, so the payer's identifiers from THIS
@@ -455,6 +509,8 @@ class Team:
                 self._stamp(rc, f"pre-capture risk check {dec['id']}: {dec['outcome']} (risk {dec['score']:.2f}); "
                                 f"{len(lk['linked'])} payer identifier(s) from this payment linked (hashed)")
             if dec["outcome"] != "approve":
+                self.store.set_risk_state(order_id, dec["outcome"])
+                self.store.transition(order_id, "not_captured", f"pre-capture check {dec['id']}: {dec['outcome']}")
                 co["status"] = "NOT_CAPTURED"
                 self.twin._event("guard", f"Capture of {order_id} withheld at the pre-capture check "
                                           f"({dec['outcome']}, risk {dec['score']:.2f})", level="bad")
@@ -462,22 +518,81 @@ class Team:
                     self._stamp(rc, "not captured: the authorization lapses and Razorpay releases it; nothing was charged")
                 raise CaptureRefused(409, f"payment not captured: the pre-capture risk check returned {dec['outcome']} "
                                           f"(risk {dec['score']:.2f}). Nothing was charged; the authorization is released.")
-            res = self.pp.capture_payment(order_id, payment_id, p, links)
-            if res.get("status") == "COMPLETED":
-                co["status"] = "COMPLETED"
+            self.store.transition(order_id, "capture_requested", "capture requested")  # written BEFORE calling Razorpay
+            try:
+                res = self.pp.capture_payment(order_id, payment_id, p, links)
+            except RazorpayError as e:  # we do not know whether Razorpay captured: never claim "nothing was charged"
+                self.store.transition(order_id, "unconfirmed", f"capture call failed: {str(e)[:60]}")
+                co["status"] = "UNCONFIRMED"
                 if rc:
-                    rc["payment"].update(status="COMPLETED", approval="approved by buyer", capture_id=_capture_id(res))
-                    self._stamp(rc, f"buyer approved; Razorpay capture COMPLETED ({_capture_id(res)})")
-                self.mandate["spent"] = round(self.mandate["spent"] + co["total"], 2)
-                if rc and lk["linked"]:
-                    self._stamp(rc, f"mirrored {len(lk['linked'])} payer identifier(s) into the twin (salted hashes only); "
-                                    f"account risk {lk['risk_before']:.2f} -> {lk['risk_after']:.2f}")
-                for o in self.twin.orders:
-                    if o["id"] == co["twin_order"]:
-                        o["status"] = "captured"
-                        o["capture_id"] = _capture_id(res)
-                self.twin._event("razorpay", f"Razorpay capture COMPLETED for {order_id} ({rs(co['total'])})", level="ok")
+                    self._stamp(rc, "capture outcome unknown (Razorpay unreachable); payment status being confirmed")
+                return {"id": order_id, "status": "CONFIRMING", "payment_id": payment_id,
+                        "message": "Payment status is being confirmed with Razorpay. You will not be charged twice."}
+            if self._fault == "crash_after_capture":  # fault injection for the crash-recovery test
+                raise WorkerCrash("worker died after Razorpay accepted the capture, before recording it")
+            if res.get("status") == "COMPLETED":
+                self._record_capture(order_id, payment_id, "capture response")
             return res
+
+    def _record_capture(self, order_id, payment_id, source):
+        """Record a capture once: payment -> captured, reservation -> spent (exactly once, by state transition)."""
+        r = self.store.transition(order_id, "captured", source, payment_id)
+        co = self.checkouts.get(order_id) or {}
+        co["status"] = "COMPLETED"
+        if not r["applied"]:
+            return r
+        pay = self.store.payment(order_id)
+        rc = self.receipts.get(pay.get("receipt_id"))
+        if rc and rc.get("payment"):
+            rc["payment"].update(status="COMPLETED", approval="approved by buyer", capture_id=payment_id)
+            self._stamp(rc, f"Razorpay capture COMPLETED ({payment_id}), recorded via {source}")
+        for o in self.twin.orders:
+            if o["id"] == pay.get("twin_order"):
+                o["status"] = "captured"
+                o["capture_id"] = payment_id
+        self.twin._event("razorpay", f"Razorpay capture COMPLETED for {order_id} ({rs(pay['amount'] / 100)}), "
+                                     f"recorded via {source}", level="ok")
+        return r
+
+    def reconcile_one(self, order_id):
+        """Ask Razorpay what really happened to an in-flight capture and record it once."""
+        pay = self.store.payment(order_id)
+        if not pay or not pay.get("payment_id"):
+            return {"id": order_id, "status": "UNKNOWN"}
+        try:
+            p = self.pp.get_payment(pay["payment_id"])
+        except RazorpayError:
+            return {"id": order_id, "status": "CONFIRMING", "payment_id": pay["payment_id"],
+                    "message": "Payment status is being confirmed with Razorpay. You will not be charged twice."}
+        st = p.get("status")
+        if st == "captured":
+            self._record_capture(order_id, pay["payment_id"], "reconciler")
+            return {"id": order_id, "status": "COMPLETED", "payment_id": pay["payment_id"], "reconciled": True}
+        if st == "refunded":
+            self.store.transition(order_id, "refunded", "reconciler")
+            return {"id": order_id, "status": "REFUNDED", "reconciled": True}
+        if st == "failed":
+            self.store.transition(order_id, "failed", "reconciler")
+            return {"id": order_id, "status": "FAILED", "reconciled": True}
+        if st == "authorized" and pay["pay_state"] in ("capture_requested", "unconfirmed"):
+            # the capture never reached Razorpay: it was already checked and approved, so finish it now
+            self.store.transition(order_id, "capture_requested", "reconciler retry")
+            try:
+                res = self.pp.capture_payment(order_id, pay["payment_id"], p)
+            except RazorpayError:
+                self.store.transition(order_id, "unconfirmed", "reconciler retry failed")
+                return {"id": order_id, "status": "CONFIRMING", "payment_id": pay["payment_id"]}
+            if res.get("status") == "COMPLETED":
+                self._record_capture(order_id, pay["payment_id"], "reconciler")
+                return {"id": order_id, "status": "COMPLETED", "payment_id": pay["payment_id"], "reconciled": True}
+        return {"id": order_id, "status": str(st).upper()}
+
+    def reconcile(self):
+        """On startup and periodically: resolve in-flight captures and release budget held by abandoned checkouts."""
+        out = [self.reconcile_one(p["order_id"]) for p in self.store.unresolved()
+               if p["pay_state"] in ("capture_requested", "unconfirmed")]
+        released = self.store.expire_reservations()
+        return {"resolved": out, "expired_reservations": released}
 
     # ============================================================ investigator
     def investigator_tools(self, case):
@@ -593,6 +708,8 @@ class Team:
             return {"status": "cancelled_before_capture", "order": a["target"]}
         ref = self.pp.refund_capture(o["capture_id"], o["amount"], a["reason"])
         o["status"] = "refunded"
+        if o.get("pay_order_id"):  # an agent checkout: move the durable payment forward, credit the mandate once
+            self.store.transition(o["pay_order_id"], "refunded", f"refund {ref.get('id')}")
         return {"status": ref.get("status"), "refund_id": ref.get("id"), "pay_mode": self.pp.mode}
 
     def decide_action(self, action_id, approve, reviewer, note=""):
@@ -632,8 +749,9 @@ class Team:
                 return {**h, "duplicate": True}
             compliance.require_reason_and_reviewer(reviewer, note)  # RBI-ACC-03
             rc = self.receipts.get(h["receipt_id"])
-            remaining = self.mandate["monthly_budget"] - self.mandate["spent"]
-            if release and (h["total"] > self.mandate["per_order_limit"] or h["total"] > remaining):
+            mnd = self.mandate
+            remaining = mnd["remaining"]
+            if release and (h["total"] > mnd["per_order_limit"] or h["total"] > remaining):
                 raise CaptureRefused(409, f"cannot release: {rs(h['total'])} now exceeds the mandate "
                                           f"(remaining {rs(remaining, 2)})")
             if learn:  # the reviewer twin predicts first, then learns from the human's decision
@@ -644,6 +762,8 @@ class Team:
                 if rc:
                     self._stamp(rc, f"released by {reviewer} after review")
                 res = self._create_razorpay_order(h["cart"], h["merchant"], h["total"], h["risk"], rc)
+                if not res.get("pay_order_id"):  # the budget was taken by another checkout meanwhile
+                    raise CaptureRefused(409, "cannot release: " + "; ".join(res.get("reasons", [])))
                 h["pay_order_id"] = res["pay_order_id"]
                 rc["outcome"] = "released_by_reviewer"
             else:
@@ -671,8 +791,10 @@ class Team:
             if h["status"] != "released":
                 raise CaptureRefused(409, f"{hold_id} is {h['status']}, not released")
             co = self.checkouts.get(h.get("pay_order_id"), {})
-            if co.get("status") == "COMPLETED":
-                raise CaptureRefused(409, f"{hold_id}: the buyer already paid, so this can only be refunded by a human")
+            r = self.store.transition(h.get("pay_order_id"), "cancelled", f"release undone: {note}")
+            if not r["applied"]:
+                raise CaptureRefused(409, f"{hold_id}: the payment is already {r['state']}, so this can only be "
+                                          "refunded by a human")
             co["status"], co["cancel_note"] = "CANCELLED", note
             for o in self.twin.orders:
                 if o["id"] == co.get("twin_order"):

@@ -1,5 +1,13 @@
 # One-click deploy: Render dashboard > New > Blueprint > pick this repo.
 # "/" serves the landing page and "/app" the live demo. Secrets are entered in the Render dashboard (sync: false).
+# Payment and mandate state live in Postgres (DATABASE_URL). Render's free Postgres expires 30 days after creation
+# (then a 14-day grace period to upgrade before it is deleted), has 1 GB and no backups, and only one free database
+# can be active per workspace: fine for a demo, upgrade it for anything real.
+databases:
+  - name: sentinel-twin-db
+    plan: free
+    region: singapore
+
 services:
   - type: web
     name: sentinel-twin-razorpay
@@ -18,6 +26,10 @@ services:
         value: "3"
       - key: AUTO_TRAFFIC
         value: "1"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sentinel-twin-db
+          property: connectionString
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET

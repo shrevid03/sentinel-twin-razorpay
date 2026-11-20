@@ -58,7 +58,7 @@ def test_repeat_capture_charges_once_and_counts_spend_once(team):
 
 def test_capture_rechecks_mandate(team):
     oid = _approved_checkout(team)
-    team.mandate["monthly_budget"] = 10.0  # budget shrank after the order was created
+    team.set_mandate(monthly_budget=10.0)  # budget shrank after the order was created
     with pytest.raises(agents.CaptureRefused) as e:
         team.capture(oid)
     assert e.value.status == 409
