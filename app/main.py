@@ -493,6 +493,25 @@ def timeline(account_id: str):
     return _review(twin.timeline, account_id)
 
 
+@app.get("/api/decisions/{decision_id}")
+def decision(decision_id: str):
+    """A stored risk decision: decision point, time, evidence (with when and where each item came from), versions."""
+    def get(d):
+        if d in twin.decisions:
+            return twin.decisions[d]
+        for prefix, fork in getattr(twin, "replay_forks", {}).items():
+            if d.startswith(prefix):
+                return fork.decisions[d]
+        raise KeyError(d)
+    return _review(get, decision_id)
+
+
+@app.post("/api/decisions/{decision_id}/replay")
+def replay_decision(decision_id: str):
+    """Rebuild the graph as it was at decision time, re-run the stored model and policy, compare with what was stored."""
+    return _review(twin.replay, decision_id)
+
+
 @app.get("/api/ledger")
 def ledger(limit: int = 200):
     """The append-only, hash-chained ledger: model recommendations and human decisions as separate records."""

@@ -147,7 +147,7 @@
     <small class="muted">The drill above hardens the decision policy. This attacks the detector itself: rings drop 70% of their internal links and add 4 cover links each to honest accounts. Then GraphSAGE is retrained on perturbed graphs and tested on a fresh perturbation. Held-out rings, 3 seeds, on a copy of the twin.</small></div>
     <button id="btn-mrt">Attack and harden the model</button></div><div id="mrt-out"></div></div>
   <div class="card" id="scn-card"><div class="cardhead"><div><h3>New account joins a fraud ring <span class="tag synth">Synthetic scenario</span></h3>
-    <small class="muted">A 45-day-old, KYC-verified account with normal history pays from a UPI ID that a known fraud ring's mule accounts also use. Then the shopping agent checks out a ₹9,999 keyboard. Runs on a copy of the twin; nothing live changes.</small></div>
+    <small class="muted">A 45-day-old, KYC-verified account with normal history verified a phone number at signup that a known fraud ring also uses. Then the shopping agent checks out a ₹9,999 keyboard. A second account shows the pre-capture check: it pays from a ring's UPI ID. Runs on a copy of the twin; nothing live changes.</small></div>
     <button id="btn-scn">Run scenario</button></div>
     <div id="scn-out"></div></div>
 </section>
@@ -306,8 +306,8 @@
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/purify.min.js"></script>
 <script src="/static/app.js?v=26"></script>
-<script src="/static/drill.js?v=26"></script>
-<script src="/static/receipts.js?v=24"></script>
+<script src="/static/drill.js?v=27"></script>
+<script src="/static/receipts.js?v=25"></script>
 <script src="/static/review.js?v=27"></script>
 <script src="/static/evidence.js?v=2"></script>
 <script src="/static/fx.js?v=24"></script>

@@ -213,13 +213,23 @@ async function runScenario() {
       <ul>${reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${note ? `<p class="muted small">${note}</p>` : ""}</div>`;
     const ns = r.graph.neighbour_signal;
     out.innerHTML = `<p><b>${esc(r.account.name)}</b> (${esc(r.account.id)}) · ${r.account.age_days} days old · KYC verified · ${esc(r.account.email_domain)} email · own phone and home IP · 2 normal past orders.
-        Pays from <b>${esc(r.ring.shared_upi)}</b>, a UPI ID shared by ${r.ring.accounts_on_upi - 1} accounts in ${esc(r.ring.segment)}, ${r.ring.known_fraud_on_upi} of them already labelled fraud.
+        At signup it verified a phone number (<b>${esc(r.ring.shared_contact)}</b>) that ${r.ring.accounts_on_contact - 1} accounts in ${esc(r.ring.segment)} also use, ${r.ring.known_fraud_on_contact} of them already labelled fraud.
         Order: ${money(r.order.total)} at ${esc(r.order.merchant)}.</p>
       <div class="scn-grid">
         ${col("Rules only", r.rules_only.score, r.rules_only.decision, r.rules_only.reasons, "New device, foreign IP, spend jump, velocity, account age.")}
         ${col("GAT + rules", r.gat_rules.risk, r.gat_rules.decision, [`GAT risk ${Number(r.gat_rules.gat_risk).toFixed(2)}: the account's own features look clean`], "How the engine scored before the neighbour signal was added.")}
         ${col("GAT + rules + known-fraud neighbours", r.graph.risk, r.graph.decision, r.graph.reasons,
               `${ns.known_fraud} of ${ns.labelled} labelled linked accounts are known fraud (training labels and frozen accounts only). The shipped engine.`)}
+      </div>
+      <div class="scn-grid">
+        <div class="scn-col"><h4>1 · Pre-checkout <code>${esc(r.pre_checkout.decision_id)}</code></h4><span class="scn-dec ${esc(r.pre_checkout.outcome)}">${esc(r.pre_checkout.outcome)}</span>
+          <ul>${r.pre_checkout.evidence.map((e) => `<li>${esc(e.item)} (${esc(e.kind)}): ${esc(e.provenance)}</li>`).join("")}</ul>
+          <button class="ghost" data-replay="${esc(r.pre_checkout.decision_id)}">Replay decision</button><div class="replay-out" data-for="${esc(r.pre_checkout.decision_id)}"></div></div>
+        <div class="scn-col"><h4>2 · Pre-capture <code>${esc(r.pre_capture.decision_id || "")}</code></h4>
+          <p class="small">${esc(r.pre_capture.name)} passed pre-checkout (${esc(r.pre_capture.pre_checkout_outcome)}), then paid from a UPI ID three ring members used before. Checked after authorization, before capture:</p>
+          <span class="scn-dec ${esc(r.pre_capture.outcome || "")}">${esc(r.pre_capture.outcome || "")}</span> <span class="muted">risk ${r.pre_capture.score} · ${esc(r.pre_capture.capture_status || "")}</span>
+          <ul>${r.pre_capture.evidence.map((e) => `<li>${esc(e.item)} (${esc(e.kind)}): ${esc(e.provenance)}</li>`).join("")}</ul>
+          <button class="ghost" data-replay="${esc(r.pre_capture.pre_checkout_decision_id)}">Replay its pre-checkout decision</button><div class="replay-out" data-for="${esc(r.pre_capture.pre_checkout_decision_id)}"></div></div>
       </div>
       <p class="muted small" style="margin-top:10px">Agent checkout receipt ${esc(r.receipt.id || "")}: ${r.receipt.timeline.map(esc).join(" → ")}.
         GAT attention: ${r.graph.top_neighbours.slice(0, 3).map((n) => `${esc(n.node)} (${esc(n.type)}, ${n.attention.toFixed(2)})`).join(", ")}.</p>`;

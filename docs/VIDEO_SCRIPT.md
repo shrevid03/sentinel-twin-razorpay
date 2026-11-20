@@ -97,10 +97,10 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 
 ## Scene 5b: A new account joins a ring (10 seconds, right after Scene 5)
 
-**On screen:** still on the Defense drill tab, scroll to **New account joins a fraud ring** and click **Run scenario**. Point at the three columns from left to right: red **APPROVE**, red **APPROVE**, amber **REVIEW**.
+**On screen:** still on the Defense drill tab, scroll to **New account joins a fraud ring** and click **Run scenario**. Point at the three columns from left to right: red **APPROVE**, red **APPROVE**, amber **REVIEW**, then click **Replay decision** under the pre-checkout card.
 
 **Say:**
-> "Here's a brand-new account. Clean history, KYC done. Rules approve it. Even the GAT alone approves it. But it pays from a UPI ID four known fraudsters use, and the full engine holds it for review."
+> "Here's a brand-new account. Clean history, KYC done. Rules approve it. Even the GAT alone approves it. But at signup it verified a phone number three known fraudsters use, and the full engine holds it for review. And this replay shows the decision used only what we knew at that moment."
 
 **Filming tip:** this adds 10 seconds; to stay under 3:00, trim a sentence from Scene 3 or Scene 7. It runs on a copy of the twin, so it never changes your live numbers or creates a Razorpay order.
 

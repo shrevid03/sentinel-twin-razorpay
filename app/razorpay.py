@@ -164,17 +164,24 @@ class Razorpay:
             return False
         return hmac.compare_digest(_sig(self.key_secret, f"{order_id}|{payment_id}"), str(signature))
 
-    def demo_pay(self, order_id):
-        """Demo mode stand-in for Razorpay Checkout: an authorized payment, as Checkout would return it."""
+    def demo_pay(self, order_id, payer=None):
+        """Demo mode stand-in for Razorpay Checkout: an authorized payment, as Checkout would return it.
+        payer optionally overrides the payer fields (vpa, card, contact, email, notes)."""
         o = self.get_order(order_id)
         pid = "pay_DEMO" + uuid.uuid4().hex[:10].upper()
         self._demo_payments[pid] = {"id": pid, "entity": "payment", "order_id": order_id, "amount": o["amount"],
                                     "currency": o["currency"], "status": "authorized", "method": "upi",
-                                    "vpa": "demo.buyer@okaxis", "contact": "+919900000001"}
+                                    "vpa": "demo.buyer@okaxis", "contact": "+919900000001", **(payer or {})}
         return {"razorpay_order_id": order_id, "razorpay_payment_id": pid, "razorpay_signature": "demo"}
 
     def capture_order(self, order_id, payment_id, signature):
         """Verify the Checkout signature, check the payment belongs to this order, then capture it once."""
+        p, links = self.fetch_payment(order_id, payment_id, signature)
+        return self.capture_payment(order_id, payment_id, p, links)
+
+    def fetch_payment(self, order_id, payment_id, signature):
+        """Verify the Checkout signature and that the payment belongs to this order; return it with hashed links.
+        Nothing is captured yet: with manual capture, the risk engine can look at the payer before money moves."""
         if self.live:
             if not self.verify_payment_signature(order_id, payment_id, signature):
                 raise RazorpayError("payment signature verification failed")
@@ -187,6 +194,10 @@ class Razorpay:
         links = payer_links(p)  # hashed before anything else sees the payment entity
         if p.get("order_id") != order_id:
             raise RazorpayError(f"payment {payment_id} does not belong to order {order_id}")
+        return p, links
+
+    def capture_payment(self, order_id, payment_id, p, links=None):
+        links = links or payer_links(p)
         if p.get("status") == "authorized":
             body = {"amount": p["amount"], "currency": p["currency"]}
             if self.live:

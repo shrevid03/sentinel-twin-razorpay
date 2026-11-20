@@ -71,6 +71,39 @@ DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amo
                   "review_new_device_over": 300.0 * K, "review_spend_multiple": 0.0}
 
 
+class TrackedSet(set):
+    """An account's links (devices, IPs, payment ids). Every addition is recorded with a global evidence sequence
+    number, the simulated clock and its provenance, so any past decision can be replayed on the graph as it was."""
+
+    def __init__(self, twin=None, owner=None):
+        super().__init__()
+        self._twin, self._owner = twin, owner
+
+    def add(self, x):
+        if x not in self:
+            set.add(self, x)
+            if self._twin is not None:
+                self._twin._note_link(self._owner, x)
+
+    def update(self, *its):
+        for it in its:
+            for x in it:
+                self.add(x)
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+    def __reduce__(self):  # deepcopy / fork: rebuild without re-recording, then restore twin + owner
+        return (_rebuild_tracked, (list(self),), self.__dict__)
+
+
+def _rebuild_tracked(items):
+    t = TrackedSet()
+    set.update(t, items)
+    return t
+
+
 @dataclass
 class Account:
     id: str
@@ -98,7 +131,15 @@ class Twin:
         self.pay_ids: set[str] = set()  # UPI-…, CARD-…, CT-… nodes
         # payment identifiers draw from their own RNG so adding them leaves the rest of the seeded world unchanged
         self.prng = random.Random(seed * 7919 + 1)
-        self.xrng = random.Random(seed * 104729 + 3)  # money-flow world: its own RNG, like payment ids
+        self.xrng = random.Random(seed * 104729 + 3)
+        # evidence timing: a monotonic sequence over every link, order, transfer, label and freeze
+        self._eseq = 0
+        self._prov = "seed fixture"
+        self.link_meta: dict[tuple, dict] = {}  # (account, node) -> {"seq", "at", "prov"}
+        self.label_meta: dict[str, dict] = {}  # account -> when its training label became known
+        self.decisions: dict[str, dict] = {}  # replayable risk decisions
+        self.model_versions: dict[str, object] = {}  # model version hash -> frozen copy of the model
+        self.ledger = None  # money-flow world: its own RNG, like payment ids
         self.transfers: list[dict] = []  # {"src", "dst", "amount", "ts", "pattern"}
         self.xfer_nb: dict[str, set] = {}  # account -> accounts it has sent money to or received from
         self.merchants = {m[0]: {"id": m[0], "name": m[1], "category": m[2]} for m in MERCHANTS}
@@ -148,7 +189,7 @@ class Twin:
 
     def link_pay_ids(self, account, ids, source="razorpay"):
         """Mirror payment identifiers (already hashed node ids) onto an account, e.g. from a captured payment."""
-        with self.lock:
+        with self.lock, self.provenance(source):
             acc = self.accounts[account]
             new = [i for i in ids if i and i.split("-")[0] in PAY_KINDS and i not in acc.pay_ids]
             for i in new:
@@ -184,7 +225,7 @@ class Twin:
     def link_payer(self, account, links, source="razorpay"):
         """Mirror a captured payment's hashed identifiers (payment ids, device, IP) onto the account, then re-score
         it with the live model, so the very next order from a shared UPI ID, card, device or IP is linked."""
-        with self.lock:
+        with self.lock, self.provenance(source):
             before = self.engine_risk(account)
             new = self.link_pay_ids(account, links.get("pay_ids") or [], source=source)
             acc = self.accounts[account]
@@ -205,6 +246,28 @@ class Twin:
                             + f"; risk {before:.2f} -> {after:.2f}", level="warn")
             return {"linked": new, "risk_before": before, "risk_after": after, "shared": shared}
 
+    # ------------------------------------------------------ evidence timing
+    def _bump(self):
+        self._eseq += 1
+        return self._eseq
+
+    def _note_link(self, owner, item):
+        self.link_meta[(owner, item)] = {"seq": self._bump(), "at": round(self.clock, 2), "prov": self._prov}
+
+    class _Prov:
+        def __init__(self, twin, prov):
+            self.twin, self.prov, self.old = twin, prov, None
+
+        def __enter__(self):
+            self.old, self.twin._prov = self.twin._prov, self.prov
+
+        def __exit__(self, *a):
+            self.twin._prov = self.old
+
+    def provenance(self, prov):
+        """with twin.provenance("payment pay_X"): links added inside are recorded with that source."""
+        return Twin._Prov(self, prov)
+
     def new_account(self, *, country=None, age_days=None, fraud=False, segment="legit",
                     disposable=False, kyc=None, name=None):
         r = self.rng
@@ -217,6 +280,8 @@ class Twin:
             email=f"{name.split()[0].lower()}.{aid[-3:]}@{dom}",
             kyc=(r.random() < 0.85) if kyc is None else kyc, fraud=fraud, segment=segment,
         )
+        acc.devices, acc.ips, acc.pay_ids = TrackedSet(self, aid), TrackedSet(self, aid), TrackedSet(self, aid)
+        acc.created_seq, acc.created_at, acc.created_prov = self._bump(), round(self.clock, 2), self._prov
         self.accounts[aid] = acc
         self._dirty = True
         return acc
@@ -238,6 +303,7 @@ class Twin:
         return {"hash": h, "applied_at": getattr(self, "_policy_applied_at", None), "policy": dict(self._policy)}
 
     def _populate(self):
+        self._prov = "seed fixture"
         r = self.rng
         cafe_ips = [self.new_ip("US"), self.new_ip("GB")]  # shared public wifi: hard negatives
         households = []
@@ -275,13 +341,15 @@ class Twin:
                                  amount=r.uniform(80 * K, 400 * K), fraud=True)
         self._populate_flows()
         self.orders.sort(key=lambda o: o["ts"])
+        self._prov = "live"
 
     # ---------------------------------------------------------- money flows
     def add_transfer(self, src, dst, amount, ts=None, pattern="none"):
         if src == dst:
             return
         self.transfers.append({"src": src, "dst": dst, "amount": round(float(amount), 2),
-                               "ts": self.clock if ts is None else ts, "pattern": pattern})
+                               "ts": self.clock if ts is None else ts, "pattern": pattern, "seq": self._bump(),
+                               "prov": self._prov})
         self.xfer_nb.setdefault(src, set()).add(dst)
         self.xfer_nb.setdefault(dst, set()).add(src)
         self._dirty = True
@@ -392,7 +460,7 @@ class Twin:
             "id": self._next("O"), "account": acc.id, "merchant": merchant or r.choice(list(self.merchants)),
             "amount": round(min(amount, 4000 * K), 2), "ts": -r.uniform(0, 60 * 24 * 30), "device": device, "ip": ip,
             "ip_country": self.ips.get(ip, acc.country), "status": "captured", "risk": None, "decision": "approve",
-            "fraud": fraud, "source": "history", "pay_order_id": None, "factors": [],
+            "fraud": fraud, "source": "history", "pay_order_id": None, "factors": [], "seq": self._bump(),
         })
 
     # --------------------------------------------------------------- graph
@@ -520,6 +588,9 @@ class Twin:
             self._split = {"X": X, "y": y, "tr": tr, "va": va, "te": te, "nodes": nodes}
             self.known_labelled = {nodes[i] for i in tr}
             self.known_fraud = {nodes[i] for i in tr if y[i] == 1}
+            lseq = self._bump()
+            for a in self.known_fraud:
+                self.label_meta.setdefault(a, {"seq": lseq, "at": round(self.clock, 2), "prov": "training label"})
             if os.getenv("TWIN_SEQ", "0") == "1" and self.seq_model is None:
                 # train the sequence transformer on the same training accounts, then rebuild the graph with its output
                 from .seqformer import SeqFormer, all_account_events, encode
@@ -552,6 +623,8 @@ class Twin:
             else:
                 self.model = GAT(len(self.features), hidden=8, heads=4, skip=GAT_SKIP)
             hist = self.model.fit(X, mask, y, tr, va, epochs=epochs)
+            self.model_version = self._model_hash(self.model)
+            self.model_versions[self.model_version] = copy.deepcopy(self.model)
             P = self.model.predict_proba(X, mask)
             te_pred = P[te] >= 0.5
             tp = int(np.sum(te_pred & (y[te] == 1)))
@@ -632,6 +705,7 @@ class Twin:
             nodes, idx, X, mask = self.build_graph(
                 extra={"account": account, "device": device, "ip": ip, "merchant": merchant, "amount": amount})
             P = self.model.predict_proba(X, mask)
+            feat_row = [round(float(v), 4) for v in X[idx[account]]]
             g_now = float(P[idx[account]])
             before = self.risk(account)
             shared_ids = self.shared_identifiers(account, extra_device=device)
@@ -683,6 +757,7 @@ class Twin:
             risk = 1 - (1 - g) * (1 - min(t, 1) * 0.75)
             return {"risk": round(float(risk), 3), "spend_ratio": round(float(ratio), 2), "gat_risk": round(g_now, 3), "gat_before": round(before, 3),
                     "device_risk": round(dev_risk, 3), "neighbour_signal": nbs, "graph_risk": round(float(g), 3),
+                    "features": feat_row,
                     "txn_score": round(min(t, 1), 3), "factors": factors}
 
     def known_fraud_signal(self, account, extra_ids=()):
@@ -730,6 +805,123 @@ class Twin:
         flagged = [b for b in partners if self.is_flagged(b)]
         return {"partners": len(partners), "flagged": len(flagged)}
 
+    # ------------------------------------------------- replayable decisions
+    @staticmethod
+    def _model_hash(model):
+        h = hashlib.sha256()
+        net = getattr(model, "net", model)
+        params = net.params() if hasattr(net, "params") else []
+        for p_ in params:
+            h.update(np.ascontiguousarray(p_, dtype=np.float64).tobytes())
+        return "m-" + h.hexdigest()[:12]
+
+    def _evidence(self, account, device, ip):
+        """Every input the decision could see, with when it became available and where it came from."""
+        acc = self.accounts[account]
+        out = [{"item": account, "kind": "account", "seq": getattr(acc, "created_seq", 0),
+                "available_at": getattr(acc, "created_at", 0), "provenance": getattr(acc, "created_prov", "seed fixture")}]
+        for node in sorted(acc.devices | acc.ips | acc.pay_ids):
+            m = self.link_meta.get((account, node), {"seq": 0, "at": 0, "prov": "seed fixture"})
+            out.append({"item": node, "kind": _ntype(node), "seq": m["seq"], "available_at": m["at"],
+                        "provenance": m["prov"]})
+        for node, kind in ((device, "device"), (ip, "ip")):
+            if node and node not in (acc.devices | acc.ips):
+                out.append({"item": node, "kind": kind, "seq": self._eseq, "available_at": round(self.clock, 2),
+                            "provenance": "this request (checkout session)"})
+        ids = acc.devices | acc.ips | acc.pay_ids | {device, ip}
+        for b in self.accounts.values():
+            if b.id != account and (b.devices | b.ips | b.pay_ids) & ids and b.id in self.label_meta:
+                lm = self.label_meta[b.id]
+                if b.id in self.known_fraud or b.status == "frozen":
+                    out.append({"item": b.id, "kind": "known-fraud label", "seq": lm["seq"], "available_at": lm["at"],
+                                "provenance": lm["prov"]})
+        for t in self.transfers:
+            if account in (t["src"], t["dst"]):
+                out.append({"item": f"{t['src']}->{t['dst']}", "kind": "transfer", "seq": t.get("seq", 0),
+                            "available_at": round(t["ts"], 2), "provenance": t.get("prov", "seed fixture")})
+        return out
+
+    def record_decision(self, point, account, merchant, amount, device, ip, policy=None, new_device=False):
+        """Score, decide and store a replayable risk decision (decision point: pre_checkout or pre_capture)."""
+        with self.lock:
+            pol = {**DEFAULT_POLICY, **(policy or self.policy)}
+            s_ = self.score_order(account, merchant, amount, device, ip)
+            decision = self.decide(s_["risk"], amount, new_device, pol, s_["spend_ratio"])
+            did = f"{getattr(self, 'decision_prefix', 'DEC-')}{len(self.decisions) + 1:05d}"
+            rec = {"id": did, "point": point, "decided_at": round(self.clock, 2), "seq": self._eseq,
+                   "inputs": {"account": account, "merchant": merchant, "amount": round(float(amount), 2),
+                              "device": device, "ip": ip, "new_device": bool(new_device)},
+                   "evidence": self._evidence(account, device, ip), "model_version": getattr(self, "model_version", None),
+                   "policy_version": hashlib.sha256(json.dumps(pol, sort_keys=True).encode()).hexdigest()[:8],
+                   "policy": pol, "features": s_["features"], "score": s_["risk"], "gat_risk": s_["gat_risk"],
+                   "txn_score": s_["txn_score"], "factors": s_["factors"], "outcome": decision}
+            self.decisions[did] = rec
+            if self.ledger is not None:
+                self.ledger.append({"type": "risk_decision", "case_id": did, "by": "model", "point": point,
+                                    "account": account, "decided_at": rec["decided_at"], "seq": rec["seq"],
+                                    "model_version": rec["model_version"], "policy_version": rec["policy_version"],
+                                    "score": rec["score"], "outcome": decision, "evidence_items": len(rec["evidence"])})
+            return rec, s_
+
+    def as_of(self, seq, at=None):
+        """A copy of the twin with everything that became known after evidence sequence `seq` removed."""
+        with self.lock:
+            t = self.fork()
+        t.accounts = {k: a for k, a in t.accounts.items() if getattr(a, "created_seq", 0) <= seq}
+        for a in t.accounts.values():
+            for attr in ("devices", "ips", "pay_ids"):
+                cur = getattr(a, attr)
+                keep = [x for x in cur if t.link_meta.get((a.id, x), {"seq": 0})["seq"] <= seq]
+                fresh = TrackedSet(t, a.id)
+                set.update(fresh, keep)
+                setattr(a, attr, fresh)
+            if a.status == "frozen" and getattr(a, "frozen_seq", 0) > seq:
+                a.status = "active"
+        t.orders = [o for o in t.orders if o.get("seq", 0) <= seq and o["account"] in t.accounts]
+        t.transfers = [x for x in t.transfers if x.get("seq", 0) <= seq and x["src"] in t.accounts and x["dst"] in t.accounts]
+        t.xfer_nb = {}
+        for x in t.transfers:
+            t.xfer_nb.setdefault(x["src"], set()).add(x["dst"])
+            t.xfer_nb.setdefault(x["dst"], set()).add(x["src"])
+        t.known_fraud = {a for a in t.known_fraud if t.label_meta.get(a, {"seq": 0})["seq"] <= seq}
+        t.label_meta = {a: m for a, m in t.label_meta.items() if m["seq"] <= seq}
+        t.link_meta = {k: m for k, m in t.link_meta.items() if m["seq"] <= seq}
+        if at is not None:
+            t.clock = at
+        t._eseq = seq
+        t._dirty = True
+        return t
+
+    def replay(self, decision_id):
+        """Re-run a stored decision on the graph as it was at decision time, with the stored model and policy."""
+        if decision_id not in self.decisions:  # made on a scenario's copy of the twin: replay it there
+            for prefix, fork in getattr(self, "replay_forks", {}).items():
+                if decision_id.startswith(prefix):
+                    return fork.replay(decision_id)
+        rec = self.decisions[decision_id]
+        cur = getattr(self, "model_version", None)
+        model = self.model_versions.get(rec["model_version"])
+        if model is None:
+            return {"decision": decision_id, "replayable": False, "identical": False,
+                    "reason": f"model version {rec['model_version']} is not available (current {cur})"}
+        t = self.as_of(rec["seq"], rec["decided_at"])
+        t.model = copy.deepcopy(model)
+        t.model_version = rec["model_version"]
+        i = rec["inputs"]
+        s_ = t.score_order(i["account"], i["merchant"], i["amount"], i["device"], i["ip"])
+        outcome = t.decide(s_["risk"], i["amount"], i["new_device"], rec["policy"], s_["spend_ratio"])
+        ev_now = t._evidence(i["account"], i["device"], i["ip"])
+        same_ev = [(e["item"], e["seq"]) for e in ev_now] == [(e["item"], e["seq"]) for e in rec["evidence"]]
+        later = [e for e in self._evidence(i["account"], i["device"], i["ip"]) if e["seq"] > rec["seq"]]
+        return {"decision": decision_id, "replayable": True, "point": rec["point"], "decided_at": rec["decided_at"],
+                "model_version": rec["model_version"], "current_model_version": cur,
+                "policy_version": rec["policy_version"], "stored": {"score": rec["score"], "outcome": rec["outcome"]},
+                "replayed": {"score": s_["risk"], "outcome": outcome},
+                "identical": abs(s_["risk"] - rec["score"]) < 1e-9 and outcome == rec["outcome"] and same_ev
+                and s_["features"] == rec["features"],
+                "evidence_identical": same_ev, "features_identical": s_["features"] == rec["features"],
+                "evidence_added_since": [{k: e[k] for k in ("item", "kind", "available_at", "provenance")} for e in later]}
+
     def decide(self, risk, amount, new_device, policy=None, spend_ratio=0.0):
         p = {**DEFAULT_POLICY, **(policy or self.policy)}
         if risk >= p["block_threshold"]:
@@ -762,10 +954,12 @@ class Twin:
                 "pay_order_id": pay_order_id, "factors": s["factors"], "new_device": new_device, "spend_ratio": s["spend_ratio"],
                 "items": items or [], "new_device_flag": new_device,
             }
+            order["seq"] = self._bump()
             self.orders.append(order)
             if decision != "block":
-                acc.devices.add(device)
-                acc.ips.add(ip)
+                with self.provenance(f"order {order['id']}"):
+                    acc.devices.add(device)
+                    acc.ips.add(ip)
             self._dirty = True
             self._event("order", f"{order['id']} {acc.name} {rs(amount)} at {self.merchants[merchant]['name']}"
                                  f" -> {decision.upper()} (risk {s['risk']:.2f})", order=order["id"],
@@ -973,6 +1167,9 @@ class Twin:
     def freeze(self, account, reason=""):
         with self.lock:
             self.accounts[account].status = "frozen"
+            self.accounts[account].frozen_seq = self._bump()
+            self.label_meta[account] = {"seq": self.accounts[account].frozen_seq, "at": round(self.clock, 2),
+                                        "prov": f"investigator freeze: {reason[:80]}"}
             self._event("action", f"{account} restricted (merchant-side, simulated): {reason}", level="bad")
 
     def flagged(self, k=10):
@@ -1037,6 +1234,10 @@ class Twin:
             hook = getattr(self, "on_event", None)
             if hook is not None:
                 memo[id(hook)] = None
+            if getattr(self, "ledger", None) is not None:  # a fork never writes to the live ledger
+                memo[id(self.ledger)] = None
+            if "replay_forks" in self.__dict__:  # nor carries other scenarios' copies
+                memo[id(self.replay_forks)] = {}
             twin = copy.deepcopy(self, memo)
             twin.on_event = None
             return twin

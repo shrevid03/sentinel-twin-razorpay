@@ -251,6 +251,7 @@ class Team:
         self.casebook = CaseBook(self)  # evidence cases + the append-only ledger (compliance_rules.yaml)
         self.ledger = self.casebook.ledger
         guard.LEDGER = self.ledger
+        twin.ledger = self.ledger
         self._recent_turns: dict[str, list] = {}
 
     # ================================================================ shopper
@@ -354,11 +355,14 @@ class Team:
             return {"status": "rejected_by_mandate_guard", "total": total, "reasons": problems, "receipt_id": rc["id"]}
         merchant = cart[0].get("twin_merchant") or cart[0]["merchant"]
         acc = self.twin.accounts[self.buyer]
-        score = self.twin.score_order(self.buyer, merchant, total, min(acc.devices), min(acc.ips))
-        decision = self.twin.decide(score["risk"], total, False)
+        # pre-checkout decision: only what was known before this checkout (replayable; see Twin.replay)
+        dec, score = self.twin.record_decision("pre_checkout", self.buyer, merchant, total, min(acc.devices),
+                                               min(acc.ips))
+        decision = dec["outcome"]
         rc["risk"] = {"score": score["risk"], "gat_part": score["gat_risk"], "rules_part": score["txn_score"],
                       "device_risk": score.get("device_risk"), "factors": score["factors"], "decision": decision,
-                      "policy_version": self.twin.policy_version()}
+                      "policy_version": self.twin.policy_version(), "decision_id": dec["id"],
+                      "decided_at": dec["decided_at"], "model_version": dec["model_version"]}
         self._stamp(rc, f"risk engine decision: {decision} (risk {score['risk']:.2f})")
         if decision == "block":
             rc["outcome"] = "blocked_by_risk_engine"
@@ -401,7 +405,7 @@ class Team:
         self.checkouts[order["id"]] = {"pay_order_id": order["id"], "twin_order": tw["id"], "total": total,
                                        "cart": cart, "risk": risk, "status": order.get("status"),
                                        "receipt_id": rc["id"], "amount": order.get("amount"),
-                                       "currency": order.get("currency"), "payment_id": None}
+                                       "currency": order.get("currency"), "payment_id": None, "merchant": merchant}
         rc["outcome"] = "razorpay_order_created"
         rc["payment"] = {"mode": self.pp.mode, "order_id": order["id"], "status": order.get("status"),
                         "approval": "awaiting buyer approval", "capture_id": None, "twin_order": tw["id"]}
@@ -431,21 +435,40 @@ class Team:
                 raise CaptureRefused(409, f"capture refused: {rs(co['total'])} exceeds the buyer's mandate "
                                           f"(remaining {rs(remaining, 2)})")
             if payment_id is None and not self.pp.live:  # demo mode: stand in for Razorpay Checkout
-                d = self.pp.demo_pay(order_id)
+                d = self.pp.demo_pay(order_id, getattr(self, "_demo_payer", None))
                 payment_id, signature = d["razorpay_payment_id"], d["razorpay_signature"]
             if not payment_id:
                 raise CaptureRefused(400, "razorpay_payment_id and razorpay_signature from Checkout are required")
-            res = self.pp.capture_order(order_id, payment_id, signature)
+            p, links = self.pp.fetch_payment(order_id, payment_id, signature)
             co["payment_id"] = payment_id
             rc = self.receipts.get(co.get("receipt_id"))
+            # pre-capture decision: the payment is authorized but not captured, so the payer's identifiers from THIS
+            # payment may be used now; they were not available to (and cannot change) the pre-checkout decision
+            lk = self.twin.link_payer(self.buyer, links, source=f"payment {payment_id} (authorized, before capture)")
+            acc = self.twin.accounts[self.buyer]
+            dec, sc = self.twin.record_decision("pre_capture", self.buyer, co.get("merchant") or "M-01", co["total"],
+                                                min(acc.devices), min(acc.ips))
+            co["pre_capture_decision"] = dec["id"]
+            if rc:
+                rc["pre_capture"] = {"decision_id": dec["id"], "score": dec["score"], "outcome": dec["outcome"],
+                                     "factors": dec["factors"], "linked": lk["linked"]}
+                self._stamp(rc, f"pre-capture risk check {dec['id']}: {dec['outcome']} (risk {dec['score']:.2f}); "
+                                f"{len(lk['linked'])} payer identifier(s) from this payment linked (hashed)")
+            if dec["outcome"] != "approve":
+                co["status"] = "NOT_CAPTURED"
+                self.twin._event("guard", f"Capture of {order_id} withheld at the pre-capture check "
+                                          f"({dec['outcome']}, risk {dec['score']:.2f})", level="bad")
+                if rc:
+                    self._stamp(rc, "not captured: the authorization lapses and Razorpay releases it; nothing was charged")
+                raise CaptureRefused(409, f"payment not captured: the pre-capture risk check returned {dec['outcome']} "
+                                          f"(risk {dec['score']:.2f}). Nothing was charged; the authorization is released.")
+            res = self.pp.capture_payment(order_id, payment_id, p, links)
             if res.get("status") == "COMPLETED":
                 co["status"] = "COMPLETED"
                 if rc:
                     rc["payment"].update(status="COMPLETED", approval="approved by buyer", capture_id=_capture_id(res))
                     self._stamp(rc, f"buyer approved; Razorpay capture COMPLETED ({_capture_id(res)})")
                 self.mandate["spent"] = round(self.mandate["spent"] + co["total"], 2)
-                lk = self.twin.link_payer(self.buyer, res.get("payer_links") or {"pay_ids": res.get("payer_ids") or []},
-                                          source=f"payment {payment_id}")
                 if rc and lk["linked"]:
                     self._stamp(rc, f"mirrored {len(lk['linked'])} payer identifier(s) into the twin (salted hashes only); "
                                     f"account risk {lk['risk_before']:.2f} -> {lk['risk_after']:.2f}")

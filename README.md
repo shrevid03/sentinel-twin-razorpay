@@ -74,17 +74,33 @@ What this honestly shows:
 * **The skip connection stays off in the app.** On this twin it caught no more attack fraud and blocked a good order. It is one constant (`GAT_SKIP` in `app/twin.py`).
 * Caveat: the money-flow rings are synthetic. Honest hard negatives are included (flatmates paying rent to one person, friends passing money along, and about a third of accounts never transfer), and a 2-layer GNN spots a tight new cluster of transfer-linked accounts rather than proving a loop is closed. The evidence investigator does that part.
 
+### Replayable decisions: only evidence known at decision time
+
+Every link in the twin (device, IP, UPI ID, card, contact, transfer), every fraud label and every freeze is recorded with an evidence sequence number, the time it became available and its **provenance** (seed fixture, signup, prior order, prior payment, the current payment, a training label, an investigator freeze). Every agent checkout stores a **risk decision**: the decision point, when it was made, every piece of evidence it could see (each with its time and provenance), the model version (a hash of the weights), the policy version, the feature snapshot, the score and the outcome. It goes in the hash-chained ledger.
+
+**Replay decision** (on receipts and in the scenario; `POST /api/decisions/{id}/replay`) rebuilds the graph exactly as it was at decision time (everything that arrived later is removed), re-runs the stored model version and policy, and shows stored vs replayed, plus the evidence that arrived later and was ignored. A missing model version is reported instead of silently using the current one.
+
+There are two honest decision points:
+1. **Pre-checkout**: only what was known before the checkout (signup details, prior history, seeded fixtures). Decides whether a Razorpay order is created at all.
+2. **Pre-capture**: orders use manual capture, so after the buyer authorizes, the payer's UPI ID, card and contact from *this* payment are linked (hashed) and checked before any money is captured. A risky payment is not captured: the authorization lapses and nothing is charged. These identifiers never reach the pre-checkout decision.
+
+Regression tests (`tests/test_replay.py`): a fraud link and a freeze added after checkout leave the replayed decision identical; the current payment's UPI ID appears only in the pre-capture decision; a new model going live is detected (the replay uses the stored version), and a lost model version makes the decision "not replayable" rather than wrong.
+
 ### One click: a new account joins a fraud ring
 
-The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new-account`, `app/scenario.py`). On a copy of the twin it creates a 45-day-old, KYC-verified account with two normal past orders, its own phone and home IP, and one link to fraud: it pays from a UPI ID that a known ring's mule accounts also use. Then the shopping agent checks out a ₹9,999 keyboard through the normal path (mandate check in code, then the risk gate). On the reference twin (seed 3, 120 epochs):
+The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new-account`, `app/scenario.py`), on a copy of the twin, with both decision points:
+
+1. **Pre-checkout.** A 45-day-old, KYC-verified account with two normal past orders, its own phone and home IP, verified at **signup** a phone number that three known fraud accounts also use (provenance: "signup: phone verified by OTP"). The shopping agent checks out a ₹9,999 keyboard:
 
 | Engine | Risk | Decision | Why |
 |---|---|---|---|
 | Rules only | 0.09 | **approve** | its only flag, "amount is 2.6x this buyer's usual spend", is too weak to review |
-| GAT + rules | 0.07 | **approve** | the GAT alone scores the account 0.003: its own features look clean |
-| **GAT + rules + known-fraud neighbours** (shipped) | **0.66** | **review** | "4 of 4 labelled linked accounts are known fraud"; "shares UPI ID with 8 flagged account(s)" |
+| GAT + rules | 0.08 | **approve** | the GAT alone scores the account 0.02: its own features look clean |
+| **GAT + rules + known-fraud neighbours** (shipped) | **0.63** | **review** | "3 of 3 labelled linked accounts are known fraud"; "shares phone/email with 3 flagged account(s)" |
 
-The agent's checkout is held for review before any Razorpay order exists, and the decision receipt carries those reasons. For new accounts, the explicit known-fraud-neighbour signal does what the GAT alone does not.
+2. **Pre-capture.** A second, clean account passes the pre-checkout check (approve, 0.07), then pays from a UPI ID that three ring members paid from before. After authorization and before capture the check returns **review (0.61)**: the payment is not captured and nothing is charged. Replaying that account's pre-checkout decision gives the identical result, and lists the payment's UPI ID as evidence that arrived later and was ignored.
+
+For new accounts the explicit known-fraud-neighbour signal does what the GAT alone does not.
 
 ### Reviewer twin: a digital twin of the human reviewer
 

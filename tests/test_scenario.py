@@ -20,9 +20,12 @@ def test_rules_approve_but_the_graph_engine_stops_the_checkout(trained_twin):
     assert r["graph"]["decision"] in ("review", "block")
     assert r["graph"]["checkout_status"] in ("held_for_review", "blocked_by_risk_engine")
     assert r["graph"]["neighbour_signal"]["known_fraud"] >= 1
-    assert any("UPI ID" in f for f in r["graph"]["reasons"])
+    assert any("phone/email" in f for f in r["graph"]["reasons"])
+    assert r["pre_checkout"]["replay"]["identical"]
+    assert any(e["provenance"].startswith("signup") for e in r["pre_checkout"]["evidence"] if e["kind"] == "contact")
+    assert r["pre_capture"]["outcome"] in ("review", "block") and r["pre_capture"]["capture_status"] == "not captured"
     assert r["receipt"]["outcome"] == r["graph"]["checkout_status"]
-    assert r["ring"]["shared_upi"].startswith("UPI-")
+    assert r["ring"]["shared_contact"].startswith("CT-")
     # it ran on a fork: the live twin is untouched
     assert len(trained_twin.accounts) == n_acc and len(trained_twin.orders) == n_ord
 
