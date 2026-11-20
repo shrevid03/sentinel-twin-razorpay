@@ -58,3 +58,25 @@ def test_learns_a_bust_out_pattern():
     assert p[60:].mean() > p[:60].mean() + 0.3
     att = m.attention_from_cls()
     assert att.shape == (80, MAX_EVENTS) and np.allclose(att[0][len(seqs[0]):], 0, atol=1e-6)
+
+
+def test_twin_with_sequence_transformer(monkeypatch):
+    from app.twin import Twin
+    monkeypatch.setenv("TWIN_SEQ", "1")
+    t = Twin(seed=3)
+    t.train(30)
+    assert t.metrics["sequence_model"] and "seq_risk" in t.features
+    acc = next(a.id for a in t.accounts.values() if a.segment == "synthetic")
+    tl = t.timeline(acc)
+    assert tl["events"] and tl["risk"] is not None
+    total = sum(e["attention"] for e in tl["events"])
+    assert 0 < total <= 1 + 1e-6  # the rest of the [CLS] attention is on itself
+    s = t.score_order(acc, "M-02", 20000, min(t.accounts[acc].devices), min(t.accounts[acc].ips))
+    assert 0 <= s["risk"] <= 1
+
+
+def test_sequence_transformer_is_off_by_default():
+    from app.twin import Twin
+    t = Twin(seed=3)
+    t.train(10)
+    assert not t.metrics["sequence_model"] and t.timeline("A-001")["risk"] is None

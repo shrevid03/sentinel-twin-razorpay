@@ -36,10 +36,29 @@ def _gap_bucket(minutes):
     return int(min(7, 2 + math.floor(math.log(max(minutes, 1.0), 6))))  # <6m, <36m, <3.6h, <21h, <5d, >5d
 
 
+def all_account_events(twin, extra=None):
+    """account_events for every account in one pass over orders and transfers (fast enough to run per score)."""
+    by = {a: [] for a in twin.accounts}
+    for o in twin.orders:
+        if o["status"] != "blocked" and o["account"] in by:
+            by[o["account"]].append({"ts": o["ts"], "kind": 1, "amount": o["amount"], "merchant": o["merchant"],
+                                     "device": o.get("device"), "ip_country": o.get("ip_country"), "label": f"order {o['id']}"})
+    if extra:
+        by[extra["account"]].append({"ts": twin.clock, "kind": 1, "amount": extra["amount"], "merchant": extra["merchant"],
+                                     "device": extra.get("device"), "ip_country": twin.ips.get(extra.get("ip")),
+                                     "label": "this order"})
+    for i, t in enumerate(twin.transfers):
+        if t["src"] in by:
+            by[t["src"]].append({"ts": t["ts"], "kind": 2, "amount": t["amount"], "peer": t["dst"], "label": f"transfer out T-{i + 1:05d}"})
+        if t["dst"] in by:
+            by[t["dst"]].append({"ts": t["ts"], "kind": 3, "amount": t["amount"], "peer": t["src"], "label": f"transfer in T-{i + 1:05d}"})
+    return {a: _tokens(twin, a, evs) for a, evs in by.items()}
+
+
 def account_events(twin, account, extra=None):
     """The account's recent events as token dicts (oldest first), plus readable labels for the UI."""
-    acc = twin.accounts[account]
     evs = []
+    acc = twin.accounts[account]
     for o in twin.orders:
         if o["account"] == account and o["status"] != "blocked":
             evs.append({"ts": o["ts"], "kind": 1, "amount": o["amount"], "merchant": o["merchant"], "device": o.get("device"),
@@ -53,7 +72,12 @@ def account_events(twin, account, extra=None):
             evs.append({"ts": t["ts"], "kind": 2, "amount": t["amount"], "peer": t["dst"], "label": f"transfer out T-{i + 1:05d}"})
         elif t["dst"] == account:
             evs.append({"ts": t["ts"], "kind": 3, "amount": t["amount"], "peer": t["src"], "label": f"transfer in T-{i + 1:05d}"})
-    evs.sort(key=lambda e: e["ts"])
+    return _tokens(twin, account, evs)
+
+
+def _tokens(twin, account, evs):
+    acc = twin.accounts[account]
+    evs = sorted(evs, key=lambda e: e["ts"])
     seen_dev, seen_peer, prev = set(), set(), None
     toks = []
     for e in evs:
@@ -62,7 +86,7 @@ def account_events(twin, account, extra=None):
             c = CATS.index(cat) + 2 if cat in CATS else 1
             nd = 2 if (e["device"] and e["device"] not in seen_dev and seen_dev) else 1
             seen_dev.add(e["device"])
-            npl = 2 if e["ip_country"] != acc.country else 1
+            npl = 2 if (e["ip_country"] or acc.country) != acc.country else 1
         else:
             c = 1
             nd = 1

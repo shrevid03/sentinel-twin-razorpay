@@ -132,6 +132,25 @@ The drill hardens the policy; **Attack and harden the model** on the Defense dri
 
 Hardening only on attacked rings recovers most attack recall but loses clean rings; mixed hardening keeps clean rings at the cost of more good accounts flagged. Both rows are shown because neither is free. A bounded RED/BLUE loop follows: each round RED tries five perturbations against the current model and keeps the one that hurts most, and BLUE retrains on a fresh draw of it (round 1: RED's best attack cut recall to 67%; after BLUE, 100% on a fresh attack).
 
+### Transaction-sequence transformer (optional, off by default)
+
+Inspired by [Razorpay Vulcan](https://razorpay.com/foundation-model/), which Razorpay describes as "India's first transformer-based AI Foundation Model for Payments". This is our own small model; it does not use Vulcan, which has no public API. The graph sees *who* an account is linked to; `app/seqformer.py` sees *how it behaves over time*. Each account's recent orders and transfers become tokens (kind, amount bucket, merchant category, new device, new place or counterparty, time since the previous event) after a [CLS] token; one 2-head self-attention layer and a feed-forward block (NumPy, gradient-checked) produce a behaviour embedding and a sequence risk score, which feed the GAT as extra node features. The GAT is trained on out-of-fold sequence features so it does not over-trust in-sample scores. With `TWIN_SEQ=1` the Evidence case card shows the account's event timeline with the transformer's attention on each event (`GET /api/timeline/{account}`).
+
+Measured on the twin (same drill, seed 7), with and without it:
+
+| | Off (default) | On |
+|---|---|---|
+| Unseen attacks intercepted, shipped engine | 86.7% | 91.3% |
+| Unseen attacks intercepted, hardened policy | 93.9% | 95.9% |
+| Synthetic-identity bust-outs intercepted (shipped / hardened) | 68% / 80% | 80% / 80% |
+| New fraud rings intercepted, shipped engine | 82.5% | 68% |
+| Device farms intercepted | 100% | 89% |
+| Held-out account AUC (GAT) | 0.974 | 0.982 |
+| **Good orders blocked** | **₹0** | **₹16,539** |
+| Drill run time | about 23 s | about 100 s |
+
+It catches more slow bust-outs and more attacks overall, but it blocks good orders, does worse on brand-new rings and device farms, and makes scoring about four times slower, so it stays **off by default**. A larger, real history (rather than a few synthetic orders per account) is what a sequence model needs to earn its place.
+
 ### Razorpay payments feed the model
 
 At capture (and on `payment.captured` webhooks) the payer's UPI ID, card (Razorpay's card fingerprint when present, else network + last4 + issuer), phone/email, and the device and IP the merchant's checkout put in the payment notes become salted-hash nodes linked to the account. The account is re-scored straight away, so the next payment from the same UPI ID, card, device or IP is linked; a link to flagged accounts raises an event, and the receipt records the risk before and after. Raw values are never stored. "Flagged" means known fraud, frozen or model risk ≥ 0.5: a clean account attaching itself to a ring can dilute the ring's model score, but labels and freezes do not move.
@@ -347,6 +366,7 @@ app/
   model_redteam.py attack and harden the detector, RED/BLUE rounds
   reviewer_twin.py the reviewer twin
   scenario.py      "new account joins a fraud ring"
+  seqformer.py     transaction-sequence transformer (TWIN_SEQ=1), off by default
 compliance_rules.yaml  RBI-grounded rules, loaded as config
   catalog.py       demo store catalog (plus a poisoned listing for the injection attack)
   integrations.py  Elastic and Zapier sinks

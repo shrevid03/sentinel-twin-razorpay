@@ -65,6 +65,7 @@ NEIGHBOUR_WEIGHT = 0.8
 # to unseen-attack interception (84.9% vs 85.2%) and blocks one good ₹14,975 order in every run, so the app keeps
 # it off. Flip to True to compare; the drill and rules-vs-graph numbers in the README are with it off.
 GAT_SKIP = False
+SEQ_DIMS = 8  # when TWIN_SEQ=1: sequence risk + the first SEQ_DIMS dims of the transformer's behaviour embedding
 
 DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amount": 1000.0 * K,
                   "review_new_device_over": 300.0 * K, "review_spend_multiple": 0.0}
@@ -105,6 +106,8 @@ class Twin:
         self.events: list[dict] = []
         self.policy = dict(DEFAULT_POLICY)
         self.model: GAT | None = None
+        self.seq_model = None  # transaction-sequence transformer (TWIN_SEQ=1), off by default
+        self.features = list(FEATURES)
         self.metrics: dict = {}
         self._probs: dict[str, float] = {}
         self.known_labelled: set[str] = set()  # accounts whose label the model trained on
@@ -156,6 +159,22 @@ class Twin:
                 self._event("razorpay", f"Mirrored {len(new)} payment identifier(s) from {source} onto {account} "
                                         f"({', '.join(PAY_KINDS[i.split('-')[0]] for i in new)}; hashed, no raw PII)")
             return new
+
+    def timeline(self, account):
+        """The account's recent events as the sequence transformer reads them, with the [CLS] attention per event
+        when the transformer is on (TWIN_SEQ=1)."""
+        from .seqformer import account_events, encode
+        toks = account_events(self, account)
+        out = {"account": account, "sequence_model": self.seq_model is not None, "risk": None,
+               "events": [{"event": t["label"], "inr": t["inr"], "new_device": t["new_device"] == 2,
+                           "new_place": t["new_place"] == 2, "attention": None} for t in toks]}
+        if self.seq_model is not None and toks:
+            ids, m = encode([toks])
+            out["risk"] = round(float(self.seq_model.predict(ids, m)[0]), 3)
+            att = self.seq_model.attention_from_cls()[0][:len(toks)]
+            for e, a in zip(out["events"], att):
+                e["attention"] = round(float(a), 3)
+        return out
 
     def engine_risk(self, account):
         """Account-level risk as the shipped engine sees it: the model's score combined with the known-fraud share."""
@@ -435,7 +454,7 @@ class Twin:
                 if b in idx:
                     link(a.id, b)
 
-        X = np.zeros((N, len(FEATURES)))
+        X = np.zeros((N, len(self.features)))
         xstat = {}
         for t in self.transfers:
             o_ = xstat.get(t["src"], (0, 0, 0.0))
@@ -458,6 +477,15 @@ class Twin:
             X[i, 17:21] = [min(xo / 5, 2), min(xi / 5, 2), math.log1p(xa / K) / 8, len(self.xfer_nb.get(a.id, ())) / 6]
         deg = mask.sum(axis=1) - 1
         X[:, 14] = np.log1p(deg) / 5
+        if self.seq_model is not None:  # behaviour over time, from the sequence transformer
+            from .seqformer import all_account_events, encode
+            toks = all_account_events(self, extra)
+            ids, smask = encode([toks[a.id] for a in accs])
+            risk = self.seq_model.predict(ids, smask)
+            emb = self.seq_model._c["cls"][:, :SEQ_DIMS]
+            nf = len(FEATURES)
+            X[:len(accs), nf] = risk
+            X[:len(accs), nf + 1:nf + 1 + SEQ_DIMS] = np.tanh(emb)
         nA = len(accs)
         for i in range(nA, N):
             n = nodes[i]
@@ -492,12 +520,37 @@ class Twin:
             self._split = {"X": X, "y": y, "tr": tr, "va": va, "te": te, "nodes": nodes}
             self.known_labelled = {nodes[i] for i in tr}
             self.known_fraud = {nodes[i] for i in tr if y[i] == 1}
+            if os.getenv("TWIN_SEQ", "0") == "1" and self.seq_model is None:
+                # train the sequence transformer on the same training accounts, then rebuild the graph with its output
+                from .seqformer import SeqFormer, all_account_events, encode
+                toks = all_account_events(self)
+                tr_acc = [nodes[i] for i in tr]
+                ids, smask = encode([toks[a] for a in tr_acc])
+                self.seq_model = SeqFormer(seed=7).fit(ids, smask, np.array([int(self.accounts[a].fraud) for a in tr_acc]),
+                                                       epochs=150)
+                self.features = list(FEATURES) + ["seq_risk"] + [f"seq_emb_{k}" for k in range(SEQ_DIMS)]
+                nodes, idx, X, mask = self.build_graph()
+                # out-of-fold sequence features for the GAT's training rows: two transformers, each trained on half the
+                # training accounts, score the other half, so the GAT never learns from in-sample sequence scores
+                rr2 = np.random.default_rng(11)
+                halves = np.array_split(rr2.permutation(len(tr_acc)), 2)
+                nf = len(FEATURES)
+                for k in (0, 1):
+                    fit_i, score_i = halves[1 - k], halves[k]
+                    sub = SeqFormer(seed=7).fit(ids[fit_i], smask[fit_i],
+                                                np.array([int(self.accounts[tr_acc[j]].fraud) for j in fit_i]), epochs=150)
+                    rk = sub.predict(ids[score_i], smask[score_i])
+                    em = np.tanh(sub._c["cls"][:, :SEQ_DIMS])
+                    rows = [idx[tr_acc[j]] for j in score_i]
+                    X[rows, nf] = rk
+                    X[rows, nf + 1:nf + 1 + SEQ_DIMS] = em
+                self._split["X"] = X
             kind = os.getenv("TWIN_MODEL", "gat").strip().lower()
             if kind == "graphsage":  # GraphSAGE in NumPy (app/sage.py)
                 from .sage import SageMaskModel
-                self.model = SageMaskModel(len(FEATURES), hidden=64, seed=7)
+                self.model = SageMaskModel(len(self.features), hidden=64, seed=7)
             else:
-                self.model = GAT(len(FEATURES), hidden=8, heads=4, skip=GAT_SKIP)
+                self.model = GAT(len(self.features), hidden=8, heads=4, skip=GAT_SKIP)
             hist = self.model.fit(X, mask, y, tr, va, epochs=epochs)
             P = self.model.predict_proba(X, mask)
             te_pred = P[te] >= 0.5
@@ -508,7 +561,7 @@ class Twin:
                 "recall": round(tp / max(int((y[te] == 1).sum()), 1), 3),
                 "train_nodes": int(len(tr)), "test_nodes": int(len(te)), "history": hist,
                 "graph": {"nodes": len(nodes), "edges": int((mask.sum() - len(nodes)) / 2)},
-                "heads": self.model.n_heads, "features": FEATURES,
+                "heads": self.model.n_heads, "features": self.features, "sequence_model": self.seq_model is not None,
                 "model": getattr(self.model, "kind", "gat"),
             }
             self._dirty = True
@@ -567,7 +620,7 @@ class Twin:
                 out.append({"node": nid, "type": _ntype(nid), "attention": round(float(att[j]), 4),
                             "head_attention": [round(float(h[j]), 3) for h in per_head],
                             "risk": round(self._probs.get(nid, 0), 3), "accounts_linked": shared})
-            feats = {f: round(float(X[i, k]), 3) for k, f in enumerate(FEATURES) if k >= 4}
+            feats = {f: round(float(X[i, k]), 3) for k, f in enumerate(self.features) if k >= 4}
             return {"node": node_id, "risk": round(self._probs.get(node_id, 0), 3),
                     "self_attention": round(float(att[i]), 4), "top_neighbors": out, "features": feats}
 

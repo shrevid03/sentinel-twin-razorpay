@@ -9,3 +9,7 @@ for _k in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET", 
            "ANTHROPIC_API_KEY", "LLM_PROVIDER", "ADMIN_TOKEN", "ELASTIC_URL", "ZAPIER_WEBHOOK_URL", "CHANNEL3_API_KEY",
            "RAZORPAY_FX_RATE", "RAZORPAY_CURRENCY", "TWIN_MODEL", "LEDGER_PATH", "RAZORPAY_API_BASE", "RAZORPAY_ALLOW_LIVE"):
     os.environ[_k] = ""
+
+# The server's background traffic thread keeps ticking the live twin once any test imports app.main; in the test
+# process it only competes for the CPU (and makes later tests slow), so it is off here.
+os.environ["AUTO_TRAFFIC"] = "0"

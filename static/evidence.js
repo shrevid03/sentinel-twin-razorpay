@@ -19,6 +19,19 @@ function renderEvidence(c) {
     c.chat.push({ q, a: r.answer, brain: r.brain }); renderEvidence(c);
   };
   loadLedger();
+  loadTimeline(c.account);
+}
+
+async function loadTimeline(acc) {
+  try {
+    const t = await api(`/api/timeline/${encodeURIComponent(acc)}`);
+    if (!t.events.length) return;
+    const head = t.sequence_model ? `Event timeline · sequence transformer risk ${t.risk} (bars = attention)` :
+      "Event timeline (sequence transformer is off; start with TWIN_SEQ=1 to see its attention)";
+    $("#ev-out").insertAdjacentHTML("beforeend", `<details><summary class="muted">${esc(head)}</summary><ol class="ev-steps small">${t.events.map((e) =>
+      `<li>${esc(e.event)} · ${money(e.inr)}${e.new_device ? " · new device" : ""}${e.new_place ? " · new place/counterparty" : ""}${
+        e.attention != null ? ` <span style="display:inline-block;height:6px;width:${Math.round(e.attention * 300)}px;background:#0070E0;border-radius:3px"></span> ${e.attention}` : ""}</li>`).join("")}</ol></details>`);
+  } catch (e) { /* the timeline is extra context */ }
 }
 
 async function openEvidence(acc) {

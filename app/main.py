@@ -487,6 +487,12 @@ def ask_copilot(case_id: str, body: AskIn):
     return _review(team.casebook.ask, case_id, body.question[:500])
 
 
+@app.get("/api/timeline/{account_id}")
+def timeline(account_id: str):
+    """An account's recent events in order (and, with TWIN_SEQ=1, the sequence transformer's attention on each)."""
+    return _review(twin.timeline, account_id)
+
+
 @app.get("/api/ledger")
 def ledger(limit: int = 200):
     """The append-only, hash-chained ledger: model recommendations and human decisions as separate records."""
