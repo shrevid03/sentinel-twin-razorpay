@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from .gat import GAT, auc
+from .graph_rf import graph_features, vector
 from .money import K, rs
 
 COUNTRIES = ["US", "US", "US", "IN", "GB", "DE", "CA", "AU", "FR", "BR"]
@@ -65,7 +66,17 @@ NEIGHBOUR_WEIGHT = 0.8
 # to unseen-attack interception (84.9% vs 85.2%) and blocks one good ₹14,975 order in every run, so the app keeps
 # it off. Flip to True to compare; the drill and rules-vs-graph numbers in the README are with it off.
 GAT_SKIP = False
-SEQ_DIMS = 8  # when TWIN_SEQ=1: sequence risk + the first SEQ_DIMS dims of the transformer's behaviour embedding
+SEQ_DIMS = 8
+
+
+def engine_name():
+    """Order-risk engine: "gat" (default) or "rf_graph" (random forest on explicit graph features).
+
+    Chosen by two measurements (README, "Which model decides"): on a chronological holdout of the order stream the
+    forest matched the forest + GAT and is ~15-30x faster, but on the drill's fresh red-team attacks the GAT engine
+    caught more fraud (86.7% vs 77.4%) and blocked no good orders (₹0 vs ₹29,701). Safety wins the default."""
+    e = os.getenv("TWIN_ENGINE", "").strip().lower()
+    return e if e in ("rf_graph", "gat") else "gat"  # when TWIN_SEQ=1: sequence risk + the first SEQ_DIMS dims of the transformer's behaviour embedding
 
 DEFAULT_POLICY = {"review_threshold": 0.5, "block_threshold": 0.8, "max_auto_amount": 1000.0 * K,
                   "review_new_device_over": 300.0 * K, "review_spend_multiple": 0.0}
@@ -623,8 +634,13 @@ class Twin:
             else:
                 self.model = GAT(len(self.features), hidden=8, heads=4, skip=GAT_SKIP)
             hist = self.model.fit(X, mask, y, tr, va, epochs=epochs)
-            self.model_version = self._model_hash(self.model)
-            self.model_versions[self.model_version] = copy.deepcopy(self.model)
+            self.order_model = None
+            if engine_name() == "rf_graph":
+                self._train_order_model()
+            self.model_version = self._model_hash(self.model) + (
+                "+" + self.order_model.version if self.order_model is not None else "")
+            self.model_versions[self.model_version] = {"gat": copy.deepcopy(self.model),
+                                                       "order_model": copy.deepcopy(self.order_model)}
             P = self.model.predict_proba(X, mask)
             te_pred = P[te] >= 0.5
             tp = int(np.sum(te_pred & (y[te] == 1)))
@@ -635,7 +651,7 @@ class Twin:
                 "train_nodes": int(len(tr)), "test_nodes": int(len(te)), "history": hist,
                 "graph": {"nodes": len(nodes), "edges": int((mask.sum() - len(nodes)) / 2)},
                 "heads": self.model.n_heads, "features": self.features, "sequence_model": self.seq_model is not None,
-                "model": getattr(self.model, "kind", "gat"),
+                "model": getattr(self.model, "kind", "gat"), "engine": engine_name(),
             }
             self._dirty = True
             self.refresh()
@@ -704,39 +720,21 @@ class Twin:
             acc = self.accounts[account]
             nodes, idx, X, mask = self.build_graph(
                 extra={"account": account, "device": device, "ip": ip, "merchant": merchant, "amount": amount})
-            P = self.model.predict_proba(X, mask)
             feat_row = [round(float(v), 4) for v in X[idx[account]]]
-            g_now = float(P[idx[account]])
-            before = self.risk(account)
+            engine = "rf_graph" if getattr(self, "order_model", None) is not None else "gat"
+            if engine == "gat":  # the GAT forward pass is the expensive part (about 300 ms on this twin)
+                P = self.model.predict_proba(X, mask)
+                g_now = float(P[idx[account]])
+                before = self.risk(account)
+            else:
+                g_now, before = 0.0, None
             shared_ids = self.shared_identifiers(account, extra_device=device)
             dev_others = [a for a in self.accounts.values() if device in a.devices and a.id != account]
             dev_risk = max((self._probs.get(a.id, 0) for a in dev_others), default=0.0)
-            hist = [o for o in self.orders if o["account"] == account and o["status"] != "blocked"]
-            avg = np.mean([o["amount"] for o in hist]) if hist else 60.0 * K
-            velocity = sum(1 for o in hist if o["ts"] > self.clock - 60)
-            new_device = device not in acc.devices
-            geo = self.ips.get(ip, acc.country) != acc.country
-            factors = []
-            t = 0.0
-            if new_device:
-                t += 0.25
-                factors.append("new device for this account")
-            if geo:
-                t += 0.25
-                factors.append(f"IP country {self.ips.get(ip)} differs from account country {acc.country}")
-            ratio = amount / (avg + 20 * K)
-            if ratio > 2:
-                t += 0.2 * min(ratio / 6, 1)
-                factors.append(f"amount is {ratio:.1f}x this buyer's usual spend")
-            if velocity >= 3:
-                t += 0.15 * min(velocity / 6, 1)
-                factors.append(f"{velocity} orders in the last hour")
-            if acc.age_days < 7:
-                t += 0.15
-                factors.append(f"account is only {acc.age_days} days old")
-            if acc.status == "frozen":
-                t = 1.0
-                factors.append("account is frozen by an investigator")
+            t, factors, ratio, new_device = self._rules(acc, amount, device, ip)
+            if engine == "rf_graph":
+                g_now = self.order_model.predict(vector(feat_row[4:4 + 17], graph_features(self, account, device, ip),
+                                                        [min(t, 1), ratio, float(new_device)]))
             g = max(g_now, 0.9 * dev_risk)
             nbs = self.known_fraud_signal(account, extra_ids=(device, ip))
             g = 1 - (1 - g) * (1 - NEIGHBOUR_WEIGHT * nbs["share"])
@@ -750,12 +748,14 @@ class Twin:
             mf = self.money_flow_links(account)
             if mf["flagged"]:
                 factors.append(f"moved money with {mf['flagged']} flagged account(s)")
-            if g_now - before > 0.1:
+            if engine == "gat" and g_now - before > 0.1:
                 factors.append(f"GAT risk jumps {before:.2f} -> {g_now:.2f} once this order's links are added")
             elif g_now > 0.5:
-                factors.append(f"GAT flags this account's neighbourhood ({g_now:.2f})")
+                factors.append(f"{'graph model' if engine == 'rf_graph' else 'GAT'} flags this order ({g_now:.2f})")
             risk = 1 - (1 - g) * (1 - min(t, 1) * 0.75)
-            return {"risk": round(float(risk), 3), "spend_ratio": round(float(ratio), 2), "gat_risk": round(g_now, 3), "gat_before": round(before, 3),
+            return {"risk": round(float(risk), 3), "spend_ratio": round(float(ratio), 2), "gat_risk": round(g_now, 3),
+                    "model_risk": round(g_now, 3), "engine": engine,
+                    "gat_before": None if before is None else round(before, 3),
                     "device_risk": round(dev_risk, 3), "neighbour_signal": nbs, "graph_risk": round(float(g), 3),
                     "features": feat_row,
                     "txn_score": round(min(t, 1), 3), "factors": factors}
@@ -905,7 +905,8 @@ class Twin:
             return {"decision": decision_id, "replayable": False, "identical": False,
                     "reason": f"model version {rec['model_version']} is not available (current {cur})"}
         t = self.as_of(rec["seq"], rec["decided_at"])
-        t.model = copy.deepcopy(model)
+        t.model = copy.deepcopy(model["gat"])
+        t.order_model = copy.deepcopy(model["order_model"])
         t.model_version = rec["model_version"]
         i = rec["inputs"]
         s_ = t.score_order(i["account"], i["merchant"], i["amount"], i["device"], i["ip"])
@@ -921,6 +922,51 @@ class Twin:
                 and s_["features"] == rec["features"],
                 "evidence_identical": same_ev, "features_identical": s_["features"] == rec["features"],
                 "evidence_added_since": [{k: e[k] for k in ("item", "kind", "available_at", "provenance")} for e in later]}
+
+    def _rules(self, acc, amount, device, ip):
+        """The rules engine: new device, foreign IP, spend jump, velocity, account age, frozen."""
+        hist = [o for o in self.orders if o["account"] == acc.id and o["status"] != "blocked"]
+        avg = np.mean([o["amount"] for o in hist]) if hist else 60.0 * K
+        velocity = sum(1 for o in hist if o["ts"] > self.clock - 60)
+        new_device = device not in acc.devices
+        geo = self.ips.get(ip, acc.country) != acc.country
+        factors = []
+        t = 0.0
+        if new_device:
+            t += 0.25
+            factors.append("new device for this account")
+        if geo:
+            t += 0.25
+            factors.append(f"IP country {self.ips.get(ip)} differs from account country {acc.country}")
+        ratio = amount / (avg + 20 * K)
+        if ratio > 2:
+            t += 0.2 * min(ratio / 6, 1)
+            factors.append(f"amount is {ratio:.1f}x this buyer's usual spend")
+        if velocity >= 3:
+            t += 0.15 * min(velocity / 6, 1)
+            factors.append(f"{velocity} orders in the last hour")
+        if acc.age_days < 7:
+            t += 0.15
+            factors.append(f"account is only {acc.age_days} days old")
+        if acc.status == "frozen":
+            t = 1.0
+            factors.append("account is frozen by an investigator")
+        return t, factors, ratio, new_device
+
+    def _train_order_model(self):
+        """Train the default engine on the seeded order history, with features as the twin knows them now."""
+        from .graph_rf import OrderModel
+        nodes, idx, X, _ = self.build_graph()
+        rows, ys = [], []
+        for o in self.orders:
+            if o["source"] != "history" or o["account"] not in idx:
+                continue
+            acc = self.accounts[o["account"]]
+            t, _, ratio, nd = self._rules(acc, o["amount"], o["device"], o["ip"])
+            rows.append(vector([float(v) for v in X[idx[o["account"]]][4:4 + 17]],
+                               graph_features(self, o["account"], o["device"], o["ip"]), [min(t, 1), ratio, float(nd)]))
+            ys.append(int(bool(o["fraud"])))
+        self.order_model = OrderModel(seed=7).fit(rows, ys)
 
     def decide(self, risk, amount, new_device, policy=None, spend_ratio=0.0):
         p = {**DEFAULT_POLICY, **(policy or self.policy)}

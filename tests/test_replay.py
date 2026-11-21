@@ -93,3 +93,18 @@ def test_replay_api(monkeypatch):
     sc = c.post("/api/scenario/new-account").json()
     assert sc["pre_checkout"]["replay"]["identical"] and sc["pre_capture"]["pre_checkout_replay"]["identical"]
     assert c.post("/api/decisions/DEC-99999/replay").status_code == 404
+
+
+def test_forest_engine_scores_and_replays(monkeypatch):
+    monkeypatch.setenv("TWIN_ENGINE", "rf_graph")
+    t = Twin(seed=3)
+    t.train(30)
+    assert t.metrics["engine"] == "rf_graph" and "+rf-" in t.model_version
+    team = Team(t, Razorpay())
+    team.no_live = True
+    out = team.guarded_checkout(CART)
+    did = team.receipts[out["receipt_id"]]["risk"]["decision_id"]
+    assert t.decisions[did]["features"] and t.replay(did)["identical"]
+    ring = next(a for a in t.accounts.values() if a.segment == "ring-1")
+    s = t.score_order(ring.id, "M-07", 30000, min(ring.devices), min(ring.ips))
+    assert s["engine"] == "rf_graph" and s["risk"] > 0.5

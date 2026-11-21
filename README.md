@@ -86,6 +86,37 @@ There are two honest decision points:
 
 Regression tests (`tests/test_replay.py`): a fraud link and a freeze added after checkout leave the replayed decision identical; the current payment's UPI ID appears only in the pre-capture decision; a new model going live is detected (the replay uses the stored version), and a lost model version makes the decision "not replayable" rather than wrong.
 
+### Which model decides: the GAT on trial
+
+Two measurements, both on the twin, both reported because they disagree.
+
+**1. Chronological holdout** (`scripts/model_trial.py`, 3 twin seeds, about 5,600 orders each, about 6% fraud). Ordinary traffic plus fresh attacks injected over time; every order is scored at the moment it is placed, so only links known then are used; fraud labels arrive late (like chargebacks): only at the end of the training window. Train on the first 60% of orders, freeze each model's threshold on the next 20% so it sends the same share of orders to manual review, test on the last 20%:
+
+| Review volume | Model | Fraud ₹ caught (share) | Good orders flagged |
+|---|---|---|---|
+| 2% | Rules only | 24.3% ± 11.1% | 14.3 |
+| 2% | Random forest + explicit graph features | 25.4% ± 17.1% | 0 |
+| 2% | Same forest + GAT score | 20.2% ± 14.6% | 0 |
+| 5% | Rules only | 27.9% ± 9.2% | 33.0 |
+| 5% | Random forest + explicit graph features | **86.6% ± 12.7%** | 0 |
+| 5% | Same forest + GAT score | 84.0% ± 6.5% | 0 |
+
+Here the GAT adds nothing on top of explicit graph features (neighbour aggregates, known-fraud-neighbour share and counts, shared identifiers, transfer partners).
+
+**2. The defense drill's fresh attacks** (new ring and money-flow accounts the models never saw), same seed and policy:
+
+| | GAT engine (default) | Forest engine |
+|---|---|---|
+| Unseen attacks intercepted | **86.7%** | 77.4% |
+| Layering cycles / mule fan-out / collusion | 80% / 97% / 88% | 52% / 75% / 66% |
+| Good orders blocked | **₹0** | ₹29,701 |
+
+Here the GAT generalises better to new ring shapes, and the forest blocks good orders.
+
+**Latency per decision** on the reference twin, one process: GAT engine 17.5 ms p50 / 18.2 ms p95, forest engine 9.3 / 10.3 ms, rules alone well under 1 ms. The dense GAT grows with the graph: on the trial's larger twins (three runs sharing the CPU) it took about 300 ms p50 / 400 ms p95 against about 20 ms for the forest. A production version would use sparse attention.
+
+**Decision:** the GAT engine stays the default, because missing new ring types and blocking good customers are worse for a payments risk layer than about 10 ms. The forest is one switch away (`TWIN_ENGINE=rf_graph`, `app/graph_rf.py`) and is the better choice where attacks look like past ones and latency matters most. Both are recorded in every decision's model version, so replays use whichever decided.
+
 ### Crash-safe payments
 
 Payment and mandate state live in a database (`app/store.py`, SQLAlchemy): **Postgres in production** via `DATABASE_URL` (`render.yaml` adds a free Render Postgres; it expires 30 days after creation, then a 14-day grace period before deletion, 1 GB, no backups, one per workspace) and a SQLite file in `data/` locally, so a restart loses nothing. The rules:
@@ -396,6 +427,7 @@ app/
   reviewer_twin.py the reviewer twin
   scenario.py      "new account joins a fraud ring"
   store.py         durable payment and mandate state (Postgres / SQLite), forward-only transitions, reservations
+  graph_rf.py      alternative order engine: random forest on explicit graph features (TWIN_ENGINE=rf_graph)
   seqformer.py     transaction-sequence transformer (TWIN_SEQ=1), off by default
 compliance_rules.yaml  RBI-grounded rules, loaded as config
   catalog.py       demo store catalog (plus a poisoned listing for the injection attack)

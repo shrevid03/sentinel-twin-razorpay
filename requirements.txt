@@ -9,3 +9,4 @@ networkx>=3.2,<4
 pyyaml>=6.0
 sqlalchemy>=2.0,<2.1
 psycopg[binary]>=3.2,<4
+scikit-learn>=1.5,<2
