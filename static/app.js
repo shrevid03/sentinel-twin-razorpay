@@ -273,7 +273,8 @@ async function loadGraph(focus) {
     nodesDS = new vis.DataSet(data.nodes); edgesDS = new vis.DataSet(data.edges);
     network = new vis.Network($("#graph"), { nodes: nodesDS, edges: edgesDS }, {
       physics: { solver: "barnesHut", barnesHut: { gravitationalConstant: -9000, springLength: 140, centralGravity: 0.9, springConstant: 0.05, damping: 0.3, avoidOverlap: 0.6 },
-        stabilization: { iterations: 400, fit: true }, minVelocity: 0.75 },
+        stabilization: { iterations: 180, updateInterval: 25, fit: true }, minVelocity: 0.75 },
+      layout: { improvedLayout: false },  // vis-network cannot use it on this graph anyway, and it blocks the main thread
       interaction: { hover: true, tooltipDelay: 60, hoverConnectedEdges: true, selectConnectedEdges: true, zoomSpeed: 0.6 },
       edges: { smooth: { type: "continuous", roundness: 0.2 }, selectionWidth: 1.2, hoverWidth: 1 },
       nodes: { font: { size: 0 } },
@@ -294,7 +295,7 @@ async function loadGraph(focus) {
     network.setOptions({ physics: { enabled: true } });
     nodesDS.clear(); edgesDS.clear(); chipKey = ""; $("#ring-chips").innerHTML = "";
     nodesDS.add(data.nodes); edgesDS.add(data.edges);
-    network.stabilize(400);
+    network.stabilize(180);
   }
   renderHud();
 }
