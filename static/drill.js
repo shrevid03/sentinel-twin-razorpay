@@ -193,7 +193,7 @@ window.renderFlow = (d) => {
   };
   const sub = (p) => `${p} of ${N} arrows get through`;
   el.innerHTML = `<div class="cardhead"><h3>Attack flow <span class="tag synth">Synthetic attack traffic</span></h3>
-      <small class="muted">${d ? `Each arrow is a tenth of the ${money(att)} attempted. Red got through; blue was intercepted.` : "Illustration until you run a drill: then the arrows follow the real result."}</small></div>
+      <small class="muted">${d ? `Each arrow is a tenth of the ${money(att)} attempted. Red got through; green was intercepted.` : "Illustration until you run a drill: then the arrows follow the real result."}</small></div>
     <svg class="flowsvg" viewBox="0 0 900 140" role="img" aria-label="Before hardening ${passB} of ${N} attack arrows pass the shield; after hardening ${passA} of ${N}">
       ${panel(0, passB, "Before hardening", d ? `${money(s.breach_evaded_before_inr)} got through · ${sub(passB)}` : "Today's policy", "#8FB3A6")}
       <line x1="450" y1="20" x2="450" y2="130" stroke="#1B3B33" stroke-width="2"/>

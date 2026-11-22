@@ -425,3 +425,14 @@ a.rcpt-link { color: var(--glow); font-weight: 600; }
   #kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hud-tl { max-width: calc(100% - 140px); font-size: 11px; flex-wrap: wrap; }
 }
+
+/* ---------- gothic carry-over from the landing page (lighter): vignette, spaced serif titles, gold for verified ---------- */
+.workspace::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 5; box-shadow: inset 0 0 160px 30px rgba(2,6,5,.55); }
+.tabhero h2 { text-transform: uppercase; letter-spacing: .16em; font-weight: 600; font-size: clamp(22px, 2.3vw, 30px); }
+.tabhero p::before { content: "~ "; color: var(--sage-hi); } .tabhero p::after { content: " ~"; color: var(--sage-hi); }
+.tabhero p { font-family: var(--font-display); font-style: italic; font-size: 18px; color: #BFD3C8; }
+.tabhero, .hero { background-image: linear-gradient(115deg, transparent 35%, rgba(232,245,238,.05) 48%, transparent 60%), radial-gradient(120% 160% at 0% 0%, rgba(64,130,109,.38), rgba(11,31,26,.85) 60%); }
+.rp-badge.same { background: rgba(201,164,92,.14); color: #D9BA79; border: 1px solid rgba(201,164,92,.4); }
+.proof { background: rgba(201,164,92,.1); color: #D9BA79; border-color: rgba(201,164,92,.35); }
+.rc-head .big { color: var(--moon); }
+.brand b { letter-spacing: .12em; text-transform: uppercase; font-size: 16px; }
