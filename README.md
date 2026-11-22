@@ -10,6 +10,15 @@ An AI shopping agent pays through Razorpay Checkout (UPI, cards, netbanking). A 
 
 **Payment flow in one line:** agent proposes a cart → mandate checked in code → GAT + rules risk gate → Razorpay order (manual capture) → buyer pays in Razorpay Checkout → server verifies `HMAC-SHA256(order_id|payment_id)` → mandate re-checked → payment captured exactly once.
 
+![Scrolling the landing page: through a moonlit gothic window into the fraud graph](docs/img/landing-scroll.gif)
+
+| | |
+|---|---|
+| ![Landing page hero: a gothic window onto a smoky viridian sky](docs/img/landing-hero.jpg) | ![The fraud graph drawn as ivy on a stone wall; the ring blooms coral](docs/img/landing-ivy-graph.jpg) |
+| ![Command center: the twin graph with coral fraud rings](docs/img/app-command-center.jpg) | ![A decision receipt with the replay drawn on a timeline](docs/img/app-receipt-replay.jpg) |
+
+All artwork is procedural (SVG, canvas and a WebGL shader), self-hosted with no CDN at runtime; reduced-motion and phone visitors get a calm, fully visible version.
+
 ## Results at a glance
 
 Tested on three public fraud graphs plus the app's own twin. Full tables, protocols and caveats are in [docs/REAL_DATA.md](docs/REAL_DATA.md).
