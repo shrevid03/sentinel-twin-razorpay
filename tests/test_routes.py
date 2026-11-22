@@ -14,5 +14,6 @@ def test_landing_and_app_routes(monkeypatch):
     assert 'src="/static/app.js' in app_page.text and 'href="/static/style.css' in app_page.text
     assert client.get("/static/landing.html").status_code == 200
     for asset in ("theme.css", "landing.css", "landing.js", "smoke.js", "vendor/gsap.min.js", "vendor/ScrollTrigger.min.js",
-                  "vendor/lenis.min.js", "vendor/fonts/fraunces-latin-full-normal.woff2"):  # self-hosted, no CDN at runtime
+                  "vendor/lenis.min.js", "vendor/fonts/fraunces-latin-full-normal.woff2", "js/sound.js", "js/scene3d.js",
+                  "vendor/three/three.module.min.js", "vendor/postprocessing/index.js"):  # self-hosted, no CDN at runtime
         assert client.get("/static/" + asset).status_code == 200, asset

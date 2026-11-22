@@ -154,7 +154,8 @@ void main(){
     const dt = Math.min(.05, (now - last) / 1000); last = now;
     state.mx += (state.tx - state.mx) * .05; state.my += (state.ty - state.my) * .05;
     state.glint *= .985;
-    if (draw && state.heroVisible) draw(now);
+    const in3d = document.documentElement.classList.contains("has-3d");  // the 3D hero draws its own sky
+    if (draw && state.heroVisible && !in3d) draw(now);
     if (canvas) canvas.style.opacity = state.heroVisible ? (1 - state.scroll * .45).toFixed(3) : "0";
     if (frame++ % 1 === 0) stepFlies(dt, now);
     if (glow) glow.style.transform = `translate(${px - 160}px, ${py - 160}px)`;
