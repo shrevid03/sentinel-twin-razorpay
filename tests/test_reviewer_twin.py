@@ -69,7 +69,7 @@ def test_autopilot_is_off_by_default_and_never_touches_irreversible_actions(trai
     assert rt.autopilot["enabled"] is False
     out = team.guarded_checkout(CART)
     assert out["status"] == "held_for_review"  # shadow mode: a human decides
-    rt.set_autopilot(enabled=True, min_confidence=0.5, max_inr=10 ** 9)
+    rt.set_autopilot(enabled=True, min_confidence=0.5, max_inr=10 ** 9, admin="Priya Nair", reason="pilot on low value")
     assert rt.autopilot["min_confidence"] == 0.95 and rt.autopilot["max_inr"] == 12500.0  # clamped
     rt.predict = lambda kind, item: {"p_approve": 0.999, "decision": "approve", "confidence": 0.999, "reasons": [],
                                      "mode": "autopilot"}
@@ -80,14 +80,40 @@ def test_autopilot_is_off_by_default_and_never_touches_irreversible_actions(trai
 def test_autopilot_release_is_logged_and_can_be_undone(trained_twin):
     team = _team(trained_twin)
     rt = team.reviewer_twin
-    rt.set_autopilot(enabled=True)
+    rt.set_autopilot(enabled=True, admin="Priya Nair", reason="pilot on low-value holds")
     rt.predict = lambda kind, item: {"p_approve": 0.99, "decision": "approve", "confidence": 0.99, "reasons": [],
                                      "mode": "autopilot"}
     out = team.guarded_checkout(CART)
     assert out["status"] == "released_by_reviewer_twin" and out["pay_order_id"]
     assert not [r for r in rt.records if r["source"] == "real"]  # it never learns from its own decisions
-    assert any(e["reviewer"] == "reviewer twin (autopilot)" for e in team.audit)
+    assert any(e["reviewer"] == "reviewer twin under policy enabled by Priya Nair" for e in team.audit)
+    assert rt.autopilot_log[-1]["reviewer"] == "reviewer twin under policy enabled by Priya Nair"
     rt.undo(out["hold_id"])
     assert team.holds[out["hold_id"]]["status"] == "rejected"
     with pytest.raises(CaptureRefused):
         team.capture(out["pay_order_id"])  # the cancelled checkout can never be charged
+
+
+def test_autopilot_needs_a_named_admin_and_reason_and_is_ledgered(trained_twin):
+    team = _team(trained_twin)
+    rt = team.reviewer_twin
+    for admin, reason in ((None, "a good reason"), ("", "a good reason"), ("reviewer twin", "a good reason"),
+                          ("system", "a good reason"), ("Priya Nair", ""), ("Priya Nair", "ok")):
+        with pytest.raises(PermissionError):
+            rt.set_autopilot(enabled=True, admin=admin, reason=reason)
+    assert rt.autopilot["enabled"] is False
+    rt.set_autopilot(enabled=True, admin="Agatha Rao", reason="pilot on low-value holds")
+    rows = team.ledger.records(kind="autopilot_policy")
+    assert rows and rows[-1]["by"] == "Agatha Rao" and rows[-1]["reason"] == "pilot on low-value holds"
+    assert "never captures, refunds" in rows[-1]["scope"]
+    rt.set_autopilot(enabled=False, admin="Agatha Rao")
+    assert rt.autopilot["enabled"] is False and rt.autopilot["enabled_by"] is None
+
+
+def test_autopilot_api_refuses_without_admin_and_reason():
+    from fastapi.testclient import TestClient
+    from app import main
+    c = TestClient(main.app)
+    assert c.post("/api/reviewer-twin/autopilot", json={"enabled": True}).status_code == 403
+    assert c.post("/api/reviewer-twin/autopilot", json={"enabled": True, "admin": "Priya Nair"}).status_code == 403
+    assert c.get("/api/reviewer-twin").json()["autopilot"]["enabled"] is False

@@ -16,7 +16,7 @@ load_dotenv()
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
 from . import integrations  # noqa: E402
 from . import channel3  # noqa: E402
@@ -468,6 +468,8 @@ def actions():
 
 class AutopilotIn(BaseModel):
     enabled: bool | None = None
+    admin: str | None = Field(None, max_length=80)
+    reason: str | None = Field(None, max_length=300)
     max_inr: float | None = None
     min_confidence: float | None = None
 
@@ -554,8 +556,13 @@ def reviewer_twin_replay():
 
 @app.post("/api/reviewer-twin/autopilot", dependencies=ADMIN)
 def reviewer_twin_autopilot(body: AutopilotIn):
-    """Off by default. Only ever releases held checkouts under the cap at confidence >= 0.95."""
-    return team.reviewer_twin.set_autopilot(body.enabled, body.max_inr, body.min_confidence)
+    """Off by default. Enabling needs a named admin and a reason (written to the ledger). It only ever releases held
+    checkouts under the cap at confidence >= 0.95; it never captures, refunds, restricts or moves money."""
+    try:
+        return team.reviewer_twin.set_autopilot(body.enabled, body.max_inr, body.min_confidence,
+                                                admin=body.admin, reason=body.reason)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
 
 
 @app.post("/api/reviewer-twin/undo/{hold_id}", dependencies=ADMIN)
@@ -598,7 +605,7 @@ def reject_hold(hold_id: str, body: ReviewIn):
 
 @app.get("/api/receipts")
 def receipts():
-    return list(team.receipts.values())[::-1]
+    return [team.receipt_view(r) for r in list(team.receipts.values())[::-1]]
 
 
 @app.get("/api/receipts/{receipt_id}")
@@ -610,7 +617,7 @@ def receipt(receipt_id: str):
         r = team.receipts.get((co or {}).get("receipt_id"))
     if not r:
         raise HTTPException(404, "unknown receipt")
-    return r
+    return team.receipt_view(r)
 
 
 @app.get("/api/razorpay/calls")

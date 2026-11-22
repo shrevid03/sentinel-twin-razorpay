@@ -82,7 +82,7 @@ Every link in the twin (device, IP, UPI ID, card, contact, transfer), every frau
 
 There are two honest decision points:
 1. **Pre-checkout**: only what was known before the checkout (signup details, prior history, seeded fixtures). Decides whether a Razorpay order is created at all.
-2. **Pre-capture**: orders use manual capture, so after the buyer authorizes, the payer's UPI ID, card and contact from *this* payment are linked (hashed) and checked before any money is captured. A risky payment is not captured: the authorization lapses and nothing is charged. These identifiers never reach the pre-checkout decision.
+2. **Pre-capture**: orders use manual capture, so after the buyer authorizes, the payer's UPI ID, card and contact from *this* payment are linked (hashed) and checked before any money is captured. A risky payment is not captured. That is not the same as "no debit": the customer's bank may already show a temporary hold or debit, which Razorpay reverses automatically (an uncaptured payment is auto-refunded when the capture window ends, at most 5 days for our orders or 3 days on Razorpay's default setting, and reaches the customer in 5-7 working days). These identifiers never reach the pre-checkout decision.
 
 Regression tests (`tests/test_replay.py`): a fraud link and a freeze added after checkout leave the replayed decision identical; the current payment's UPI ID appears only in the pre-capture decision; a new model going live is detected (the replay uses the stored version), and a lost model version makes the decision "not replayable" rather than wrong.
 
@@ -125,7 +125,12 @@ Payment and mandate state live in a database (`app/store.py`, SQLAlchemy): **Pos
 * **Risk state and payment state are separate.** Risk: approved / review / blocked. Payment: created -> authorized -> capture_requested (-> unconfirmed) -> captured -> refunded, or not_captured / failed / cancelled. States only move forward, through an explicit transition table applied with a conditional `UPDATE ... WHERE pay_state IN (...)`, so a duplicate, stale or out-of-order event is a no-op.
 * **Budget is reserved atomically before checkout opens** (`UPDATE mandates SET reserved = reserved + :a WHERE monthly_budget - spent - reserved >= :a`): with ₹2,000 left, two simultaneous ₹1,500 checkouts get exactly one reservation. A reservation becomes spend exactly once on capture, is released exactly once if the payment fails, is not captured or is abandoned (30 minutes), and is credited back exactly once on refund.
 * **"capture_requested" is written before Razorpay is asked to capture.** A reconciler runs at startup and about once a minute: it asks Razorpay what actually happened to every in-flight capture and records it once, or finishes a capture that never left the process.
-* **Honest messages.** "Nothing was charged" appears only when that is known (the payment was never captured, or no payment started). If a capture's outcome is unknown, the customer sees "payment status is being confirmed; you will not be charged twice".
+* **Honest messages, one per money state** (`app/payment_words.py`, shown on every receipt):
+  * no payment attempted: "nothing was charged" (the only state that says this);
+  * authorized, not captured: "not captured: your bank may show a temporary hold or debit that Razorpay reverses automatically" (auto-refund after the capture window, then 5-7 working days);
+  * capture outcome unknown: "payment status is being confirmed; you will not be charged twice";
+  * captured: complete;
+  * refunded: "refund initiated", reaching the customer in 5-7 working days.
 * **Webhooks**: deliveries are deduplicated by event id in the database (so a restart remembers them), and every business effect is a forward-only state transition anyway, because deduplicating deliveries alone does not protect the action.
 
 Tests (`tests/test_payments.py`, 12): exactly one of two concurrent reservations, and exactly 6 of 12 for a budget that fits 6, using separate database connections; captured before authorized and refund before capture converge; **the worker dies after Razorpay accepted the capture, before recording it**: on restart the reconciler records the capture once, debits the mandate once, Razorpay was asked to capture once, and a retry tells the customer it is complete; a lost capture response says "confirming", then reconciles; a crash before the capture call is finished by the reconciler; an abandoned checkout releases its budget; duplicate, out-of-order and replayed webhooks record one capture and one refund. The same tests run against Postgres with `TEST_DATABASE_URL=postgresql://... pytest tests/test_payments.py`.
@@ -142,7 +147,7 @@ The **Defense drill** tab has a **Run scenario** button (`POST /api/scenario/new
 | GAT + rules | 0.08 | **approve** | the GAT alone scores the account 0.02: its own features look clean |
 | **GAT + rules + known-fraud neighbours** (shipped) | **0.63** | **review** | "3 of 3 labelled linked accounts are known fraud"; "shares phone/email with 3 flagged account(s)" |
 
-2. **Pre-capture.** A second, clean account passes the pre-checkout check (approve, 0.07), then pays from a UPI ID that three ring members paid from before. After authorization and before capture the check returns **review (0.61)**: the payment is not captured and nothing is charged. Replaying that account's pre-checkout decision gives the identical result, and lists the payment's UPI ID as evidence that arrived later and was ignored.
+2. **Pre-capture.** A second, clean account passes the pre-checkout check (approve, 0.07), then pays from a UPI ID that three ring members paid from before. After authorization and before capture the check returns **review (0.61)**: the payment is not captured (any temporary bank hold or debit is reversed by Razorpay automatically). Replaying that account's pre-checkout decision gives the identical result, and lists the payment's UPI ID as evidence that arrived later and was ignored.
 
 For new accounts the explicit known-fraud-neighbour signal does what the GAT alone does not.
 
@@ -153,7 +158,7 @@ The **Investigator** tab has a **Reviewer twin** card (`app/reviewer_twin.py`, `
 * **Shadow mode by default.** Each queue item shows "Your twin would approve (94%) because account age 900 days; signals fired 0; …", and the queue is sorted so the cases it is least sure about come first.
 * **Honest agreement.** Each prediction is stored *before* the human decides, and the model is refit only afterwards. Cold start: it begins from 40 clearly labelled synthetic decisions drawn from a written policy, and always says "trained on N real + M replayed + K seeded decisions".
 * **Demo:** **Replay 30 reviewer decisions** has a simulated reviewer (a stricter version of the seed policy: wary of big carts on young accounts) work 30 synthetic cases. The twin agrees on **80%** of them (24 of 30), predicting each one before it is decided. These are labelled "replayed", never mixed with real decisions.
-* **Autopilot is off by default.** When switched on, it may only *release held checkouts* (reversible: the buyer still has to pay in Razorpay Checkout, and **undo** cancels the checkout so it can never be captured), at confidence ≥ 0.95 and up to ₹5,000 (capped at the ₹12,500 mandate). It never refunds, restricts or captures, never learns from its own decisions, and every release is in the audit trail with an undo link.
+* **Autopilot is off by default, and off in the demo and the video.** The authorization boundary is explicit: only a *named admin with a written reason* can switch it on (`POST /api/reviewer-twin/autopilot` with `admin` and `reason`; anything else is refused with 403), and that admin, reason and limits go into the hash-chained ledger. It may then only *release held checkouts*: a release creates a Razorpay order the buyer still has to pay, so it never captures, refunds, restricts or moves money. Limits: confidence ≥ 0.95, up to ₹5,000 (capped at the ₹12,500 mandate). Every release is recorded as "reviewer twin under policy enabled by <admin>", it never learns from its own decisions, and **undo** cancels the checkout so it can never be captured.
 
 ### Money-flow rings
 
@@ -233,7 +238,7 @@ Concierge takes voice in all ten languages (Web Speech API in Chrome and Edge) a
 
 ### Reliability
 
-The test suite (107 tests) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, nothing charged, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
+The test suite (107 tests) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, no payment started, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
 
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 

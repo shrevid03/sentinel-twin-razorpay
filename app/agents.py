@@ -19,6 +19,7 @@ import threading
 import time
 
 from . import catalog, compliance, channel3, guard
+from . import payment_words as words
 from .money import K, rs
 from .razorpay import RazorpayError
 from .redteam import ATTACKS, run_attack, scorecard, why_adapted
@@ -434,7 +435,7 @@ class Team:
                                           for c in cart], ref)
         except Exception as e:
             self.store.release(rid)
-            raise RazorpayError(f"{e}; no payment was started, so nothing was charged") from None
+            raise RazorpayError(f"{e}; {words.NO_PAYMENT[0].lower()}{words.NO_PAYMENT[1:]}") from None
         tw = self.twin.place_order(self.buyer, merchant, total, source="agent", pay_order_id=order["id"],
                                    items=[c["sku"] for c in cart])
         tw["status"] = "awaiting_payment"
@@ -484,9 +485,11 @@ class Team:
                 self.twin._event("guard", f"Capture of {order_id} ({rs(co['total'])}) refused: mandate exceeded at "
                                           "capture time", level="bad")
                 if self.receipts.get(co.get("receipt_id")):
-                    self._stamp(self.receipts[co["receipt_id"]], "capture refused: mandate exceeded at capture time")
+                    self._stamp(self.receipts[co["receipt_id"]], "capture refused: mandate exceeded at capture time; "
+                                + (words.NOT_CAPTURED_SHORT if payment_id else "no payment was started"))
                 raise CaptureRefused(409, f"capture refused: {rs(co['total'])} exceeds the buyer's mandate "
-                                          f"(per-order limit {rs(m['per_order_limit'])}). Nothing was charged.")
+                                          f"(per-order limit {rs(m['per_order_limit'])}). "
+                                          + (words.NOT_CAPTURED if payment_id else words.NO_PAYMENT))
             if payment_id is None and not self.pp.live:  # demo mode: stand in for Razorpay Checkout
                 d = self.pp.demo_pay(order_id, getattr(self, "_demo_payer", None))
                 payment_id, signature = d["razorpay_payment_id"], d["razorpay_signature"]
@@ -515,9 +518,9 @@ class Team:
                 self.twin._event("guard", f"Capture of {order_id} withheld at the pre-capture check "
                                           f"({dec['outcome']}, risk {dec['score']:.2f})", level="bad")
                 if rc:
-                    self._stamp(rc, "not captured: the authorization lapses and Razorpay releases it; nothing was charged")
+                    self._stamp(rc, words.NOT_CAPTURED_SHORT)
                 raise CaptureRefused(409, f"payment not captured: the pre-capture risk check returned {dec['outcome']} "
-                                          f"(risk {dec['score']:.2f}). Nothing was charged; the authorization is released.")
+                                          f"(risk {dec['score']:.2f}). " + words.NOT_CAPTURED)
             self.store.transition(order_id, "capture_requested", "capture requested")  # written BEFORE calling Razorpay
             try:
                 res = self.pp.capture_payment(order_id, payment_id, p, links)
@@ -527,12 +530,26 @@ class Team:
                 if rc:
                     self._stamp(rc, "capture outcome unknown (Razorpay unreachable); payment status being confirmed")
                 return {"id": order_id, "status": "CONFIRMING", "payment_id": payment_id,
-                        "message": "Payment status is being confirmed with Razorpay. You will not be charged twice."}
+                        "message": words.CONFIRMING}
             if self._fault == "crash_after_capture":  # fault injection for the crash-recovery test
                 raise WorkerCrash("worker died after Razorpay accepted the capture, before recording it")
             if res.get("status") == "COMPLETED":
                 self._record_capture(order_id, payment_id, "capture response")
             return res
+
+    def receipt_view(self, rc):
+        """A receipt plus what the customer should be told about money right now, from the durable payment state."""
+        pay = self.store.payment((rc.get("payment") or {}).get("order_id")) if rc.get("payment") else None
+        state = pay["pay_state"] if pay else None
+        if state is None:
+            msg = words.NO_PAYMENT
+        else:
+            msg = words.for_state(state)
+        return {**rc, "payment_status": {"state": state or "no_payment", "customer_message": msg,
+                                         "gateway": getattr(self.pp, "mode", "demo"),
+                                         "gateway_note": ("demo gateway: Razorpay was simulated in-process, no real "
+                                                          "Razorpay API was called" if not getattr(self.pp, "live", False)
+                                                          else "Razorpay test-mode API (keys rzp_test_)")}}
 
     def _record_capture(self, order_id, payment_id, source):
         """Record a capture once: payment -> captured, reservation -> spent (exactly once, by state transition)."""
@@ -545,7 +562,7 @@ class Team:
         rc = self.receipts.get(pay.get("receipt_id"))
         if rc and rc.get("payment"):
             rc["payment"].update(status="COMPLETED", approval="approved by buyer", capture_id=payment_id)
-            self._stamp(rc, f"Razorpay capture COMPLETED ({payment_id}), recorded via {source}")
+            self._stamp(rc, f"Razorpay capture COMPLETED ({payment_id}), recorded via {source}: captured")
         for o in self.twin.orders:
             if o["id"] == pay.get("twin_order"):
                 o["status"] = "captured"
@@ -563,7 +580,7 @@ class Team:
             p = self.pp.get_payment(pay["payment_id"])
         except RazorpayError:
             return {"id": order_id, "status": "CONFIRMING", "payment_id": pay["payment_id"],
-                    "message": "Payment status is being confirmed with Razorpay. You will not be charged twice."}
+                    "message": words.CONFIRMING}
         st = p.get("status")
         if st == "captured":
             self._record_capture(order_id, pay["payment_id"], "reconciler")
@@ -710,7 +727,8 @@ class Team:
         o["status"] = "refunded"
         if o.get("pay_order_id"):  # an agent checkout: move the durable payment forward, credit the mandate once
             self.store.transition(o["pay_order_id"], "refunded", f"refund {ref.get('id')}")
-        return {"status": ref.get("status"), "refund_id": ref.get("id"), "pay_mode": self.pp.mode}
+        return {"status": ref.get("status"), "refund_id": ref.get("id"), "pay_mode": self.pp.mode,
+                "message": words.REFUND_INITIATED}
 
     def decide_action(self, action_id, approve, reviewer, note=""):
         """Approve (execute exactly once) or reject a proposed action."""
@@ -803,7 +821,8 @@ class Team:
             rc = self.receipts.get(h["receipt_id"])
             if rc:
                 rc["outcome"] = "release_undone"
-                self._stamp(rc, f"release undone ({note}); checkout cancelled, nothing was charged")
+                self._stamp(rc, f"release undone ({note}); checkout cancelled before any payment was recorded, so it can never "
+                                "be captured; if the buyer had authorized anyway, Razorpay refunds it automatically")
             self._audit("hold", hold_id, "undone", "merchant", note, {"pay_order_id": h.get("pay_order_id")})
             self.twin._event("review", f"Release of {hold_id} undone: checkout cancelled before payment", level="info")
             return {"hold_id": hold_id, "status": "cancelled", "pay_order_id": h.get("pay_order_id")}

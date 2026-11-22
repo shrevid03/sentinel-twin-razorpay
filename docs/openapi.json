@@ -1168,6 +1168,120 @@
         }
       }
     },
+    "/api/timeline/{account_id}": {
+      "get": {
+        "summary": "Timeline",
+        "description": "An account's recent events in order (and, with TWIN_SEQ=1, the sequence transformer's attention on each).",
+        "operationId": "timeline_api_timeline__account_id__get",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decisions/{decision_id}": {
+      "get": {
+        "summary": "Decision",
+        "description": "A stored risk decision: decision point, time, evidence (with when and where each item came from), versions.",
+        "operationId": "decision_api_decisions__decision_id__get",
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/decisions/{decision_id}/replay": {
+      "post": {
+        "summary": "Replay Decision",
+        "description": "Rebuild the graph as it was at decision time, re-run the stored model and policy, compare with what was stored.",
+        "operationId": "replay_decision_api_decisions__decision_id__replay_post",
+        "parameters": [
+          {
+            "name": "decision_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Decision Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/ledger": {
       "get": {
         "summary": "Ledger",
@@ -1272,7 +1386,7 @@
     "/api/reviewer-twin/autopilot": {
       "post": {
         "summary": "Reviewer Twin Autopilot",
-        "description": "Off by default. Only ever releases held checkouts under the cap at confidence >= 0.95.",
+        "description": "Off by default. Enabling needs a named admin and a reason (written to the ledger). It only ever releases held\ncheckouts under the cap at confidence >= 0.95; it never captures, refunds, restricts or moves money.",
         "operationId": "reviewer_twin_autopilot_api_reviewer_twin_autopilot_post",
         "parameters": [
           {
@@ -1778,6 +1892,30 @@
               }
             ],
             "title": "Enabled"
+          },
+          "admin": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 80
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 300
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "max_inr": {
             "anyOf": [

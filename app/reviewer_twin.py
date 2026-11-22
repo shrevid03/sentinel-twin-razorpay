@@ -12,7 +12,8 @@ a written reviewer policy (REVIEWER_POLICY), and always reports "trained on N re
 Shadow mode by default: it only predicts. Agreement is measured honestly: each prediction is made and stored
 *before* the human decides, and the model is refit only afterwards.
 
-Autopilot is OFF by default. When switched on it may only release held checkouts (reversible: releasing creates
+Autopilot is OFF by default and in the demo. Only a named admin with a written reason can switch it on (recorded
+in the ledger); releases are logged as "reviewer twin under policy enabled by <admin>". It may only release held checkouts (reversible: releasing creates
 a Razorpay order that still needs the buyer to pay, and an undo cancels it) under a rupee cap and at
 confidence >= 0.95. It never refunds, freezes or captures, and every autopilot decision is logged and undoable.
 """
@@ -54,7 +55,7 @@ REVIEWER_POLICY = (
     "two or more flagged accounts. Approve a refund when risk is at least 0.75."
 )
 
-AUTOPILOT_DEFAULTS = {"enabled": False, "max_inr": 5000.0, "min_confidence": 0.95}
+AUTOPILOT_DEFAULTS = {"enabled": False, "max_inr": 5000.0, "min_confidence": 0.95, "enabled_by": None, "reason": None}
 REVERSIBLE = {"hold"}  # the only kind autopilot may touch; refunds, freezes and captures are never automated
 
 
@@ -277,15 +278,39 @@ class ReviewerTwin:
                 "agreement_before": before, "status": self.status()}
 
     # ------------------------------------------------------------ autopilot
-    def set_autopilot(self, enabled=None, max_inr=None, min_confidence=None):
+    def set_autopilot(self, enabled=None, max_inr=None, min_confidence=None, admin=None, reason=None):
+        """The authorization boundary. Autopilot is OFF unless a named admin switches it on with a written reason;
+        that admin, the reason and the limits are written to the hash-chained ledger, and every release it makes is
+        attributed to "reviewer twin under policy enabled by <admin>". It only ever releases holds (creating a
+        Razorpay order the buyer must still pay); it never captures, refunds, restricts or moves money."""
+        from .compliance import MACHINE_REVIEWERS
+        admin, reason = (admin or "").strip(), (reason or "").strip()
         with self.lock:
-            if enabled is not None:
-                self.autopilot["enabled"] = bool(enabled)
+            if enabled:
+                words_ = set(admin.lower().replace("-", " ").split())
+                if not admin or any(set(m.split()) <= words_ for m in MACHINE_REVIEWERS):
+                    raise PermissionError("enabling autopilot needs a named human admin")
+                if len(reason) < 8:
+                    raise PermissionError("enabling autopilot needs a written reason (8+ characters)")
             if max_inr is not None:
                 self.autopilot["max_inr"] = max(0.0, min(float(max_inr), 12500.0))  # never above the mandate limit
             if min_confidence is not None:
                 self.autopilot["min_confidence"] = max(0.95, min(float(min_confidence), 1.0))  # never below 0.95
+            if enabled is not None:
+                self.autopilot["enabled"] = bool(enabled)
+                self.autopilot.update(enabled_by=admin if enabled else None, reason=reason if enabled else None,
+                                      changed_at=time.strftime("%Y-%m-%d %H:%M:%S"))
+                ledger = getattr(self.team, "ledger", None)
+                if ledger is not None:
+                    ledger.append({"type": "autopilot_policy", "by": admin or "admin", "enabled": bool(enabled),
+                                   "reason": reason, "max_inr": self.autopilot["max_inr"],
+                                   "min_confidence": self.autopilot["min_confidence"],
+                                   "scope": "release held checkouts only; never captures, refunds, restricts or "
+                                            "moves money"})
             return dict(self.autopilot)
+
+    def reviewer_label(self):
+        return f"reviewer twin under policy enabled by {self.autopilot.get('enabled_by') or 'unknown admin'}"
 
     def try_autopilot(self, kind, item):
         """Maybe decide one queue item. Returns the log entry, or None when the human must decide."""
@@ -299,12 +324,12 @@ class ReviewerTwin:
             return None
         if float(item.get("total") or 0) > ap["max_inr"]:
             return None
-        res = self.team.decide_hold(item["id"], True, "reviewer twin (autopilot)",
+        res = self.team.decide_hold(item["id"], True, self.reviewer_label(),
                                     f"auto-released at confidence {pred['confidence']:.2f}; undo available",
                                     learn=False)  # it never trains on its own decisions
         entry = {"at": time.strftime("%Y-%m-%d %H:%M:%S"), "hold_id": item["id"], "total": item.get("total"),
                  "confidence": pred["confidence"], "reasons": pred["reasons"], "pay_order_id": res.get("pay_order_id"),
-                 "undone": False}
+                 "undone": False, "reviewer": self.reviewer_label(), "policy_reason": ap.get("reason")}
         self.autopilot_log.append(entry)
         return entry
 

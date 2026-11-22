@@ -124,7 +124,7 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 
 **Filming tip:** the investigator takes a few seconds with Gemini; trim the wait.
 
-**Optional extra line (5 seconds):** click **Replay 30 reviewer decisions** on the Reviewer twin card and say: *"And the reviewer twin learns how I decide: it agreed with 24 of 30 decisions before seeing them, and it only advises unless I switch it on."*
+**Optional extra line (5 seconds):** click **Replay 30 reviewer decisions** on the Reviewer twin card and say: *"And the reviewer twin learns how I decide: it agreed with 24 of 30 decisions before seeing them, and it only advises: a named person decides."* Keep **Autopilot off** for the whole recording: enabling it needs a named admin and a written reason, goes into the ledger, and it could only release holds, never move money.
 
 ---
 

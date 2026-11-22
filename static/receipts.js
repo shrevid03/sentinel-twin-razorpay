@@ -28,7 +28,9 @@ async function openReceipt(id) {
       <code>${esc(r.pre_capture.decision_id)}</code> · <b>${esc(r.pre_capture.outcome)}</b> (risk ${r.pre_capture.score}) · ${esc(r.pre_capture.factors.join("; ") || "no new signals")}
       <button class="ghost" data-replay="${esc(r.pre_capture.decision_id)}">Replay decision</button><div class="replay-out" data-for="${esc(r.pre_capture.decision_id)}"></div></div>` : ""}
     ${pp ? `<div class="rc-sec"><h4>Razorpay (${esc(pp.mode !== "demo" ? "Real Razorpay test mode" : "Demo mode")})</h4>
-      Order <code>${esc(pp.order_id)}</code> · status ${esc(pp.status)} · ${esc(pp.approval)} · payment ${esc(pp.capture_id || "not yet captured")}</div>` : ""}
+      Order <code>${esc(pp.order_id)}</code> · status ${esc(pp.status)} · ${esc(pp.approval)} · payment ${esc(pp.capture_id || "not captured")}</div>` : ""}
+    ${r.payment_status ? `<div class="rc-sec"><h4>Money: what the customer is told</h4><b>${esc(r.payment_status.state.replace(/_/g, " "))}</b> · ${esc(r.payment_status.customer_message)}
+      <div class="muted">Gateway: ${esc(r.payment_status.gateway_note)}</div></div>` : ""}
     ${rv ? `<div class="rc-sec"><h4>Human review</h4>${esc(rv.hold_id)} · ${esc(rv.status)}${rv.reviewer ? ` by ${esc(rv.reviewer)}` : ""}${rv.note ? ` · "${esc(rv.note)}"` : ""}</div>` : ""}
     <div class="rc-sec"><h4>Timeline</h4>${r.timeline.map((t) => `<div><span class="muted">${esc(t.at)}</span> ${esc(t.event)}</div>`).join("")}</div>`;
   $("#modal").hidden = false;

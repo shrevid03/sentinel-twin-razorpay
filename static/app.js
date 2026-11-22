@@ -411,7 +411,7 @@ async function renderPay(co) {
     <div id="pp-buttons"></div></div>`;
   const charge = fmtCharge({ amount: co.amount, currency: co.currency });
   const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ Razorpay payment <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
-  const fail = (e) => addMsg("sys", "Payment not captured: " + esc(e?.message || e));
+  const fail = (e) => { const m = String(e?.message || e); addMsg("sys", esc(/captured|charged|confirm/i.test(m) ? m : "Payment not completed: " + m)); };
   const capture = (body) => api(`/api/razorpay/orders/${encodeURIComponent(co.pay_order_id)}/capture`, body).then(done, fail);
   if (CFG.pay_mode !== "demo" && CFG.razorpay_key_id) {
     $("#pp-buttons").innerHTML = `<button id="rzp-pay" class="rzp-btn">Pay ${esc(charge)} with Razorpay</button> <small class="muted">Test mode: pick UPI and enter success@razorpay.</small>`;
@@ -422,9 +422,9 @@ async function renderPay(co) {
         name: "Sentinel Twin Demo Store", description: co.cart.map((c) => c.name).join(", ").slice(0, 250),
         theme: { color: "#0C2451" },
         handler: (resp) => capture(resp),  // {razorpay_payment_id, razorpay_order_id, razorpay_signature}
-        modal: { ondismiss: () => addMsg("sys", "Razorpay Checkout closed; nothing was charged.") },
+        modal: { ondismiss: () => addMsg("sys", "Razorpay Checkout was closed before the payment finished, so nothing was captured. If your bank still shows a debit, Razorpay reverses it automatically (auto-refund after the capture window, then 5-7 working days).") },
       });
-      rzp.on("payment.failed", (r) => fail(r?.error?.description || "payment failed"));
+      rzp.on("payment.failed", (r) => fail("Payment failed (" + (r?.error?.description || "declined") + "), so it was not captured. If your bank shows a debit, Razorpay reverses it automatically."));
       rzp.open();
     };
   } else {

@@ -54,7 +54,8 @@ async function loadReviewerTwin() {
     <p class="muted small">Agreement over the last ${ag.n} decisions${agr.n ? ` (${agr.n} real: ${Math.round(agr.rate * 100)}%)` : ""}, each predicted <i>before</i> the human decided. ${esc(s.label)}.
       Seeded decisions are synthetic, from a written policy: ${esc(s.policy)}</p>
     <div class="row"><button id="btn-rt-replay" class="ghost">Replay 30 reviewer decisions</button>
-      <label class="toggle"><input type="checkbox" id="rt-auto" ${s.autopilot.enabled ? "checked" : ""}> Autopilot: release held checkouts up to ${money(s.autopilot.max_inr)} at ≥ ${Math.round(s.autopilot.min_confidence * 100)}% (never refunds, restrictions or captures)</label></div>
+      <label class="toggle"><input type="checkbox" id="rt-auto" ${s.autopilot.enabled ? "checked" : ""}> Autopilot (off by default; a named admin must enable it with a reason): release held checkouts up to ${money(s.autopilot.max_inr)} at ≥ ${Math.round(s.autopilot.min_confidence * 100)}% (never captures, refunds, restricts or moves money)</label>
+      ${s.autopilot.enabled ? `<div class="small warn">Enabled by ${esc(s.autopilot.enabled_by)}: "${esc(s.autopilot.reason)}". Releases are logged as "reviewer twin under policy enabled by ${esc(s.autopilot.enabled_by)}".</div>` : ""}</div>
     <details><summary class="muted">What it weighs</summary><table class="dtable">${s.weights.slice(0, 8).map((w) => `<tr><td>${esc(w.feature)}</td><td class="n ${w.weight > 0 ? "ok" : "bad"}">${w.weight > 0 ? "+" : ""}${w.weight.toFixed(2)}</td></tr>`).join("")}</table></details>
     ${s.recent.length ? `<details><summary class="muted">Recent decisions: twin vs human</summary><table class="dtable"><tr><th>Item</th><th>Source</th><th>Twin said</th><th>Human</th></tr>
       ${s.recent.map((r) => `<tr><td>${esc(r.id || "")}</td><td>${esc(r.source)}</td><td>${r.prediction ? esc(r.prediction.decision) + " " + Math.round(r.prediction.confidence * 100) + "%" : "–"}</td>
@@ -63,7 +64,13 @@ async function loadReviewerTwin() {
   $("#btn-rt-replay").onclick = async () => { const b = $("#btn-rt-replay"); b.disabled = true; b.textContent = "Replaying…";
     try { const r = await api("/api/reviewer-twin/replay", {}); b.textContent = `Agreement ${Math.round(r.agreement.rate * 100)}% on 30 replayed decisions`; }
     catch (e) { alert(e.message); } loadReviewerTwin(); };
-  $("#rt-auto").onchange = async (e) => { try { await api("/api/reviewer-twin/autopilot", { enabled: e.target.checked }); } catch (err) { alert(err.message); } loadReviewerTwin(); };
+  $("#rt-auto").onchange = async (e) => {
+    const body = { enabled: e.target.checked };
+    if (body.enabled) {  // the authorization boundary: a named admin and a reason, written to the ledger
+      body.admin = prompt("Autopilot only releases held checkouts (never captures, refunds or moves money). Your name (admin):") || "";
+      body.reason = body.admin ? prompt("Reason for enabling autopilot (recorded in the ledger):") || "" : "";
+    }
+    try { await api("/api/reviewer-twin/autopilot", body); } catch (err) { alert(err.message); } loadReviewerTwin(); };
 }
 document.addEventListener("click", async (e) => {
   const u = e.target.closest("[data-undo]"); if (!u) return;
