@@ -106,6 +106,15 @@ The whole speech, scene by scene, with what to click and how to film it. About 4
 
 ---
 
+## Scene 5c: Proof, not claims (15 seconds, optional; trim Scene 3 to fit)
+
+**On screen:** open a decision receipt and click **Replay decision**; then show the README's "Crash-safe payments" and "Which model decides" tables for a second each.
+
+**Say:**
+> "Every decision can be replayed on the graph exactly as it was, so later evidence can't rewrite history. Payments survive a crash: if the server dies mid-capture, it reconciles with Razorpay and charges once. And I put my own model on trial: where it doesn't earn its place, the README says so."
+
+---
+
 ## Scene 6: Humans stay in charge (2:10–2:25)
 
 **On screen:** click **Investigator** → **Investigate riskiest**. Let the case report appear. In **Review queue**, click **Approve** on one proposal, then open **Audit trail**.
