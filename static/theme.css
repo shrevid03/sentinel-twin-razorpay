@@ -1,0 +1,76 @@
+/* Sentinel Twin design tokens: one identity for the landing page and the app. Viridian on deep green-black.
+   Contrast (WCAG): --text on --bg 16.6:1, --muted on --bg-2 7.5:1, --glow on --bg-2 7.7:1, white on --primary 4.5:1,
+   --danger on --bg-2 5.7:1, --warn on --bg-2 9.7:1. Viridian itself (3.8:1) is used for fills, never small text. */
+@font-face { font-family: "Fraunces"; src: url("/static/vendor/fonts/fraunces-latin-full-normal.woff2") format("woff2-variations"), url("/static/vendor/fonts/fraunces-latin-full-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "Fraunces"; src: url("/static/vendor/fonts/fraunces-latin-full-italic.woff2") format("woff2-variations"), url("/static/vendor/fonts/fraunces-latin-full-italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("/static/vendor/fonts/inter-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("/static/vendor/fonts/inter-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("/static/vendor/fonts/inter-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("/static/vendor/fonts/inter-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("/static/vendor/fonts/jetbrains-mono-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-display: swap; }
+
+:root {
+  /* surfaces */
+  --bg: #06120F;          /* page */
+  --bg-2: #0B1F1A;        /* raised page areas, nav */
+  --surface: #0F2620;     /* cards */
+  --surface-2: #12302A;   /* inputs, table headers, hover */
+  --line: rgba(143, 179, 166, .16);
+  --line-strong: rgba(143, 179, 166, .32);
+  /* brand */
+  --primary: #40826D;     /* viridian: fills, buttons, active states */
+  --primary-ink: #FFFFFF; /* text on --primary (4.5:1) */
+  --glow: #5FBF9F;        /* highlights, graph edges, accent text */
+  --glow-soft: rgba(95, 191, 159, .16);
+  --deep: #1F4D40;
+  /* text */
+  --text: #E6F2EC;
+  --muted: #8FB3A6;
+  /* status */
+  --danger: #FF5C5C;      /* fraud, block */
+  --danger-soft: rgba(255, 92, 92, .14);
+  --warn: #F5B84B;        /* review, hold */
+  --warn-soft: rgba(245, 184, 75, .14);
+  --ok: #5FBF9F;
+  --ok-soft: rgba(95, 191, 159, .14);
+  /* type */
+  --font-display: "Fraunces", Georgia, serif;
+  --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fs-xs: 12px; --fs-sm: 13.5px; --fs-md: 15px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 34px; --fs-3xl: clamp(40px, 6vw, 76px);
+  /* shape and motion */
+  --r-sm: 8px; --r-md: 14px; --r-lg: 22px; --r-pill: 999px;
+  --shadow: 0 18px 50px -20px rgba(0, 0, 0, .7), 0 0 0 1px var(--line);
+  --glass: linear-gradient(160deg, rgba(95, 191, 159, .08), rgba(15, 38, 32, .55) 40%, rgba(6, 18, 15, .6));
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --t: .22s;
+}
+
+html { background: var(--bg); color: var(--text); color-scheme: dark; }
+body { margin: 0; font-family: var(--font-ui); font-size: var(--fs-md); line-height: 1.55; background: var(--bg); color: var(--text);
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+h1, h2, h3, .display { font-family: var(--font-display); font-variation-settings: "SOFT" 100, "WONK" 0, "opsz" 96; font-weight: 650; letter-spacing: -.02em; line-height: 1.05; margin: 0; }
+a { color: var(--glow); }
+code, .mono { font-family: var(--font-mono); font-size: .9em; }
+::selection { background: var(--primary); color: #fff; }
+:focus-visible { outline: 2px solid var(--glow); outline-offset: 2px; border-radius: 6px; }
+
+/* one button system: .btn (primary), .btn.ghost, .btn.danger, .btn.small; plain <button> in the app maps to these */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: .5em; padding: .72em 1.25em; border-radius: var(--r-pill);
+  border: 1px solid transparent; background: var(--primary); color: var(--primary-ink); font: 600 var(--fs-md)/1 var(--font-ui);
+  text-decoration: none; cursor: pointer; transition: transform var(--t) var(--ease), background var(--t), box-shadow var(--t), border-color var(--t);
+  box-shadow: 0 10px 30px -12px rgba(95, 191, 159, .6); }
+.btn:hover { background: #4C957E; box-shadow: 0 14px 36px -12px rgba(95, 191, 159, .8); }
+.btn:active { transform: translateY(1px) scale(.98); }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--line-strong); box-shadow: none; }
+.btn.ghost:hover { border-color: var(--glow); background: var(--glow-soft); }
+.btn.big { padding: .95em 1.7em; font-size: var(--fs-lg); }
+
+.pill-tag { display: inline-flex; align-items: center; gap: .45em; padding: .3em .8em; border-radius: var(--r-pill); font-size: var(--fs-xs);
+  font-weight: 600; letter-spacing: .02em; border: 1px solid var(--line-strong); color: var(--muted); background: rgba(6, 18, 15, .5); }
+.pill-tag i { width: 7px; height: 7px; border-radius: 50%; background: var(--glow); box-shadow: 0 0 10px var(--glow); }
+.pill-tag.warn i { background: var(--warn); box-shadow: 0 0 10px var(--warn); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001s !important; animation-iteration-count: 1 !important; transition-duration: .001s !important; scroll-behavior: auto !important; }
+}
