@@ -1,6 +1,11 @@
 /* Sentinel Twin design tokens: one identity for the landing page and the app. Viridian on deep green-black.
    Contrast (WCAG): --text on --bg 16.6:1, --muted on --bg-2 7.5:1, --glow on --bg-2 7.7:1, white on --primary 4.5:1,
    --danger on --bg-2 5.7:1, --warn on --bg-2 9.7:1. Viridian itself (3.8:1) is used for fills, never small text. */
+@font-face { font-family: "Cormorant Garamond"; src: url("/static/vendor/fonts/cormorant-garamond-latin-500-normal.woff2") format("woff2"); font-weight: 500; font-style: normal; font-display: swap; }
+@font-face { font-family: "Cormorant Garamond"; src: url("/static/vendor/fonts/cormorant-garamond-latin-600-normal.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: swap; }
+@font-face { font-family: "Cormorant Garamond"; src: url("/static/vendor/fonts/cormorant-garamond-latin-700-normal.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Cormorant Garamond"; src: url("/static/vendor/fonts/cormorant-garamond-latin-500-italic.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Cormorant Garamond"; src: url("/static/vendor/fonts/cormorant-garamond-latin-600-italic.woff2") format("woff2"); font-weight: 600; font-style: italic; font-display: swap; }
 @font-face { font-family: "Fraunces"; src: url("/static/vendor/fonts/fraunces-latin-full-normal.woff2") format("woff2-variations"), url("/static/vendor/fonts/fraunces-latin-full-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
 @font-face { font-family: "Fraunces"; src: url("/static/vendor/fonts/fraunces-latin-full-italic.woff2") format("woff2-variations"), url("/static/vendor/fonts/fraunces-latin-full-italic.woff2") format("woff2"); font-weight: 100 900; font-style: italic; font-display: swap; }
 @font-face { font-family: "Inter"; src: url("/static/vendor/fonts/inter-latin-400-normal.woff2") format("woff2"); font-weight: 400; font-display: swap; }
@@ -23,6 +28,9 @@
   --glow: #5FBF9F;        /* highlights, graph edges, accent text */
   --glow-soft: rgba(95, 191, 159, .16);
   --deep: #1F4D40;
+  /* moodboard: dark-academia viridian, moonlight and a little gold */
+  --sage-1: #2B3A33; --sage-2: #3E5248; --sage-hi: #9DB5A8; --moon: #E8F5EE; --gold: #C9A45C;
+  --teal-1: #1E5A4C; --teal-2: #2E7D6B; --teal-3: #3FA58A; --teal-4: #7FD1B9;
   /* text */
   --text: #E6F2EC;
   --muted: #8FB3A6;
@@ -34,7 +42,8 @@
   --ok: #5FBF9F;
   --ok-soft: rgba(95, 191, 159, .14);
   /* type */
-  --font-display: "Fraunces", Georgia, serif;
+  --font-display: "Cormorant Garamond", "Fraunces", Georgia, serif;
+  --font-accent: "Fraunces", Georgia, serif;
   --font-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --fs-xs: 12px; --fs-sm: 13.5px; --fs-md: 15px; --fs-lg: 18px; --fs-xl: 24px; --fs-2xl: 34px; --fs-3xl: clamp(40px, 6vw, 76px);
@@ -49,7 +58,9 @@
 html { background: var(--bg); color: var(--text); color-scheme: dark; }
 body { margin: 0; font-family: var(--font-ui); font-size: var(--fs-md); line-height: 1.55; background: var(--bg); color: var(--text);
   -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
-h1, h2, h3, .display { font-family: var(--font-display); font-variation-settings: "SOFT" 100, "WONK" 0, "opsz" 96; font-weight: 650; letter-spacing: -.02em; line-height: 1.05; margin: 0; }
+h1, h2, h3, .display { font-family: var(--font-display); font-weight: 600; letter-spacing: -.005em; line-height: 1.05; margin: 0; }
+.spaced { text-transform: uppercase; letter-spacing: .32em; }
+.tilde { font-family: var(--font-display); font-style: italic; font-weight: 500; color: var(--sage-hi); letter-spacing: .02em; }
 a { color: var(--glow); }
 code, .mono { font-family: var(--font-mono); font-size: .9em; }
 ::selection { background: var(--primary); color: #fff; }

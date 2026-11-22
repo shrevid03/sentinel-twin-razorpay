@@ -6,82 +6,118 @@
 <title>Sentinel Twin · safe AI checkout, before money moves</title>
 <meta name="description" content="A risk layer for agent-led payments on Razorpay: a digital twin and a graph attention network stop unsafe agent checkouts before money moves.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z' fill='%2340826D'/><g fill='%23E6F2EC'><circle cx='11' cy='12' r='2.2'/><circle cx='21' cy='11' r='2.2'/><circle cx='16' cy='19' r='2.6'/></g><path d='M11 12l5 7 5-8' stroke='%23E6F2EC' stroke-width='1.4' fill='none'/></svg>">
-<link rel="preload" href="/static/vendor/fonts/fraunces-latin-full-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/static/vendor/fonts/cormorant-garamond-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <script>/* the scroll story is for wide screens that allow motion; everything else gets the plain, fully visible page */
 if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");</script>
-<link rel="stylesheet" href="/static/theme.css?v=1">
-<link rel="stylesheet" href="/static/landing.css?v=2">
+<link rel="stylesheet" href="/static/theme.css?v=3">
+<link rel="stylesheet" href="/static/landing.css?v=4">
 </head>
 <body>
 <div class="glows" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
+<div class="beam" aria-hidden="true"></div>
 <div class="grain" aria-hidden="true"></div>
+<svg class="edge-ivy left" aria-hidden="true" viewBox="0 0 80 1000" preserveAspectRatio="none"><path class="vine" d=""/><g class="lv"></g></svg>
+<svg class="edge-ivy right" aria-hidden="true" viewBox="0 0 80 1000" preserveAspectRatio="none"><path class="vine" d=""/><g class="lv"></g></svg>
 
 <header class="top">
-  <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z" fill="#40826D"/><path d="M11 12l5 7 5-8" stroke="#E6F2EC" stroke-width="1.4" fill="none"/><g fill="#E6F2EC"><circle cx="11" cy="12" r="2.2"/><circle cx="21" cy="11" r="2.2"/><circle cx="16" cy="19" r="2.6"/></g></svg>Sentinel Twin</a>
+  <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z" fill="#40826D"/><path d="M11 12l5 7 5-8" stroke="#E6F2EC" stroke-width="1.4" fill="none"/><g fill="#E6F2EC"><circle cx="11" cy="12" r="2.2"/><circle cx="21" cy="11" r="2.2"/><circle cx="16" cy="19" r="2.6"/></g></svg><span class="spaced">Sentinel Twin</span></a>
   <div class="right"><span class="pill-tag warn"><i></i>Demo mode · Razorpay test-mode ready</span><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
 </header>
 
-<!-- 1. HERO: the camera zooms into one order -->
+<!-- 1. HERO: a gothic window onto a moonlit, smoky sky; the camera pushes through it -->
 <section class="hero" id="top">
   <div class="stage">
-    <svg id="net" aria-hidden="true" preserveAspectRatio="xMidYMid slice"></svg>
+    <div class="moon" aria-hidden="true"></div>
+    <svg class="window" id="window" viewBox="0 0 1600 1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+      <defs>
+        <pattern id="stone" patternUnits="userSpaceOnUse" width="512" height="512"><rect width="512" height="512" fill="#17221D"/><image id="stoneImg" width="512" height="512" href=""/></pattern>
+        <linearGradient id="wallShade" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0A120F" stop-opacity=".2"/><stop offset=".55" stop-color="#0A120F" stop-opacity=".05"/><stop offset="1" stop-color="#030806" stop-opacity=".85"/></linearGradient>
+        <radialGradient id="wallLight" cx="50%" cy="38%" r="55%"><stop offset="0" stop-color="#9DB5A8" stop-opacity=".22"/><stop offset=".5" stop-color="#3E5248" stop-opacity=".06"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+      </defs>
+      <path class="wall" fill-rule="evenodd" fill="url(#stone)" d="M0 0H1600V1000H0Z M540 1000V520A520 520 0 0 1 800 70A520 520 0 0 1 1060 520V1000Z"/>
+      <path fill-rule="evenodd" fill="url(#wallShade)" d="M0 0H1600V1000H0Z M540 1000V520A520 520 0 0 1 800 70A520 520 0 0 1 1060 520V1000Z"/>
+      <path fill-rule="evenodd" fill="url(#wallLight)" d="M0 0H1600V1000H0Z M540 1000V520A520 520 0 0 1 800 70A520 520 0 0 1 1060 520V1000Z"/>
+      <g class="moulding">
+        <path d="M520 1000V520A540 540 0 0 1 800 52A540 540 0 0 1 1080 520V1000" />
+        <path class="thin" d="M540 1000V520A520 520 0 0 1 800 70A520 520 0 0 1 1060 520V1000" />
+      </g>
+      <g class="tracery">
+        <path d="M800 330V1000"/>
+        <path d="M540 640A260 260 0 0 1 670 415A260 260 0 0 1 800 640"/>
+        <path d="M800 640A260 260 0 0 1 930 415A260 260 0 0 1 1060 640"/>
+        <circle cx="800" cy="285" r="78"/>
+        <path d="M800 215a34 34 0 0 1 0 68a34 34 0 0 1 0-68zM730 285a34 34 0 0 1 68 0a34 34 0 0 1-68 0zM802 285a34 34 0 0 1 68 0a34 34 0 0 1-68 0zM800 287a34 34 0 0 1 0 68a34 34 0 0 1 0-68z" class="foil"/>
+        <path d="M540 820H1060" class="thin"/>
+      </g>
+      <g class="ivy" id="windowIvy"></g>
+    </svg>
     <div class="hero-copy" id="heroCopy">
-      <div class="kicker">Risk layer for agent-led payments</div>
-      <h1>Sentinel<br><em>Twin</em></h1>
-      <p class="lede"><b>An AI agent shops and pays on Razorpay.</b> A digital twin of your business checks every order with a graph model, and stops the unsafe ones before money moves.</p>
-      <div class="cta"><a class="btn big magnetic" href="/app">Open the live twin →</a><a class="btn ghost big magnetic" href="#story">See how it works</a></div>
+      <p class="tilde">~ a risk layer for agent-led payments ~</p>
+      <h1 class="spaced">Sentinel <span>Twin</span></h1>
+      <p class="sub spaced">agentic payments · fraud graph · replayable decisions</p>
+      <p class="lede">An AI agent shops and pays on Razorpay. A digital twin of your business checks every order with a graph model, and stops the unsafe ones <b>before money moves</b>.</p>
+      <div class="cta"><a class="btn big magnetic" href="/app">Open the live twin →</a><a class="btn ghost big magnetic" href="#story">Step inside</a></div>
     </div>
     <div class="ordercard" id="orderCard">
-      <div class="kicker">One order, zoomed in</div>
+      <p class="tilde">~ one order, seen up close ~</p>
       <h3>ORD-0912 · Mechanical keyboard</h3>
       <div class="row"><span>Amount</span><b>₹9,999</b></div>
       <div class="row"><span>Buyer</span><b>45-day-old account, KYC done</b></div>
       <div class="row"><span>Device and IP</span><b>own device · home IP</b></div>
       <div class="row"><span>Rules engine</span><b class="ok-dot">0.09 · approve</b></div>
     </div>
-    <div class="scrollhint" aria-hidden="true">Scroll<span></span></div>
+    <div class="scrollhint" aria-hidden="true">step through<span></span></div>
   </div>
 </section>
 
-<!-- 2. THE RING -->
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1600 90" preserveAspectRatio="none"><path class="vein" d="M0 52C180 30 260 70 420 48S700 20 860 46S1150 74 1300 40S1520 36 1600 50"/><path class="vein thin" d="M0 62C220 58 300 40 520 60S820 70 980 52S1300 64 1600 58"/></svg></div>
+
+<!-- 2. THE RING: ivy on a stone wall; the vines are the graph's edges -->
 <section class="story" id="story">
   <div class="wrap grid">
     <div class="steps">
-      <div class="step"><div class="eyebrow">01 · Looks clean</div><h2>Every rule says yes. Suspiciously yes.</h2>
+      <div class="step"><p class="eyebrow tilde">~ i · looks clean ~</p><h2>Every rule says yes. Suspiciously yes.</h2>
         <p>A 45-day-old account, KYC done, its own device, a normal amount. <b>A rules engine approves it at 0.09.</b></p></div>
-      <div class="step"><div class="eyebrow">02 · Zoom out</div><h2>Zoom out, and the plot thickens.</h2>
+      <div class="step"><p class="eyebrow tilde">~ ii · the ivy creeps ~</p><h2>Follow the vines.</h2>
         <p>At signup it verified a phone number by OTP. <b>Three accounts already known as fraud use the same number.</b> That link existed before checkout, so the decision may use it.</p></div>
-      <div class="step"><div class="eyebrow">03 · Caught before checkout</div><h2>Not a customer. A whole ring.</h2>
+      <div class="step"><p class="eyebrow tilde">~ iii · the ring blooms ~</p><h2>Not a customer. A whole ring.</h2>
         <p>The graph attention network sees the ring and the shipped engine scores the order <b>0.63: held for review</b>. No Razorpay order is created until a person decides.</p></div>
     </div>
-    <div class="visual"><div class="panel" id="ring">
+    <div class="visual"><div class="panel stonewall" id="ring">
       <h4>The twin's graph around this order</h4>
-      <svg viewBox="0 0 560 360" role="img" aria-label="The new account linked through a shared phone number to three known-fraud accounts">
-        <circle class="halo" cx="420" cy="190" r="118"/>
-        <path class="l" d="M140 190 L270 190"/>
-        <path class="l lit" d="M270 190 L400 92"/><path class="l lit" d="M270 190 L452 196"/><path class="l lit" d="M270 190 L392 292"/>
-        <path class="l" d="M400 92 L452 196 L392 292 M400 92 L500 70 M452 196 L520 260"/>
-        <path class="l" d="M140 190 L70 120 M140 190 L60 250 M70 120 L150 70"/>
+      <svg viewBox="0 0 560 360" role="img" aria-label="The new account linked through a shared phone number to three known-fraud accounts, drawn as ivy on a stone wall">
+        <circle class="halo" cx="430" cy="190" r="120"/>
+        <path class="vine" d="M140 190C180 170 230 210 270 190"/>
+        <path class="vine lit" d="M270 190C320 160 350 110 400 92"/>
+        <path class="vine lit" d="M270 190C330 200 390 176 452 196"/>
+        <path class="vine lit" d="M270 190C300 240 350 280 392 292"/>
+        <path class="vine" d="M400 92C440 120 430 170 452 196M452 196C430 240 410 260 392 292M400 92C440 70 470 80 500 70M452 196C480 210 500 240 520 260"/>
+        <path class="vine" d="M140 190C110 170 90 140 70 120M140 190C110 210 80 230 60 250M70 120C100 100 120 80 150 70"/>
+        <g class="leaves"></g>
         <circle class="acc" cx="70" cy="120" r="12"/><circle class="acc" cx="60" cy="250" r="11"/><circle class="acc" cx="150" cy="70" r="10"/>
         <circle class="me" cx="140" cy="190" r="17"/>
         <rect class="phone" x="259" y="179" width="22" height="22" rx="5" transform="rotate(45 270 190)"/>
-        <circle class="fraud" cx="400" cy="92" r="15"/><circle class="fraud" cx="452" cy="196" r="15"/><circle class="fraud" cx="392" cy="292" r="15"/>
+        <g class="bloom" transform="translate(400 92)"></g><g class="bloom" transform="translate(452 196)"></g><g class="bloom" transform="translate(392 292)"></g>
+        <circle class="fraud" cx="400" cy="92" r="13"/><circle class="fraud" cx="452" cy="196" r="13"/><circle class="fraud" cx="392" cy="292" r="13"/>
         <circle class="acc" cx="500" cy="70" r="10"/><circle class="acc" cx="520" cy="260" r="10"/>
-        <text x="96" y="230">new account</text><text x="230" y="230">phone (OTP)</text><text x="420" y="134">known fraud</text>
+        <text x="96" y="232">new account</text><text x="230" y="232">phone (OTP)</text><text x="438" y="140">known fraud</text>
       </svg>
       <div class="score"><b id="ringScore">0.63</b><span class="verdict review" id="ringVerdict">review</span><small>rules alone: 0.09 approve</small></div>
-      <div class="legend"><span><i style="background:var(--glow)"></i>this account</span><span><i style="background:var(--warn)"></i>shared phone</span><span><i style="background:var(--danger)"></i>known fraud</span></div>
+      <div class="legend"><span><i style="background:#5FBF9F"></i>this account</span><span><i style="background:#F5B84B"></i>shared phone</span><span><i style="background:#FF5C5C"></i>known fraud</span></div>
     </div></div>
   </div>
 </section>
 
-<!-- 3. THE MANDATE -->
-<section class="story" id="mandate">
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1600 90" preserveAspectRatio="none"><path class="vein" d="M0 40C200 64 360 24 560 46S880 70 1060 40S1400 30 1600 48"/><path class="vein thin" d="M0 58C260 44 420 70 640 56S1000 40 1200 60S1480 66 1600 54"/></svg></div>
+
+<!-- 3. THE MANDATE: under great dark leaves -->
+<section class="story leafy" id="mandate">
+  <div class="scenery" aria-hidden="true"><svg class="leaves-bg left" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice"></svg><svg class="leaves-bg right" viewBox="0 0 400 900" preserveAspectRatio="xMidYMid slice"></svg></div>
   <div class="wrap grid">
     <div class="steps">
-      <div class="step"><div class="eyebrow">04 · Agent shopping</div><h2>An agent with a shopping list, and a curfew.</h2>
+      <div class="step"><p class="eyebrow tilde">~ iv · a list and a curfew ~</p><h2>An agent with a shopping list, and a curfew.</h2>
         <p>You approve a limit once, like UPI Reserve Pay: <b>₹12,500 per order, ₹35,000 a month</b>. The agent searches, builds a cart and asks to pay, in chat or voice, in ten Indian languages.</p></div>
-      <div class="step"><div class="eyebrow">05 · Checked in code</div><h2>No sweet-talking the limits.</h2>
+      <div class="step"><p class="eyebrow tilde">~ v · no sweet-talking ~</p><h2>Limits live in code, not in the prompt.</h2>
         <p>Blocked categories, per-order limits and the monthly budget are checked by the server. <b>The budget is reserved atomically</b> before a checkout opens, so two parallel carts can never overspend.</p></div>
     </div>
     <div class="visual"><div class="panel cart" id="cartPanel">
@@ -95,15 +131,28 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
   </div>
 </section>
 
-<!-- 4. THE PIPELINE -->
-<section class="story" id="pipeline">
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1600 90" preserveAspectRatio="none"><path class="vein" d="M0 50C240 30 380 68 600 44S960 22 1160 50S1460 66 1600 42"/><path class="vein thin" d="M0 60C180 66 420 48 700 62S1100 50 1400 64S1560 56 1600 60"/></svg></div>
+
+<!-- 4. THE PIPELINE: over folds of dark silk -->
+<section class="story silky" id="pipeline">
+  <div class="scenery" aria-hidden="true">
+  <svg class="silk" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <linearGradient id="silkA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0B1F1A"/><stop offset=".45" stop-color="#2E7D6B"/><stop offset=".55" stop-color="#7FD1B9" stop-opacity=".55"/><stop offset=".7" stop-color="#1E5A4C"/><stop offset="1" stop-color="#06120F"/></linearGradient>
+      <linearGradient id="silkB" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06120F"/><stop offset=".5" stop-color="#1E5A4C"/><stop offset=".6" stop-color="#3FA58A" stop-opacity=".5"/><stop offset="1" stop-color="#06120F"/></linearGradient>
+    </defs>
+    <path class="fold f1" fill="url(#silkA)" d="M-100 260C200 120 420 420 760 300S1260 80 1700 240V420C1300 300 1080 560 760 470S220 300 -100 470Z"/>
+    <path class="fold f2" fill="url(#silkB)" d="M-100 520C260 380 520 700 860 560S1380 380 1700 520V700C1360 600 1140 820 820 720S240 600 -100 760Z"/>
+    <path class="fold f3" fill="url(#silkA)" opacity=".6" d="M-100 80C300 -20 600 220 900 120S1400 -40 1700 80V200C1400 120 1100 300 860 230S300 80 -100 220Z"/>
+  </svg>
+  </div>
   <div class="wrap grid">
     <div class="steps">
-      <div class="step"><div class="eyebrow">06 · Two decision points</div><h2>Checked before checkout, again before capture.</h2>
+      <div class="step"><p class="eyebrow tilde">~ vi · two gates ~</p><h2>Checked before checkout, again before capture.</h2>
         <p>Orders use <b>manual capture</b>. After the buyer pays in Razorpay Checkout, the server verifies the signature, then checks the payer's UPI ID, card and phone from <i>this</i> payment before any money is captured.</p></div>
-      <div class="step"><div class="eyebrow">07 · The risky one stops</div><h2>The risky one stops at the door.</h2>
+      <div class="step"><p class="eyebrow tilde">~ vii · stopped at the door ~</p><h2>The risky one stops at the door.</h2>
         <p>A second account pays from a UPI ID three ring members used: <b>0.61, not captured</b>. The customer is told their bank may show a temporary hold that Razorpay reverses automatically, not a vague "nothing was charged".</p></div>
-      <div class="step"><div class="eyebrow">08 · Crash-safe</div><h2>Pull the plug. Still charged once.</h2>
+      <div class="step"><p class="eyebrow tilde">~ viii · pull the plug ~</p><h2>A crash can't charge twice.</h2>
         <p>"Capture requested" is written before Razorpay is called. If the worker dies mid-capture, <b>a reconciler asks Razorpay what happened</b> and records it exactly once.</p></div>
     </div>
     <div class="visual"><div class="panel" id="pipePanel">
@@ -126,21 +175,38 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
   </div>
 </section>
 
-<!-- 5. RED TEAM -->
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1600 90" preserveAspectRatio="none"><path class="vein" d="M0 46C200 70 420 28 640 50S1000 66 1220 38S1480 50 1600 44"/><path class="vein thin" d="M0 60C300 50 500 66 760 54S1160 64 1380 52S1540 62 1600 58"/></svg></div>
+
+<!-- 5. RED TEAM: a misty lake at night; attack waves ripple the water -->
 <section class="story" id="redteam">
   <div class="wrap grid">
     <div class="steps">
-      <div class="step"><div class="eyebrow">09 · Attack it</div><h2>We hired a burglar. A synthetic one.</h2>
+      <div class="step"><p class="eyebrow tilde">~ ix · a burglar, invited ~</p><h2>We hired a burglar. A synthetic one.</h2>
         <p>Eight playbooks: fraud rings, card testing, account takeover, synthetic identities, device farms, layering cycles, mule fan-out and collusion. It adapts whatever got caught.</p></div>
-      <div class="step"><div class="eyebrow">10 · Fix it, prove it</div><h2>The walls get thicker, and we measure it.</h2>
+      <div class="step"><p class="eyebrow tilde">~ x · the walls thicken ~</p><h2>Defences harden, measured on unseen attacks.</h2>
         <p>A simulator searches 216 policies, prices the cost to good customers, then replays fresh attacks. <b>₹14,46,140 of unseen attack traffic:</b> rules alone stop 22.4%, the graph 86.7%, the hardened policy 93.9%, with no good orders blocked.</p></div>
     </div>
-    <div class="visual"><div class="panel" id="attack">
+    <div class="visual"><div class="panel lake" id="attack">
       <h4>Unseen attacks intercepted</h4>
-      <svg viewBox="0 0 560 170" aria-hidden="true">
+      <svg viewBox="0 0 560 230" aria-hidden="true">
+        <defs>
+          <linearGradient id="lakeSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0B1F1A"/><stop offset="1" stop-color="#1E3A31"/></linearGradient>
+          <linearGradient id="lakeWater" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#16302A"/><stop offset="1" stop-color="#050D0B"/></linearGradient>
+          <radialGradient id="lakeMoon"><stop offset="0" stop-color="#E8F5EE"/><stop offset=".35" stop-color="#BFE0D2" stop-opacity=".7"/><stop offset="1" stop-color="#9DB5A8" stop-opacity="0"/></radialGradient>
+          <linearGradient id="reflect" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#E8F5EE" stop-opacity=".55"/><stop offset="1" stop-color="#E8F5EE" stop-opacity="0"/></linearGradient>
+          <radialGradient id="wisp"><stop offset="0" stop-color="#E8FFF4"/><stop offset=".3" stop-color="#7FD1B9" stop-opacity=".8"/><stop offset="1" stop-color="#3FA58A" stop-opacity="0"/></radialGradient>
+        </defs>
+        <rect width="560" height="120" fill="url(#lakeSky)"/>
+        <circle cx="420" cy="44" r="46" fill="url(#lakeMoon)"/><circle cx="420" cy="44" r="15" fill="#E8F5EE"/>
+        <path fill="#0A1612" d="M0 120V92l14-24 10 18 12-30 14 26 9-14 13 22 10-34 12 30 11-18 12 22 14-28 12 24 10-12 15 22 10-30 12 26 13-16 12 22 11-26 14 30 9-14 12 18 13-24 11 20 12-30 14 26 10-12 13 22 12-28 11 24 13-16 12 20 14-26 10 24 12-12 13 22 11-30 14 26 12-14 11 18 13-22 12 26 14-28 10 24 12-14 13 22V120Z"/>
+        <rect y="104" width="560" height="22" fill="#9DB5A8" opacity=".12" class="mist"/>
+        <rect y="120" width="560" height="110" fill="url(#lakeWater)"/>
+        <rect x="408" y="122" width="24" height="100" fill="url(#reflect)" class="moonpath"/>
+        <g id="ripples" fill="none" stroke="#9DB5A8" stroke-opacity=".35"></g>
         <g id="waves"></g>
-        <path class="shield" d="M470 20 430 36v40c0 30 18 52 40 62 22-10 40-32 40-62V36Z"/>
-        <path d="M454 80l11 11 22-24" stroke="#5FBF9F" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <g class="wisps"><circle cx="70" cy="132" r="9" fill="url(#wisp)"/><circle cx="150" cy="150" r="7" fill="url(#wisp)"/><circle cx="260" cy="138" r="8" fill="url(#wisp)"/><circle cx="330" cy="160" r="6" fill="url(#wisp)"/></g>
+        <path class="shield" d="M500 126 476 136v22c0 18 11 30 24 36 13-6 24-18 24-36v-22Z"/>
+        <path d="M489 160l8 8 14-16" stroke="#5FBF9F" stroke-width="3" fill="none" stroke-linecap="round"/>
       </svg>
       <div class="bars">
         <div class="b"><span>Rules only</span><div class="t"><div class="f" style="width:22.4%;background:#8FB3A6"></div></div><span class="v" data-to="22.4">22.4%</span></div>
@@ -151,17 +217,26 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
   </div>
 </section>
 
-<!-- 6. REPLAY -->
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1600 90" preserveAspectRatio="none"><path class="vein" d="M0 54C220 30 400 62 620 44S980 24 1180 52S1480 60 1600 46"/><path class="vein thin" d="M0 62C240 56 460 70 700 58S1080 48 1320 62S1520 58 1600 56"/></svg></div>
+
+<!-- 6. REPLAY: a moonlit staircase; every step is a piece of evidence -->
 <section class="story" id="replay">
   <div class="wrap grid">
     <div class="steps">
-      <div class="step"><div class="eyebrow">11 · Replay any decision</div><h2>Go on, drag time around.</h2>
+      <div class="step"><p class="eyebrow tilde">~ xi · climb back in time ~</p><h2>Go on, drag time around.</h2>
         <p>Every link and label carries <b>when it became known and where it came from</b>. A replay rebuilds the graph as it was at decision time and re-runs the stored model and policy.</p></div>
-      <div class="step"><div class="eyebrow">12 · Survives a restart</div><h2>No peeking at the future.</h2>
+      <div class="step"><p class="eyebrow tilde">~ xii · no peeking at the future ~</p><h2>Evidence that arrived later is ignored.</h2>
         <p>The graph event log, decision records, model files and the hash-chained ledger live in the database. <b>After a restart the replay is still identical</b>, and a missing model is reported as "not replayable", never re-scored.</p></div>
     </div>
     <div class="visual"><div class="panel" id="replayPanel">
       <h4>A pre-checkout decision · example from the scenario</h4>
+      <svg class="stairs" id="stairs" viewBox="0 0 560 210" aria-hidden="true">
+        <defs><radialGradient id="stairMoon"><stop offset="0" stop-color="#E8F5EE" stop-opacity=".9"/><stop offset="1" stop-color="#9DB5A8" stop-opacity="0"/></radialGradient></defs>
+        <path d="M470 18v70h56v-70a28 28 0 0 0-56 0z" fill="#0B1F1A" stroke="#3E5248" stroke-width="2"/>
+        <circle cx="498" cy="40" r="18" fill="url(#stairMoon)"/>
+        <path d="M498 12v76M470 50h56" stroke="#3E5248" stroke-width="1.5"/>
+        <g id="stairSteps"></g>
+      </svg>
       <div class="timeline" id="tl"><div class="axis"></div><div class="past" id="tlPast"></div></div>
       <input type="range" class="scrub" id="scrub" min="0" max="200" value="200" aria-label="Scrub the replay through time">
       <div class="evlist" id="evlist"></div>
@@ -170,9 +245,11 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
   </div>
 </section>
 
+<div class="marble" aria-hidden="true"><svg viewBox="0 0 1600 90" preserveAspectRatio="none"><path class="vein" d="M0 44C240 66 460 30 700 50S1080 66 1300 40S1520 46 1600 50"/><path class="vein thin" d="M0 58C200 62 480 50 760 60S1160 54 1400 62S1560 58 1600 60"/></svg></div>
+
 <!-- 7. PROOF + CTA -->
 <section class="proof wrap" id="proof">
-  <div class="kicker">13 · Proof, not claims</div>
+  <p class="tilde">~ xiii · proof, not claims ~</p>
   <h2>Built like a payments system, tested like one.</h2>
   <div class="stats">
     <div class="stat"><div class="num"><span data-count="142">142</span></div><p>tests, passing on PostgreSQL 16 and SQLite</p></div>
@@ -182,16 +259,17 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
   </div>
 </section>
 <section class="cta-band">
-  <h2>Safe checkout,<br>before money moves.</h2>
+  <p class="tilde">~ the door is open ~</p>
+  <h2 class="spaced">Before money moves</h2>
   <a class="btn big magnetic" id="launch2" href="/app">Open the live twin →</a>
-  <p>Runs in a clearly labelled demo mode without keys, and on Razorpay test mode with them. Test-mode money is never real money.</p>
+  <p class="fine">Runs in a clearly labelled demo mode without keys, and on Razorpay test mode with them. Test-mode money is never real money.</p>
 </section>
-<footer>Sentinel Twin · a risk layer for agent-led payments, built on Razorpay test mode · Gemini · NumPy GAT · MIT</footer>
+<footer>Sentinel Twin · a risk layer for agent-led payments, built on Razorpay test mode · Gemini · NumPy GAT · MIT · all artwork is procedural</footer>
 
 <script src="/static/vendor/gsap.min.js"></script>
 <script src="/static/vendor/ScrollTrigger.min.js"></script>
 <script src="/static/vendor/lenis.min.js"></script>
-<script src="/static/smoke.js?v=1"></script>
-<script src="/static/landing.js?v=2"></script>
+<script src="/static/smoke.js?v=3"></script>
+<script src="/static/landing.js?v=4"></script>
 </body>
 </html>
