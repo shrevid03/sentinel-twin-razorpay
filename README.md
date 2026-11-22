@@ -285,7 +285,7 @@ Concierge takes voice in all ten languages (Web Speech API in Chrome and Edge) a
 
 ### Reliability
 
-The test suite (107 tests) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, no payment started, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
+The test suite (142 tests, passing on PostgreSQL 16 and SQLite) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, no payment started, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
 
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
@@ -448,6 +448,10 @@ pytest -q
 * `tests/test_safety.py` (9 tests): review and block never create a Razorpay order; repeat captures charge once and count spend once; the mandate is re-checked at capture; unknown orders can't be captured; unverified webhooks change nothing; every checkout gets a receipt; the investigator can't refund or restrict without approval, rejection changes nothing and approval runs once; held checkouts need a reviewer.
 * `tests/test_admin.py`: admin actions return 401 without `X-Admin-Token` when `ADMIN_TOKEN` is set, and reset leaves a clean demo.
 * `tests/test_razorpay.py` (7 tests): the Checkout signature matches Razorpay's formula and rejects swapped ids; a forged signature makes no API call; a payment from another order is never captured; amounts convert to paise with manual capture; the demo flow captures end to end; a tampered webhook is ignored and a signed one is processed; live keys are refused by default.
+* `tests/test_durable_audit.py` (5 tests): a decision replays identically after a restart with a different seed, from the persisted event log and model artifact; receipts, ledger and decision ids survive; a missing artifact is not replayable; scenario decisions are durable; two writers share one verified ledger chain.
+* `tests/test_payment_words.py` (4 tests): "nothing was charged" appears only when no payment was attempted; a payment that is not captured warns about a temporary bank hold; captured and refunded states get their own wording.
+* `tests/test_live_check_script.py`: the real-Razorpay check script's logic, against a local fake of the API.
+* `TEST_DATABASE_URL=postgresql://... pytest` runs everything against Postgres.
 * `tests/conftest.py` blanks every key, so the suite never calls Razorpay or an LLM even when `.env` has real keys.
 
 ## A 3-minute tour
