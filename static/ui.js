@@ -16,6 +16,7 @@
   window.showTab = showTab = (t) => {
     _show(t);
     setNav(false);
+    window.STSound?.tick();
     const title = $("#mobile-title"); if (title) title.textContent = LABELS[t] || "Sentinel Twin";
     if (!reduce && window.gsap) {  // cards rise in, a few at a time (they are visible again within half a second)
       const cards = [...document.querySelectorAll(`#tab-${t} > .card, #tab-${t} > .grid2 > * , #tab-${t} > .pulse-row > .card, #tab-${t} > .kpis`)].slice(0, 10);
@@ -28,6 +29,13 @@
     const sync = () => { mini.textContent = pay.textContent.replace(/^Razorpay\s*·?\s*/i, "") ; mini.className = pay.className; };
     new MutationObserver(sync).observe(pay, { childList: true, characterData: true, subtree: true, attributes: true }); sync();
   }
+
+  // ------------------------------------------------------------ arriving from the landing page's "Open the live twin"
+  try {
+    const t = +sessionStorage.getItem("st-arrive");
+    if (t && Date.now() - t < 15000 && !reduce) $("#arriveFlash")?.classList.add("go");
+    sessionStorage.removeItem("st-arrive");
+  } catch {}
 
   // ------------------------------------------------------------ toasts (errors that used to be alert() boxes)
   const host = $("#toasts");

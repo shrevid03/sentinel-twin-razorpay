@@ -414,7 +414,7 @@ async function renderPay(co) {
     <div id="pp-buttons"></div></div>`;
   const charge = fmtCharge({ amount: co.amount, currency: co.currency });
   const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ Razorpay payment <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
-  const fail = (e) => { const m = String(e?.message || e); addMsg("sys", esc(/captured|charged|confirm/i.test(m) ? m : "Payment not completed: " + m)); };
+  const fail = (e) => { const m = String(e?.message || e); if (/not captured/i.test(m)) window.STSound?.hold(); addMsg("sys", esc(/captured|charged|confirm/i.test(m) ? m : "Payment not completed: " + m)); };
   const capture = (body) => api(`/api/razorpay/orders/${encodeURIComponent(co.pay_order_id)}/capture`, body).then(done, fail);
   if (CFG.pay_mode !== "demo" && CFG.razorpay_key_id) {
     $("#pp-buttons").innerHTML = `<button id="rzp-pay" class="rzp-btn">Pay ${esc(charge)} with Razorpay</button> <small class="muted">Test mode: pick UPI and enter success@razorpay.</small>`;

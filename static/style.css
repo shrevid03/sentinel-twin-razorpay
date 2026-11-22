@@ -436,3 +436,14 @@ a.rcpt-link { color: var(--glow); font-weight: 600; }
 .proof { background: rgba(201,164,92,.1); color: #D9BA79; border-color: rgba(201,164,92,.35); }
 .rc-head .big { color: var(--moon); }
 .brand b { letter-spacing: .12em; text-transform: uppercase; font-size: 16px; }
+
+/* sound toggles and the arrival from the landing page */
+.sound-btn { width: 34px; height: 34px; padding: 0; border-radius: 50%; background: rgba(6,18,15,.55); border: 1px solid var(--line-strong); color: var(--sage-hi); box-shadow: none; }
+.sound-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.sound-btn.on { color: #D9BA79; border-color: rgba(201,164,92,.5); }
+.sound-btn:hover { background: rgba(64,130,109,.3); border-color: var(--glow); }
+.side-foot .sound-row { gap: 6px; } .side-foot .sound-row button { width: 34px; }
+.arrive-flash { position: fixed; inset: 0; z-index: 90; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 40%, rgba(255,248,225,.8), rgba(217,186,121,.4) 18%, rgba(127,209,185,.2) 38%, #06120F 70%); }
+.arrive-flash.go { animation: arrive 1.4s ease-out forwards; }
+@keyframes arrive { 0% { opacity: 1; } 100% { opacity: 0; } }
+#d-attacks, #d-cands, #d-verify, #d-engines, #d-byattack, #mrt-out, #scn-out, .rc-sec { overflow-x: auto; }

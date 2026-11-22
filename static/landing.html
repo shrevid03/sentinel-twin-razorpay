@@ -10,18 +10,19 @@
 <script>/* the scroll story is for wide screens that allow motion; everything else gets the plain, fully visible page */
 if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");</script>
 <link rel="stylesheet" href="/static/theme.css?v=3">
-<link rel="stylesheet" href="/static/landing.css?v=4">
+<link rel="stylesheet" href="/static/landing.css?v=5">
 </head>
 <body>
 <div class="glows" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
 <div class="beam" aria-hidden="true"></div>
 <div class="grain" aria-hidden="true"></div>
+<div class="launch-flash" id="launchFlash" aria-hidden="true"></div>
 <svg class="edge-ivy left" aria-hidden="true" viewBox="0 0 80 1000" preserveAspectRatio="none"><path class="vine" d=""/><g class="lv"></g></svg>
 <svg class="edge-ivy right" aria-hidden="true" viewBox="0 0 80 1000" preserveAspectRatio="none"><path class="vine" d=""/><g class="lv"></g></svg>
 
 <header class="top">
   <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z" fill="#40826D"/><path d="M11 12l5 7 5-8" stroke="#E6F2EC" stroke-width="1.4" fill="none"/><g fill="#E6F2EC"><circle cx="11" cy="12" r="2.2"/><circle cx="21" cy="11" r="2.2"/><circle cx="16" cy="19" r="2.6"/></g></svg><span class="spaced">Sentinel Twin</span></a>
-  <div class="right"><span class="pill-tag warn"><i></i>Demo mode · Razorpay test-mode ready</span><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
+  <div class="right"><button class="sound-btn" data-sound-toggle type="button"></button><button class="sound-btn" data-sound-toggle="ambient" type="button"></button><span class="pill-tag warn"><i></i>Demo mode · Razorpay test-mode ready</span><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
 </header>
 
 <!-- 1. HERO: a gothic window onto a moonlit, smoky sky; the camera pushes through it -->
@@ -269,7 +270,8 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
 <script src="/static/vendor/gsap.min.js"></script>
 <script src="/static/vendor/ScrollTrigger.min.js"></script>
 <script src="/static/vendor/lenis.min.js"></script>
-<script src="/static/smoke.js?v=3"></script>
-<script src="/static/landing.js?v=4"></script>
+<script src="/static/js/sound.js?v=1"></script>
+<script src="/static/smoke.js?v=4"></script>
+<script src="/static/landing.js?v=5"></script>
 </body>
 </html>

@@ -61,6 +61,7 @@ async function replayDecision(id) {
   const tEnd = Math.max(r.decided_at, ...later.map((e) => +e.available_at || 0), ...used.map((e) => +e.available_at || 0)) * 1.08 + 1;
   const tMin = Math.min(0, ...used.map((e) => +e.available_at || 0));
   const pos = (t) => (((+t || 0) - tMin) / (tEnd - tMin) * 100).toFixed(2) + "%";
+  if (r.identical) window.STSound?.sparkle();
   el.innerHTML = `<div class="rp">
     <div class="rp-top"><span class="rp-badge ${r.identical ? "same" : "diff"}">${r.identical ? "Identical on replay" : "Different on replay"}</span>
       <span class="muted small">${esc(r.source || "in-memory replay")}${r.events_replayed ? ` · ${r.events_replayed} events` : ""}</span></div>

@@ -121,6 +121,10 @@ void main(){
   addEventListener("pointermove", (e) => { px = e.clientX; py = e.clientY; }, { passive: true });
   const stepFlies = (dt, now) => {
     ctx.clearRect(0, 0, innerWidth, innerHeight);
+    if (state.scatter) {  // launch: every firefly bursts outward from the window
+      for (const f of flies) { const dx = f.x - innerWidth / 2, dy = f.y - innerHeight * .42, d = Math.hypot(dx, dy) || 1; f.vx += dx / d * 9; f.vy += dy / d * 9; }
+      state.scatter = 0;
+    }
     for (const f of flies) {
       f.ph += dt * .8;
       f.vx += Math.cos(f.ph * 1.3) * .012; f.vy += Math.sin(f.ph) * .012;

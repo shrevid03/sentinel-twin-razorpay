@@ -167,6 +167,18 @@
     window.__renderReplay = (T) => { scrub.value = T; render(T); };
   }
 
+  // ---------------------------------------------------------------- the launch moment
+  $$('a[href="/app"]').forEach((a) => a.addEventListener("click", (e) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;  // new tab / window: just open it
+    const played = window.STSound && window.STSound.launch();
+    if (reduce && !played) return;
+    e.preventDefault();
+    if (!reduce) { $("#launchFlash")?.classList.add("go"); if (window.__smoke) window.__smoke.scatter = 1; }
+    try { sessionStorage.setItem("st-arrive", String(Date.now())); } catch {}
+    setTimeout(() => { location.href = a.href; }, played ? 1500 : 650);
+  }));
+  const S = (k) => window.STSound && window.STSound[k] && window.STSound[k]();
+
   // ---------------------------------------------------------------- small things: header, sparkles, magnetic buttons
   const top = $(".top");
   const onTop = () => top && top.classList.toggle("scrolled", scrollY > 40);
@@ -221,6 +233,7 @@
     .to(copy, { y: -60, opacity: 0, duration: .3, ease: "power2.in" }, 0)
     .to(".scrollhint", { opacity: 0, duration: .1 }, 0)
     .to(win, { scale: 9, duration: 1, ease: "power2.in" }, 0)
+    .call(() => { if (!window.__whooshed) { window.__whooshed = true; S("whoosh"); } }, null, .18)
     .to(win, { opacity: 0, duration: .2 }, .8)
     .to(moon, { scale: 1.6, opacity: .55, duration: 1, ease: "power1.in" }, 0)
     .to(card, { opacity: 1, duration: .15 }, .45)
@@ -244,7 +257,7 @@
     .to(sc, { v: .63, duration: .3, onUpdate: () => {
       scoreEl.textContent = sc.v.toFixed(2);
       const r = sc.v >= .5;
-      if (r && !caught) { caught = true; const host = $("#ring"), h = host.getBoundingClientRect(), hb = $("#ring .halo").getBoundingClientRect();
+      if (r && !caught) { caught = true; S("chime"); const host = $("#ring"), h = host.getBoundingClientRect(), hb = $("#ring .halo").getBoundingClientRect();
         sparkle(host, hb.left - h.left + hb.width / 2, hb.top - h.top + hb.height / 2); }
       if (!r) caught = false;
       verdict.className = "verdict " + (r ? "review" : "approve"); verdict.textContent = r ? "review · caught" : "approve";
@@ -266,7 +279,7 @@
   scrubbed("#pipeline")
     .fromTo("#tokGood", { left: "12.5%" }, { left: "87.5%", duration: .7, ease: "none" }, .1)
     .fromTo("#tokBad", { left: "12.5%" }, { left: "62.5%", duration: .45, ease: "none" }, .3)
-    .call(() => st.classList.toggle("alarm"), null, .75)
+    .call(() => { st.classList.toggle("alarm"); if (st.classList.contains("alarm")) S("hold"); }, null, .75)
     .to("#tokBad", { scale: 1.6, duration: .08, yoyo: true, repeat: 3 }, .76)
     .from("#pipePanel .outcome", { y: 24, opacity: .3, stagger: .12, duration: .2 }, .6);
 
@@ -287,7 +300,11 @@
   if (window.__renderReplay) {
     const rp = { t: 0 };
     window.__renderReplay(0);
-    scrubbed("#replay").to(rp, { t: 200, duration: 1, ease: "none", onUpdate: () => window.__renderReplay(Math.round(rp.t)) });
+    let crossed = false;
+    scrubbed("#replay").to(rp, { t: 200, duration: 1, ease: "none", onUpdate: () => {
+      window.__renderReplay(Math.round(rp.t));
+      if (rp.t >= DEC && !crossed) { crossed = true; S("sparkle"); } else if (rp.t < DEC) crossed = false;
+    } });
   }
 
   // 7. proof: count up once; gold veins in the marble dividers draw in as they pass
