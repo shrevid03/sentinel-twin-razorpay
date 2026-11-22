@@ -4,38 +4,49 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sentinel Twin</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z' fill='%23003087'/><g stroke='%23fff' stroke-width='1.6'><path d='M11 12l5 6 5-7M16 18v5'/></g><g fill='%23009CDE'><circle cx='11' cy='12' r='2.2'/><circle cx='21' cy='11' r='2.2'/><circle cx='16' cy='18' r='2.4'/><circle cx='16' cy='23' r='1.8'/></g></svg>">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z' fill='%2340826D'/><g fill='%23E6F2EC'><circle cx='11' cy='12' r='2.2'/><circle cx='21' cy='11' r='2.2'/><circle cx='16' cy='19' r='2.6'/></g><path d='M11 12l5 7 5-8' stroke='%23E6F2EC' stroke-width='1.4' fill='none'/></svg>">
+<link rel="stylesheet" href="/static/theme.css?v=2">
 <link rel="stylesheet" href="/static/vendor/ag-grid.css">
 <link rel="stylesheet" href="/static/vendor/ag-theme-quartz.css">
-<link rel="stylesheet" href="/static/style.css?v=26">
+<link rel="stylesheet" href="/static/style.css?v=30">
 </head>
 <body>
 <div id="page-smoke" aria-hidden="true"><i></i><i></i><i></i></div>
-<header class="top">
-  <div class="brand"><svg class="logo" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="lg-sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0070E0"/><stop offset="1" stop-color="#003087"/></linearGradient></defs>
+<div class="shell">
+<aside class="sidebar" id="sidebar" aria-label="Sections">
+  <a class="brand" href="/" title="Back to the story"><svg class="logo" viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="lg-sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5FBF9F"/><stop offset="1" stop-color="#40826D"/></linearGradient></defs>
     <path d="M18 2.5 5 7.4v9.2C5 25 10.6 31.3 18 33.5 25.4 31.3 31 25 31 16.6V7.4Z" fill="url(#lg-sh)"/>
     <g stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"><path d="M12.5 13.5 18 20l5.5-7.5M18 20v5.5M12.5 13.5h11"/></g>
-    <g fill="#9FD8F5"><circle cx="12.5" cy="13.5" r="2.4"/><circle cx="23.5" cy="12.5" r="2.4"/><circle cx="18" cy="25.5" r="2"/></g><circle cx="18" cy="20" r="2.8" fill="#fff"/></svg><div><b>Sentinel Twin</b><small>Digital twin of your Razorpay business, defended by AI agents</small></div></div>
-  <div class="badges">
+    <g fill="#8FD9BF"><circle cx="12.5" cy="13.5" r="2.4"/><circle cx="23.5" cy="12.5" r="2.4"/><circle cx="18" cy="25.5" r="2"/></g><circle cx="18" cy="20" r="2.8" fill="#12302A"/></svg><div><b>Sentinel Twin</b><small>Risk layer for agent payments</small></div></a>
+  <nav class="tabs" id="tabs">
+    <div class="navgroup">Shop</div>
+    <button data-tab="concierge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg><span>Concierge</span></button>
+    <div class="navgroup">Investigate</div>
+    <button data-tab="command" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="17" r="2.6"/><path d="M7.8 8.4 10.6 15M16.4 7.6 13.4 15M8.2 7l7.6-.8"/></svg><span>Command center</span></button>
+    <button data-tab="investigator"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5"/></svg><span>Investigator</span></button>
+    <div class="navgroup">Defend</div>
+    <button data-tab="drill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.4 3 8 7 9.5 4-1.5 7-5.1 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>Defense drill</span></button>
+    <button data-tab="redteam"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2"/></svg><span>Red team</span></button>
+    <button data-tab="whatif"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h6M4 17h12"/><circle cx="17" cy="7" r="2"/><circle cx="13" cy="12" r="2"/><circle cx="19" cy="17" r="2"/></svg><span>What-if simulator</span></button>
+    <div class="navgroup">Audit</div>
+    <button data-tab="ledger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Ledger</span></button>
+    <button data-tab="model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 9 11l4 4 7-9"/><path d="M15 6h5v5"/></svg><span>GAT model</span></button>
+  </nav>
+  <div class="side-foot badges">
     <span id="b-pay" class="badge">Razorpay …</span>
     <span id="b-brain" class="badge">Brain …</span>
     <span id="b-c3" class="badge" hidden>Channel3</span>
     <label class="toggle"><input type="checkbox" id="auto"> Live traffic</label>
     <button class="ghost" id="btn-reset" title="Rebuild the twin from its seed and clear queues, checkouts and policy">Reset demo</button>
   </div>
+</aside>
+<div class="scrim" id="scrim" hidden></div>
+<div class="workspace">
+<header class="mobilebar">
+  <button class="ghost iconbtn" id="menu-btn" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <b id="mobile-title">Command center</b>
+  <span class="badge" id="b-pay-mini" aria-hidden="true"></span>
 </header>
-<nav class="tabs" id="tabs">
-  <button data-tab="command" class="active">Command center</button>
-  <button data-tab="drill">Defense drill</button>
-  <button data-tab="concierge">Concierge · chat &amp; voice</button>
-  <button data-tab="investigator">Investigator</button>
-  <button data-tab="redteam">Red team</button>
-  <button data-tab="whatif">What-if simulator</button>
-  <button data-tab="ledger">Ledger</button>
-  <button data-tab="model">GAT model</button>
-</nav>
 <main>
 <!-- COMMAND CENTER -->
 <section id="tab-command" class="tab active">
@@ -50,48 +61,48 @@
     </div>
     <svg class="hero-art" viewBox="0 0 420 320" role="img" aria-label="Illustration: a phone showing a checkout card, protected by a shield linked to a network of nodes">
       <defs>
-        <linearGradient id="h-sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0070E0"/><stop offset="1" stop-color="#003087"/></linearGradient>
-        <linearGradient id="h-btn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#0070E0"/><stop offset="1" stop-color="#009CDE"/></linearGradient>
-        <filter id="h-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#003087" flood-opacity=".18"/></filter>
+        <linearGradient id="h-sh" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5FBF9F"/><stop offset="1" stop-color="#40826D"/></linearGradient>
+        <linearGradient id="h-btn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#5FBF9F"/><stop offset="1" stop-color="#8FD9BF"/></linearGradient>
+        <filter id="h-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#40826D" flood-opacity=".18"/></filter>
       </defs>
-      <g stroke="#009CDE" stroke-width="2" opacity=".55" fill="none">
+      <g stroke="#8FD9BF" stroke-width="2" opacity=".55" fill="none">
         <path d="M300 60 L360 100 L340 180 L390 230 M360 100 L400 140 M340 180 L280 250 M300 60 L250 40"/>
       </g>
-      <g fill="#fff" stroke="#009CDE" stroke-width="3">
+      <g fill="#12302A" stroke="#8FD9BF" stroke-width="3">
         <circle cx="300" cy="60" r="9"/><circle cx="360" cy="100" r="11"/><circle cx="400" cy="140" r="7"/><circle cx="390" cy="230" r="8"/><circle cx="280" cy="250" r="9"/><circle cx="250" cy="40" r="6"/>
       </g>
-      <circle cx="340" cy="180" r="12" fill="#D93025" opacity=".18"/><circle cx="340" cy="180" r="7" fill="#D93025"/>
+      <circle cx="340" cy="180" r="12" fill="#FF5C5C" opacity=".18"/><circle cx="340" cy="180" r="7" fill="#FF5C5C"/>
       <g filter="url(#h-shadow)">
-        <rect x="70" y="20" width="170" height="290" rx="28" fill="#001435"/>
-        <rect x="80" y="32" width="150" height="266" rx="20" fill="#F5F7FA"/>
-        <rect x="132" y="40" width="46" height="8" rx="4" fill="#001435"/>
+        <rect x="70" y="20" width="170" height="290" rx="28" fill="#0B1F1A"/>
+        <rect x="80" y="32" width="150" height="266" rx="20" fill="#0B1F1A"/>
+        <rect x="132" y="40" width="46" height="8" rx="4" fill="#0B1F1A"/>
       </g>
-      <rect x="94" y="66" width="122" height="14" rx="7" fill="#EAF4FF"/>
-      <g filter="url(#h-shadow)"><rect x="92" y="94" width="126" height="150" rx="14" fill="#fff"/></g>
-      <rect x="104" y="106" width="44" height="44" rx="10" fill="#EAF4FF"/>
-      <path d="M116 138c0-8 4-14 10-14s10 6 10 14z M120 124h12" fill="#0070E0" opacity=".7"/>
-      <rect x="156" y="110" width="50" height="8" rx="4" fill="#001435" opacity=".75"/>
-      <rect x="156" y="124" width="34" height="8" rx="4" fill="#5B6B82" opacity=".45"/>
-      <rect x="156" y="138" width="40" height="10" rx="5" fill="#003087"/>
-      <g font-family="Plus Jakarta Sans, sans-serif" font-size="9" fill="#1E8E3E">
-        <circle cx="110" cy="168" r="6" fill="#E6F4EA"/><path d="M107 168l2 2 4-4" stroke="#1E8E3E" stroke-width="1.6" fill="none"/>
-        <rect x="122" y="164" width="70" height="7" rx="3.5" fill="#5B6B82" opacity=".35"/>
-        <circle cx="110" cy="186" r="6" fill="#E6F4EA"/><path d="M107 186l2 2 4-4" stroke="#1E8E3E" stroke-width="1.6" fill="none"/>
-        <rect x="122" y="182" width="56" height="7" rx="3.5" fill="#5B6B82" opacity=".35"/>
+      <rect x="94" y="66" width="122" height="14" rx="7" fill="#12302A"/>
+      <g filter="url(#h-shadow)"><rect x="92" y="94" width="126" height="150" rx="14" fill="#12302A"/></g>
+      <rect x="104" y="106" width="44" height="44" rx="10" fill="#12302A"/>
+      <path d="M116 138c0-8 4-14 10-14s10 6 10 14z M120 124h12" fill="#5FBF9F" opacity=".7"/>
+      <rect x="156" y="110" width="50" height="8" rx="4" fill="#0B1F1A" opacity=".75"/>
+      <rect x="156" y="124" width="34" height="8" rx="4" fill="#8FB3A6" opacity=".45"/>
+      <rect x="156" y="138" width="40" height="10" rx="5" fill="#40826D"/>
+      <g font-family="Plus Jakarta Sans, sans-serif" font-size="9" fill="#5FBF9F">
+        <circle cx="110" cy="168" r="6" fill="#12302A"/><path d="M107 168l2 2 4-4" stroke="#5FBF9F" stroke-width="1.6" fill="none"/>
+        <rect x="122" y="164" width="70" height="7" rx="3.5" fill="#8FB3A6" opacity=".35"/>
+        <circle cx="110" cy="186" r="6" fill="#12302A"/><path d="M107 186l2 2 4-4" stroke="#5FBF9F" stroke-width="1.6" fill="none"/>
+        <rect x="122" y="182" width="56" height="7" rx="3.5" fill="#8FB3A6" opacity=".35"/>
       </g>
       <rect x="104" y="208" width="102" height="24" rx="12" fill="url(#h-btn)"/>
-      <rect x="132" y="217" width="46" height="6" rx="3" fill="#fff" opacity=".9"/>
-      <rect x="94" y="258" width="122" height="10" rx="5" fill="#E3E8EF"/>
-      <rect x="94" y="274" width="80" height="10" rx="5" fill="#E3E8EF"/>
+      <rect x="132" y="217" width="46" height="6" rx="3" fill="#12302A" opacity=".9"/>
+      <rect x="94" y="258" width="122" height="10" rx="5" fill="#1B3B33"/>
+      <rect x="94" y="274" width="80" height="10" rx="5" fill="#1B3B33"/>
       <g filter="url(#h-shadow)" transform="translate(212 120)">
         <path d="M44 0 0 16v30c0 28 19 50 44 58 25-8 44-30 44-58V16Z" fill="url(#h-sh)"/>
         <path d="M26 52l12 12 24-26" stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
       </g>
-      <path d="M300 172 L340 180" stroke="#009CDE" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
+      <path d="M300 172 L340 180" stroke="#8FD9BF" stroke-width="2" stroke-dasharray="4 4" opacity=".7"/>
     
-      <defs><linearGradient id="h-scan" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#009CDE" stop-opacity="0"/><stop offset=".5" stop-color="#009CDE" stop-opacity=".55"/><stop offset="1" stop-color="#009CDE" stop-opacity="0"/></linearGradient>
+      <defs><linearGradient id="h-scan" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8FD9BF" stop-opacity="0"/><stop offset=".5" stop-color="#8FD9BF" stop-opacity=".55"/><stop offset="1" stop-color="#8FD9BF" stop-opacity="0"/></linearGradient>
         <clipPath id="h-clip"><rect x="80" y="32" width="150" height="266" rx="20"/></clipPath></defs>
-      <g clip-path="url(#h-clip)"><g class="scan"><rect x="80" y="0" width="150" height="34" fill="url(#h-scan)"/><rect x="80" y="17" width="150" height="1.5" fill="#009CDE"/></g></g>
+      <g clip-path="url(#h-clip)"><g class="scan"><rect x="80" y="0" width="150" height="34" fill="url(#h-scan)"/><rect x="80" y="17" width="150" height="1.5" fill="#8FD9BF"/></g></g>
     </svg>
   </div>
   <div class="card" id="loop-card"><div class="skel line"></div><div class="skel line short"></div></div>
@@ -123,10 +134,10 @@
 <!-- DEFENSE DRILL -->
 <section id="tab-drill" class="tab">
   <div class="tabhero"><div><h2>Defense drill</h2><p>Attack a frozen copy of the twin, search for a safer policy, then replay the same attacks to prove it.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Attacker blocked by a shield, then a check mark">
-<circle cx="28" cy="48" r="20" fill="#EAF4FF"/><circle cx="28" cy="40" r="7" fill="#D93025"/><path d="M15 64c2-10 7-14 13-14s11 4 13 14z" fill="#D93025" opacity=".85"/>
-<path d="M52 48h22" stroke="#D93025" stroke-width="3" stroke-dasharray="4 4"/><path d="M70 42l8 6-8 6" fill="none" stroke="#D93025" stroke-width="3"/>
-<path d="M98 14 78 21v16c0 15 9 26 20 30 11-4 20-15 20-30V21z" fill="#003087"/><path d="M98 22 86 26v11c0 9 5 16 12 19z" fill="#0070E0" opacity=".7"/>
-<path d="M120 48h14" stroke="#009CDE" stroke-width="3"/><circle cx="150" cy="48" r="16" fill="#E6F4EA"/><path d="M143 48l5 5 9-10" fill="none" stroke="#1E8E3E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+<circle cx="28" cy="48" r="20" fill="#12302A"/><circle cx="28" cy="40" r="7" fill="#FF5C5C"/><path d="M15 64c2-10 7-14 13-14s11 4 13 14z" fill="#FF5C5C" opacity=".85"/>
+<path d="M52 48h22" stroke="#FF5C5C" stroke-width="3" stroke-dasharray="4 4"/><path d="M70 42l8 6-8 6" fill="none" stroke="#FF5C5C" stroke-width="3"/>
+<path d="M98 14 78 21v16c0 15 9 26 20 30 11-4 20-15 20-30V21z" fill="#40826D"/><path d="M98 22 86 26v11c0 9 5 16 12 19z" fill="#5FBF9F" opacity=".7"/>
+<path d="M120 48h14" stroke="#8FD9BF" stroke-width="3"/><circle cx="150" cy="48" r="16" fill="#12302A"/><path d="M143 48l5 5 9-10" fill="none" stroke="#5FBF9F" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
   <div class="card flowcard" id="drill-flow"></div>
   <div class="card drill-hero"><div class="cardhead"><div><h3>Defense drill <span class="tag synth">Synthetic attack traffic</span> <span class="tag">Policy hardening</span></h3>
     <p class="muted">One click: the red team attacks a frozen copy of the twin, the simulator searches 216 policies while pricing false positives, then the <b>same</b> seeded attacks are replayed under the winner. Live traffic is untouched until you apply.</p></div>
@@ -155,9 +166,9 @@
 <!-- CONCIERGE -->
 <section id="tab-concierge" class="tab">
   <div class="tabhero"><div><h2>Concierge · chat & voice</h2><p>Shop and pay with Razorpay in ten Indian languages. Spending limits are enforced in code, not by the model.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Chat bubble with Indian language glyphs and a shopping bag">
-<path d="M12 14h96a12 12 0 0 1 12 12v34a12 12 0 0 1-12 12H48l-18 16v-16H12A12 12 0 0 1 0 60V26a12 12 0 0 1 12-12z" fill="#0070E0" transform="translate(4 0)"/>
+<path d="M12 14h96a12 12 0 0 1 12 12v34a12 12 0 0 1-12 12H48l-18 16v-16H12A12 12 0 0 1 0 60V26a12 12 0 0 1 12-12z" fill="#5FBF9F" transform="translate(4 0)"/>
 <text x="20" y="52" font-family="Noto Sans, sans-serif" font-size="22" font-weight="700" fill="#fff">अ த ক</text>
-<path d="M124 38h36l-4 46h-28z" fill="#003087"/><path d="M134 38v-6a8 8 0 0 1 16 0v6" fill="none" stroke="#003087" stroke-width="3.5"/><circle cx="142" cy="60" r="6" fill="#009CDE"/></svg></div>
+<path d="M124 38h36l-4 46h-28z" fill="#40826D"/><path d="M134 38v-6a8 8 0 0 1 16 0v6" fill="none" stroke="#40826D" stroke-width="3.5"/><circle cx="142" cy="60" r="6" fill="#8FD9BF"/></svg></div>
   <div class="grid2">
     <div class="card chat">
       <div class="cardhead"><h3>Talk to Sentinel</h3>
@@ -190,14 +201,14 @@
 <!-- INVESTIGATOR -->
 <section id="tab-investigator" class="tab">
   <div class="tabhero"><div><h2>Investigator</h2><p>An AI analyst that follows shared devices and IPs through the graph and proposes actions for human approval.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Magnifier over connected nodes">
-<g stroke="#009CDE" stroke-width="2" opacity=".7"><path d="M20 30 50 50 30 75M50 50 85 30 110 55M85 30 75 12M110 55 140 40"/></g>
-<g fill="#fff" stroke="#0070E0" stroke-width="2.5"><circle cx="20" cy="30" r="6"/><circle cx="30" cy="75" r="6"/><circle cx="75" cy="12" r="5"/><circle cx="140" cy="40" r="6"/></g>
-<circle cx="50" cy="50" r="7" fill="#D93025"/><circle cx="85" cy="30" r="7" fill="#D93025"/><circle cx="110" cy="55" r="6" fill="#0070E0"/>
-<circle cx="80" cy="42" r="26" fill="#EAF4FF" fill-opacity=".55" stroke="#003087" stroke-width="5"/><path d="M99 61l22 22" stroke="#003087" stroke-width="9" stroke-linecap="round"/></svg></div>
+<g stroke="#8FD9BF" stroke-width="2" opacity=".7"><path d="M20 30 50 50 30 75M50 50 85 30 110 55M85 30 75 12M110 55 140 40"/></g>
+<g fill="#12302A" stroke="#5FBF9F" stroke-width="2.5"><circle cx="20" cy="30" r="6"/><circle cx="30" cy="75" r="6"/><circle cx="75" cy="12" r="5"/><circle cx="140" cy="40" r="6"/></g>
+<circle cx="50" cy="50" r="7" fill="#FF5C5C"/><circle cx="85" cy="30" r="7" fill="#FF5C5C"/><circle cx="110" cy="55" r="6" fill="#5FBF9F"/>
+<circle cx="80" cy="42" r="26" fill="#12302A" fill-opacity=".55" stroke="#40826D" stroke-width="5"/><path d="M99 61l22 22" stroke="#40826D" stroke-width="9" stroke-linecap="round"/></svg></div>
   <div class="grid2">
     <div class="card"><div class="cardhead"><h3>Accounts ranked by GAT risk</h3>
       <button id="btn-investigate-top">Investigate riskiest</button></div>
-      <div id="acc-grid" class="ag-theme-quartz gridbox"></div></div>
+      <div id="acc-grid" class="ag-theme-quartz-dark gridbox"></div></div>
     <div class="card" id="ev-card"><div class="cardhead"><div><h3>Evidence case <span class="tag">model → evidence → copilot → human</span></h3>
       <small class="muted">The GAT triages; deterministic graph checks gather evidence with record pointers; the copilot only explains that evidence; a person decides, with a reason (RBI rules in <code>compliance_rules.yaml</code>).</small></div></div>
       <div class="row"><input id="ev-account" placeholder="account, e.g. A-212" style="width:160px"><button id="btn-ev-open">Open evidence case</button><button class="ghost" id="btn-ev-top">Riskiest account</button></div>
@@ -220,10 +231,10 @@
 <!-- RED TEAM -->
 <section id="tab-redteam" class="tab">
   <div class="tabhero"><div><h2>Adaptive red team</h2><p>An attacker agent that probes the twin, learns what was intercepted and changes tactics. Synthetic traffic only.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Hooded figure next to a target">
-<circle cx="120" cy="48" r="38" fill="none" stroke="#D93025" stroke-width="2" opacity=".35"/><circle cx="120" cy="48" r="26" fill="none" stroke="#D93025" stroke-width="2" opacity=".55"/><circle cx="120" cy="48" r="13" fill="none" stroke="#D93025" stroke-width="2.5"/><circle cx="120" cy="48" r="4" fill="#D93025"/>
-<path d="M120 4v14M120 78v14M76 48h14M150 48h14" stroke="#D93025" stroke-width="2"/>
-<path d="M18 92c0-26 10-40 26-46-10-4-14-14-12-24 2-12 12-18 22-18s20 6 22 18c2 10-2 20-12 24 16 6 26 20 26 46z" fill="#003087"/>
-<ellipse cx="54" cy="30" rx="11" ry="13" fill="#001435"/><circle cx="50" cy="31" r="1.8" fill="#009CDE"/><circle cx="58" cy="31" r="1.8" fill="#009CDE"/></svg></div>
+<circle cx="120" cy="48" r="38" fill="none" stroke="#FF5C5C" stroke-width="2" opacity=".35"/><circle cx="120" cy="48" r="26" fill="none" stroke="#FF5C5C" stroke-width="2" opacity=".55"/><circle cx="120" cy="48" r="13" fill="none" stroke="#FF5C5C" stroke-width="2.5"/><circle cx="120" cy="48" r="4" fill="#FF5C5C"/>
+<path d="M120 4v14M120 78v14M76 48h14M150 48h14" stroke="#FF5C5C" stroke-width="2"/>
+<path d="M18 92c0-26 10-40 26-46-10-4-14-14-12-24 2-12 12-18 22-18s20 6 22 18c2 10-2 20-12 24 16 6 26 20 26 46z" fill="#40826D"/>
+<ellipse cx="54" cy="30" rx="11" ry="13" fill="#0B1F1A"/><circle cx="50" cy="31" r="1.8" fill="#8FD9BF"/><circle cx="58" cy="31" r="1.8" fill="#8FD9BF"/></svg></div>
   <div class="card"><div class="cardhead"><h3>Adaptive red team <span class="tag synth">Synthetic attack traffic</span></h3>
     <div><button id="btn-campaign">Launch adaptive campaign</button></div></div>
     <p class="muted">The red team attacks a sandboxed fork of the twin, watches what got intercepted (blocked or sent to review), then changes tactics to evade. Nothing touches live state.</p>
@@ -235,7 +246,7 @@
     <div class="kpis" id="inj-kpis"></div><div id="inj-out"></div></div>
   <div class="grid2">
     <div class="card"><h3>Attack playbooks <small class="muted">tune and fire one by hand</small></h3><div id="attacks" class="attacks"></div>
-      <h3>Results</h3><div id="rt-grid" class="ag-theme-quartz gridbox small"></div></div>
+      <h3>Results</h3><div id="rt-grid" class="ag-theme-quartz-dark gridbox small"></div></div>
     <div class="side">
       <div class="card"><h3>Red team report</h3><div id="rt-report" class="report muted">No campaign yet.</div>
         <button class="ghost" id="btn-to-whatif">Test a hardened policy in the what-if simulator →</button></div>
@@ -247,11 +258,11 @@
 <!-- WHAT IF -->
 <section id="tab-whatif" class="tab">
   <div class="tabhero"><div><h2>What-if simulator</h2><p>Replay traffic and attacks under a proposed policy before you touch the live one.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="Policy sliders next to a bar chart">
-<g stroke="#CBD5E1" stroke-width="4" stroke-linecap="round"><path d="M10 22h60M10 48h60M10 74h60"/></g>
-<g stroke="#0070E0" stroke-width="4" stroke-linecap="round"><path d="M10 22h38M10 48h18M10 74h48"/></g>
-<g fill="#fff" stroke="#003087" stroke-width="3"><circle cx="48" cy="22" r="6"/><circle cx="28" cy="48" r="6"/><circle cx="58" cy="74" r="6"/></g>
-<rect x="88" y="10" width="76" height="78" rx="10" fill="#fff" stroke="#EAF4FF" stroke-width="2"/>
-<rect x="98" y="52" width="10" height="28" rx="3" fill="#003087"/><rect x="112" y="40" width="10" height="40" rx="3" fill="#009CDE"/><rect x="128" y="58" width="10" height="22" rx="3" fill="#003087"/><rect x="142" y="26" width="10" height="54" rx="3" fill="#009CDE"/></svg></div>
+<g stroke="#2A4A41" stroke-width="4" stroke-linecap="round"><path d="M10 22h60M10 48h60M10 74h60"/></g>
+<g stroke="#5FBF9F" stroke-width="4" stroke-linecap="round"><path d="M10 22h38M10 48h18M10 74h48"/></g>
+<g fill="#12302A" stroke="#40826D" stroke-width="3"><circle cx="48" cy="22" r="6"/><circle cx="28" cy="48" r="6"/><circle cx="58" cy="74" r="6"/></g>
+<rect x="88" y="10" width="76" height="78" rx="10" fill="#12302A" stroke="#12302A" stroke-width="2"/>
+<rect x="98" y="52" width="10" height="28" rx="3" fill="#40826D"/><rect x="112" y="40" width="10" height="40" rx="3" fill="#8FD9BF"/><rect x="128" y="58" width="10" height="22" rx="3" fill="#40826D"/><rect x="142" y="26" width="10" height="54" rx="3" fill="#8FD9BF"/></svg></div>
   <div class="grid2">
     <div class="card"><h3>Policy under test</h3>
       <div class="form" id="policy-form"></div>
@@ -266,16 +277,16 @@
 <!-- LEDGER -->
 <section id="tab-ledger" class="tab">
   <div class="tabhero"><div><h2>Ledger</h2><p>Every order mirrored into the twin, every agent checkout and every Razorpay API call.</p></div><svg viewBox="0 0 170 96" role="img" aria-label="A stack of receipts">
-<g transform="translate(40 6)"><rect x="16" y="0" width="70" height="80" rx="8" fill="#EAF4FF" stroke="#009CDE" stroke-width="2" transform="rotate(8 50 40)"/>
-<rect x="8" y="4" width="70" height="80" rx="8" fill="#fff" stroke="#009CDE" stroke-width="2" transform="rotate(-5 43 44)"/>
-<rect x="12" y="6" width="70" height="82" rx="8" fill="#fff" stroke="#0070E0" stroke-width="2.5"/>
-<rect x="22" y="18" width="36" height="6" rx="3" fill="#003087"/><g fill="#CBD5E1"><rect x="22" y="32" width="50" height="5" rx="2.5"/><rect x="22" y="43" width="44" height="5" rx="2.5"/><rect x="22" y="54" width="48" height="5" rx="2.5"/></g>
-<rect x="22" y="68" width="30" height="8" rx="4" fill="#0070E0"/><circle cx="66" cy="72" r="8" fill="#E6F4EA"/><path d="M62 72l3 3 5-6" fill="none" stroke="#1E8E3E" stroke-width="2.5"/></g></svg></div>
+<g transform="translate(40 6)"><rect x="16" y="0" width="70" height="80" rx="8" fill="#12302A" stroke="#8FD9BF" stroke-width="2" transform="rotate(8 50 40)"/>
+<rect x="8" y="4" width="70" height="80" rx="8" fill="#12302A" stroke="#8FD9BF" stroke-width="2" transform="rotate(-5 43 44)"/>
+<rect x="12" y="6" width="70" height="82" rx="8" fill="#12302A" stroke="#5FBF9F" stroke-width="2.5"/>
+<rect x="22" y="18" width="36" height="6" rx="3" fill="#40826D"/><g fill="#2A4A41"><rect x="22" y="32" width="50" height="5" rx="2.5"/><rect x="22" y="43" width="44" height="5" rx="2.5"/><rect x="22" y="54" width="48" height="5" rx="2.5"/></g>
+<rect x="22" y="68" width="30" height="8" rx="4" fill="#5FBF9F"/><circle cx="66" cy="72" r="8" fill="#12302A"/><path d="M62 72l3 3 5-6" fill="none" stroke="#5FBF9F" stroke-width="2.5"/></g></svg></div>
   <div class="card"><div class="cardhead"><h3>Orders mirrored in the twin</h3><input id="ord-filter" placeholder="Filter…"></div>
-    <div id="ord-grid" class="ag-theme-quartz gridbox tall"></div></div>
+    <div id="ord-grid" class="ag-theme-quartz-dark gridbox tall"></div></div>
   <div class="grid2">
-    <div class="card"><h3>Razorpay checkouts created by the agent</h3><div id="co-grid" class="ag-theme-quartz gridbox small"></div></div>
-    <div class="card"><h3>Razorpay API calls</h3><div id="api-grid" class="ag-theme-quartz gridbox small"></div></div>
+    <div class="card"><h3>Razorpay checkouts created by the agent</h3><div id="co-grid" class="ag-theme-quartz-dark gridbox small"></div></div>
+    <div class="card"><h3>Razorpay API calls</h3><div id="api-grid" class="ag-theme-quartz-dark gridbox small"></div></div>
   </div>
 </section>
 
@@ -298,6 +309,9 @@
   </div>
 </section>
 </main>
+</div>
+</div>
+<div id="toasts" aria-live="polite"></div>
 <div id="modal" class="modal" hidden><div class="modal-box"><div class="cardhead"><h3 id="modal-title">Decision receipt</h3>
   <button class="ghost" id="modal-close">Close</button></div><div id="modal-body"></div></div></div>
 <script src="/static/vendor/vis-network.min.js"></script>
@@ -305,11 +319,13 @@
 <script src="/static/vendor/chart.umd.min.js"></script>
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/purify.min.js"></script>
-<script src="/static/app.js?v=26"></script>
-<script src="/static/drill.js?v=27"></script>
-<script src="/static/receipts.js?v=25"></script>
-<script src="/static/review.js?v=27"></script>
-<script src="/static/evidence.js?v=2"></script>
-<script src="/static/fx.js?v=24"></script>
+<script src="/static/app.js?v=36"></script>
+<script src="/static/drill.js?v=37"></script>
+<script src="/static/receipts.js?v=35"></script>
+<script src="/static/review.js?v=37"></script>
+<script src="/static/evidence.js?v=13"></script>
+<script src="/static/fx.js?v=25"></script>
+<script src="/static/vendor/gsap.min.js"></script>
+<script src="/static/ui.js?v=1"></script>
 </body>
 </html>

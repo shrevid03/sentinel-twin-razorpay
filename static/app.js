@@ -15,10 +15,10 @@ const api = async (path, body, retried) => {
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const money = (n) => "₹" + Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });  /* all amounts are rupees */
 const md = (t) => DOMPurify.sanitize(marked.parse(t || ""));
-/* Chart.js defaults: light theme, blue/navy series, legends on */
+/* Chart.js defaults: dark viridian theme (tokens in theme.css), legends on */
 if (window.Chart) {
-  Chart.defaults.font.family = '"Plus Jakarta Sans", Inter, system-ui, sans-serif';
-  Chart.defaults.color = "#5B6B82"; Chart.defaults.borderColor = "#E3E8EF";
+  Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+  Chart.defaults.color = "#8FB3A6"; Chart.defaults.borderColor = "rgba(143,179,166,.14)";
   Chart.defaults.plugins.legend.display = true;
   Chart.defaults.plugins.legend.labels.usePointStyle = true;
   Chart.defaults.elements.bar.borderRadius = 6;
@@ -45,7 +45,7 @@ async function loadStats() {
   $("#kpis").innerHTML = [
     kpi("accounts mirrored", s.accounts), kpi("devices · IPs", `${s.devices} · ${s.ips}`),
     kpi("live orders", s.live_orders), kpi("approved", s.approved, "ok"), kpi("sent to review", s.review, "warn"),
-    kpi("blocked", `${s.blocked} · ${money(s.blocked_inr)}`, "bad"), kpi("high-risk accounts", s.high_risk_accounts, "bad"),
+    kpi(`blocked · ${money(s.blocked_inr)}`, s.blocked, "bad"), kpi("high-risk accounts", s.high_risk_accounts, "bad"),
     kpi("frozen by investigator", s.frozen), kpi("GAT test AUC", s.model.test_auc ?? "–", "ok"),
   ].join("");
   window.lastStats = s; window.onStats?.(s);
@@ -57,8 +57,8 @@ let graphMeta = {}, SIZE_K = 1;
 /* ---------- twin graph: "constellation of the twin" ---------- */
 const RISKY = (n) => (n.risk || 0) > 0.5 && n.status !== "frozen";
 const REDUCED = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-const EDGE_COLOR = { color: "rgba(59,123,255,0.45)", highlight: "rgba(160,215,255,1)", hover: "rgba(160,215,255,1)" };
-const EDGE_RISK = { color: "rgba(143,211,255,0.8)", highlight: "rgba(232,244,255,1)", hover: "rgba(232,244,255,1)" };
+const EDGE_COLOR = { color: "rgba(95,191,159,0.30)", highlight: "rgba(191,240,219,1)", hover: "rgba(191,240,219,1)" };
+const EDGE_RISK = { color: "rgba(255,92,92,0.55)", highlight: "rgba(255,190,190,1)", hover: "rgba(255,190,190,1)" };
 let ringAccts = [], rings = [], ringEdges = [], POS = {}, graphRaw = null, graphFocus = null;
 
 function adjOf(g) { const a = {}; g.edges.forEach((e) => { (a[e.from] ||= []).push(e.to); (a[e.to] ||= []).push(e.from); }); return a; }
@@ -93,7 +93,7 @@ function sampleGraph(g, target = 90) {  // fewer, bigger nodes: every risky acco
 }
 
 /* custom node painters: glowing pearls, coral orbs, cyan diamonds, steel rings */
-function painter(n) {  // neon-sign tubes: hollow outlines with glow; risk = brightness, never red
+function painter(n) {  // viridian pearls for accounts, coral for risky ones, mint diamonds, amber payment ids
   return ({ ctx, x, y, state: { selected, hover }, style }) => {
     const r = style.size * SIZE_K, hot = RISKY(n), frozen = n.status === "frozen";
     return {
@@ -101,31 +101,29 @@ function painter(n) {  // neon-sign tubes: hollow outlines with glow; risk = bri
         ctx.save();
         if (n.type === "account") {
           const rr = r * 0.82;
-          ctx.fillStyle = hot ? "rgba(159,224,255,0.22)" : "rgba(77,163,255,0.12)";
+          ctx.fillStyle = hot ? "rgba(255,92,92,0.22)" : "rgba(64,130,109,0.28)";
           ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.283); ctx.fill();
-          if (frozen) { ctx.setLineDash([3, 3]); ctx.strokeStyle = "#6B7FA8"; ctx.lineWidth = 1.6 * SIZE_K; ctx.stroke(); }
+          if (frozen) { ctx.setLineDash([3, 3]); ctx.strokeStyle = "#8FB3A6"; ctx.lineWidth = 1.6 * SIZE_K; ctx.stroke(); }
           else if (hot) {
-            ctx.shadowColor = "#3D5BFF"; ctx.shadowBlur = 30; ctx.strokeStyle = "#7FD0FF"; ctx.lineWidth = 3 * SIZE_K; ctx.stroke();
-            ctx.shadowColor = "#9FE0FF"; ctx.shadowBlur = 12; ctx.strokeStyle = "#E8F4FF"; ctx.lineWidth = 1.4 * SIZE_K;
-            ctx.beginPath(); ctx.arc(x, y, rr, 0, 6.283); ctx.stroke();
-            ctx.shadowBlur = 8; ctx.fillStyle = "#E8F4FF"; ctx.beginPath(); ctx.arc(x, y, rr * 0.28, 0, 6.283); ctx.fill();
-          } else { ctx.shadowColor = "#2F7BFF"; ctx.shadowBlur = 18; ctx.strokeStyle = "#4DA3FF"; ctx.lineWidth = 2 * SIZE_K; ctx.stroke(); }
+            ctx.shadowColor = "#FF5C5C"; ctx.shadowBlur = 26; ctx.strokeStyle = "#FF5C5C"; ctx.lineWidth = 3 * SIZE_K; ctx.stroke();
+            ctx.shadowBlur = 8; ctx.fillStyle = "#FFD6D6"; ctx.beginPath(); ctx.arc(x, y, rr * 0.28, 0, 6.283); ctx.fill();
+          } else { ctx.shadowColor = "#40826D"; ctx.shadowBlur = 16; ctx.strokeStyle = "#5FBF9F"; ctx.lineWidth = 2 * SIZE_K; ctx.stroke(); }
         } else if (n.type === "device") {
-          ctx.shadowColor = hot ? "#9FE0FF" : "#2FB8FF"; ctx.shadowBlur = hot ? 14 : 10;
-          ctx.strokeStyle = hot ? "#E8F4FF" : "#5CE1FF"; ctx.lineWidth = (hot ? 1.8 : 1.4) * SIZE_K;
+          ctx.shadowColor = hot ? "#FF5C5C" : "#5FBF9F"; ctx.shadowBlur = hot ? 12 : 8;
+          ctx.strokeStyle = hot ? "#FFB3B3" : "#8FD9BF"; ctx.lineWidth = (hot ? 1.8 : 1.4) * SIZE_K;
           ctx.beginPath(); ctx.moveTo(x, y - r); ctx.lineTo(x + r, y); ctx.lineTo(x, y + r); ctx.lineTo(x - r, y); ctx.closePath(); ctx.stroke();
         } else if (n.type === "upi" || n.type === "card" || n.type === "contact") {
-          ctx.shadowColor = "#FFB547"; ctx.shadowBlur = hot ? 14 : 8;
-          ctx.strokeStyle = hot ? "#FFE3B0" : "#FFB547"; ctx.lineWidth = (hot ? 1.8 : 1.4) * SIZE_K;
+          ctx.shadowColor = "#F5B84B"; ctx.shadowBlur = hot ? 14 : 8;
+          ctx.strokeStyle = hot ? "#FFE3B0" : "#F5B84B"; ctx.lineWidth = (hot ? 1.8 : 1.4) * SIZE_K;
           ctx.strokeRect(x - r * 0.7, y - r * 0.7, r * 1.4, r * 1.4);
         } else if (n.type === "ip") {
-          ctx.shadowColor = "#5C7CFF"; ctx.shadowBlur = 8; ctx.fillStyle = hot ? "#DDE8FF" : "#8AA8FF";
+          ctx.shadowColor = "#40826D"; ctx.shadowBlur = 6; ctx.fillStyle = hot ? "#FFD6D6" : "#8FB3A6";
           ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, 6.283); ctx.fill();
         } else {
-          ctx.shadowColor = "#2F7BFF"; ctx.shadowBlur = 16; ctx.strokeStyle = "#E8F4FF"; ctx.lineWidth = 2 * SIZE_K;
+          ctx.shadowColor = "#5FBF9F"; ctx.shadowBlur = 14; ctx.strokeStyle = "#E6F2EC"; ctx.lineWidth = 2 * SIZE_K;
           ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, 6.283); ctx.stroke();
         }
-        if (selected || hover) { ctx.setLineDash([]); ctx.shadowColor = "#9FE0FF"; ctx.shadowBlur = 14; ctx.strokeStyle = "rgba(232,244,255,.95)"; ctx.lineWidth = 1.5 * SIZE_K;
+        if (selected || hover) { ctx.setLineDash([]); ctx.shadowColor = "#5FBF9F"; ctx.shadowBlur = 14; ctx.strokeStyle = "rgba(230,242,236,.95)"; ctx.lineWidth = 1.5 * SIZE_K;
           ctx.beginPath(); ctx.arc(x, y, r + 4, 0, 6.283); ctx.stroke(); }
         ctx.restore();
       },
@@ -175,7 +173,7 @@ let pulseRaf = 0, pulseCv = null, pulseCtx = null;
 const GLOW = (() => {  // pre-rendered soft glow sprite: one drawImage per node instead of a gradient per frame
   const g = document.createElement("canvas"); g.width = g.height = 128; const x = g.getContext("2d");
   const gr = x.createRadialGradient(64, 64, 0, 64, 64, 64);
-  gr.addColorStop(0, "rgba(159,224,255,0.30)"); gr.addColorStop(0.5, "rgba(77,140,255,0.12)"); gr.addColorStop(1, "rgba(61,91,255,0)");
+  gr.addColorStop(0, "rgba(255,120,120,0.32)"); gr.addColorStop(0.5, "rgba(255,92,92,0.12)"); gr.addColorStop(1, "rgba(255,92,92,0)");
   x.fillStyle = gr; x.fillRect(0, 0, 128, 128); return g;
 })();
 let pulseLast = 0;
@@ -195,8 +193,7 @@ function pulseLoop(now) {  // pulses live on their own overlay canvas, so the gr
   c.globalAlpha = 0.45 + 0.55 * breath;
   ringAccts.forEach((id) => { const p = POS[id]; if (!p) return; const d = network.canvasToDOM(p); c.drawImage(GLOW, d.x - R, d.y - R, R * 2, R * 2); });
   c.globalAlpha = 1;
-  c.fillStyle = "rgba(220,240,255,0.75)";
-  c.fillStyle = "rgba(220,240,255,0.75)";
+  c.fillStyle = "rgba(255,200,200,0.8)";
   ringEdges.forEach((e) => {
     const a = POS[e.from], b = POS[e.to]; if (!a || !b) return;
     const k = (t + e.phase) % 1, d = network.canvasToDOM({ x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k });
@@ -205,7 +202,7 @@ function pulseLoop(now) {  // pulses live on their own overlay canvas, so the gr
   });
 }
 
-function drawRingMist(ctx) {  // a faint blue halo around each ring (no red anywhere)
+function drawRingMist(ctx) {  // a faint coral halo around each ring
   const maxRisk = Math.max(0, ...rings.map((x) => x.risk));
   rings.forEach((rg) => {
     const ps = rg.accounts.map((id) => POS[id]).filter(Boolean); if (!ps.length) return;
@@ -213,10 +210,10 @@ function drawRingMist(ctx) {  // a faint blue halo around each ring (no red anyw
     const spread = Math.max(...ps.map((p) => Math.hypot(p.x - cx, p.y - cy)));
     const rad = 70 + Math.min(150, spread * 1.6);
     const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    g.addColorStop(0, "rgba(61,91,255,0.20)"); g.addColorStop(0.6, "rgba(47,123,255,0.07)"); g.addColorStop(1, "rgba(47,123,255,0)");
+    g.addColorStop(0, "rgba(255,92,92,0.16)"); g.addColorStop(0.6, "rgba(255,92,92,0.05)"); g.addColorStop(1, "rgba(255,92,92,0)");
     ctx.fillStyle = g; ctx.beginPath(); ctx.arc(cx, cy, rad, 0, 6.283); ctx.fill();
-    ctx.save(); ctx.strokeStyle = rg.risk === maxRisk && rg.n === rings.find((x) => x.risk === maxRisk).n ? "rgba(140,123,255,0.45)" : "rgba(77,163,255,0.28)";
-    ctx.lineWidth = 1.2 * SIZE_K; ctx.setLineDash([4 * SIZE_K, 6 * SIZE_K]); ctx.shadowColor = "#2F7BFF"; ctx.shadowBlur = 10;
+    ctx.save(); ctx.strokeStyle = rg.risk === maxRisk && rg.n === rings.find((x) => x.risk === maxRisk).n ? "rgba(255,92,92,0.6)" : "rgba(255,92,92,0.3)";
+    ctx.lineWidth = 1.2 * SIZE_K; ctx.setLineDash([4 * SIZE_K, 6 * SIZE_K]); ctx.shadowColor = "#FF5C5C"; ctx.shadowBlur = 8;
     ctx.beginPath(); ctx.arc(cx, cy, Math.max(30, spread + 22 * SIZE_K), 0, 6.283); ctx.stroke(); ctx.restore();
     rg.c = { x: cx, y: cy, r: rad };
   });
@@ -232,13 +229,16 @@ function drawPulses(ctx) {
   });
   ctx.restore();
 }
-let chipKey = "";
+let chipKey = "", activeRing = null;
 function placeRingChips() {
   const box = $("#ring-chips"); if (!box) return;
-  const shown = rings.filter((r) => r.c).slice(0, 8);
+  const pinned = rings.filter((r) => r.c).sort((a, b) => b.risk - a.risk).slice(0, innerWidth < 700 ? 1 : 2);
+  const act = rings.find((r) => r.n === activeRing && r.c);
+  const shown = act && !pinned.includes(act) ? [...pinned, act] : pinned;
   const key = shown.map((r) => r.n).join(",") + "|" + network.getScale().toFixed(3) + JSON.stringify(network.getViewPosition());
   if (key === chipKey) return; chipKey = key;
-  if (box.childElementCount !== shown.length) {
+  if (box.dataset.rings !== shown.map((r) => r.n).join(",")) {
+    box.dataset.rings = shown.map((r) => r.n).join(",");
     box.innerHTML = shown.map((r) => `<button class="ringchip" data-ring="${r.n}" title="Focus ring ${r.n} and explain its riskiest account"><i></i><b>Ring ${r.n}</b> · ${r.accounts.length} accounts · ${r.shared.length} shared · risk ${r.risk.toFixed(2)}</button>`).join("");
     box.querySelectorAll(".ringchip").forEach((b) => b.onclick = () => focusRing(+b.dataset.ring));
   }
@@ -283,6 +283,9 @@ async function loadGraph(focus) {
     network.on("dragEnd", () => { POS = network.getPositions(); });
     network.on("beforeDrawing", drawRingMist);
     network.on("afterDrawing", () => placeRingChips());
+    const ringOf = (id) => (rings.find((r) => r.members.has(id)) || {}).n ?? null;
+    network.on("hoverNode", (p) => { const r = ringOf(p.node); if (r !== activeRing) { activeRing = r; chipKey = ""; network.redraw(); } });
+    network.on("selectNode", (p) => { activeRing = ringOf(p.nodes[0]); chipKey = ""; network.redraw(); });
     $("#hud-zoom-in").onclick = () => network.moveTo({ scale: network.getScale() * 1.25, animation: { duration: 250 } });
     $("#hud-zoom-out").onclick = () => network.moveTo({ scale: network.getScale() / 1.25, animation: { duration: 250 } });
     $("#hud-ring").onclick = () => rings[0] && focusRing(rings.slice().sort((a, b) => b.risk - a.risk)[0].n);
@@ -420,7 +423,7 @@ async function renderPay(co) {
       const rzp = new Razorpay({
         key: CFG.razorpay_key_id, order_id: co.pay_order_id, amount: co.amount, currency: co.currency,
         name: "Sentinel Twin Demo Store", description: co.cart.map((c) => c.name).join(", ").slice(0, 250),
-        theme: { color: "#0C2451" },
+        theme: { color: "#40826D" },
         handler: (resp) => capture(resp),  // {razorpay_payment_id, razorpay_order_id, razorpay_signature}
         modal: { ondismiss: () => addMsg("sys", "Razorpay Checkout was closed before the payment finished, so nothing was captured. If your bank still shows a debit, Razorpay reverses it automatically (auto-refund after the capture window, then 5-7 working days).") },
       });
@@ -499,7 +502,7 @@ async function loadAccounts() {
       rowData: rows, pagination: true, paginationPageSize: 50,
       columnDefs: [
         { field: "id", width: 90, pinned: "left" }, { field: "name" },
-        { field: "risk", width: 110, sort: "desc", valueFormatter: (p) => p.value.toFixed(2), cellStyle: (p) => ({ color: p.value > 0.5 ? "#D93025" : "#1E8E3E", fontWeight: 600 }) },
+        { field: "risk", width: 110, sort: "desc", valueFormatter: (p) => p.value.toFixed(2), cellStyle: (p) => ({ color: p.value > 0.5 ? "#FF5C5C" : "#5FBF9F", fontWeight: 600 }) },
         { field: "status", width: 95 }, { field: "age_days", headerName: "Age (d)", width: 95 }, { field: "country", width: 90 },
         { field: "email_domain", headerName: "Email" }, { field: "devices", width: 90 }, { field: "ips", width: 75 },
         { field: "orders", width: 85 }, { field: "spend", valueFormatter: (p) => money(p.value), width: 100 },
@@ -551,7 +554,7 @@ function addResults(results, replace) {
     rtGrid = agGrid.createGrid($("#rt-grid"), { rowData: rows, columnDefs: [
       { field: "attack" }, { field: "params", flex: 1 }, { field: "fraud", valueFormatter: (p) => money(p.value), width: 100 },
       { field: "stopped", headerName: "Intercepted", headerTooltip: "blocked or sent to review", valueFormatter: (p) => money(p.value), width: 110 },
-      { field: "evaded", valueFormatter: (p) => money(p.value), width: 100, cellStyle: (p) => ({ color: p.value > 0 ? "#D93025" : "#1E8E3E" }) },
+      { field: "evaded", valueFormatter: (p) => money(p.value), width: 100, cellStyle: (p) => ({ color: p.value > 0 ? "#FF5C5C" : "#5FBF9F" }) },
       { field: "detection", headerName: "Intercept %", width: 110, valueFormatter: (p) => Math.round(p.value * 100) + "%" }, { field: "decided_by", headerName: "Decided by", width: 150 }, { field: "notes", headerName: "Why / notes", flex: 1, tooltipField: "notes" }],
       defaultColDef: { resizable: true, sortable: true } });
   } else if (replace) rtGrid.setGridOption("rowData", rows);
@@ -596,10 +599,10 @@ async function runWhatIf() {
   const r = await api("/api/whatif?include_redteam=" + $("#wi-rt").checked, getPolicy());
   const keys = [["fraud_blocked_inr", "Fraud blocked $"], ["fraud_reviewed_inr", "Fraud sent to review $"], ["fraud_missed_inr", "Fraud missed $"], ["good_blocked_inr", "Good orders blocked $"]];
   const data = { labels: keys.map((k) => k[1]), datasets: [
-    { label: "Current policy", data: keys.map((k) => r.current[k[0]]), backgroundColor: "#003087" },
-    { label: "Proposed policy", data: keys.map((k) => r.proposed[k[0]]), backgroundColor: "#009CDE" }] };
+    { label: "Current policy", data: keys.map((k) => r.current[k[0]]), backgroundColor: "#40826D" },
+    { label: "Proposed policy", data: keys.map((k) => r.proposed[k[0]]), backgroundColor: "#8FD9BF" }] };
   if (wiChart) { wiChart.data = data; wiChart.update(); } else wiChart = new Chart($("#wi-chart"), { type: "bar", data,
-    options: { plugins: { legend: { labels: { color: "#001435" } } }, scales: { x: { ticks: { color: "#5B6B82" } }, y: { ticks: { color: "#5B6B82" }, grid: { color: "#E3E8EF" } } } } });
+    options: { plugins: { legend: { labels: { color: "#E6F2EC" } } }, scales: { x: { ticks: { color: "#8FB3A6" } }, y: { ticks: { color: "#8FB3A6" }, grid: { color: "#1B3B33" } } } } });
   $("#wi-kpis").innerHTML = [kpi("intercept rate now", Math.round(r.current.catch_rate * 100) + "%"), kpi("intercept rate proposed", Math.round(r.proposed.catch_rate * 100) + "%", "ok"),
     kpi("good orders to review", `${r.current.good_reviewed} → ${r.proposed.good_reviewed}`, "warn"),
     kpi("fraud ₹ stopped per 100 orders flagged", `${money(r.current.fraud_stopped_per_100_flagged_inr)} → ${money(r.proposed.fraud_stopped_per_100_flagged_inr)}`, "ok"),
@@ -613,7 +616,7 @@ $("#btn-apply").onclick = async () => { await api("/api/policy", getPolicy()); $
 let ordGrid, coGrid, apiGrid;
 async function loadLedger() {
   const [orders, cos, calls] = await Promise.all([api("/api/orders"), api("/api/checkouts"), api("/api/razorpay/calls")]);
-  const dec = (p) => ({ color: p.value === "block" ? "#D93025" : p.value === "review" ? "#B06000" : "#1E8E3E", fontWeight: 600 });
+  const dec = (p) => ({ color: p.value === "block" ? "#FF5C5C" : p.value === "review" ? "#B06000" : "#5FBF9F", fontWeight: 600 });
   if (!ordGrid) ordGrid = agGrid.createGrid($("#ord-grid"), { rowData: orders, pagination: true, paginationPageSize: 100,
     columnDefs: [{ field: "id", width: 120, pinned: "left" }, { field: "buyer" }, { field: "account", width: 90 }, { field: "merchant_name", headerName: "Merchant" },
       { field: "amount", width: 100, valueFormatter: (p) => money(p.value) }, { field: "decision", width: 105, cellStyle: dec },
@@ -625,7 +628,7 @@ async function loadLedger() {
     data: String(c.pay_order_id).startsWith("order_DEMO") ? "Demo mode" : "Real Razorpay test mode" }));
   if (!coGrid) coGrid = agGrid.createGrid($("#co-grid"), { rowData: coRows, columnDefs: [{ field: "pay_order_id" },
     { field: "receipt_id", headerName: "Receipt", width: 130, cellRenderer: (p) => p.value ? `<a href="#" class="rcpt-link" data-rcpt="${esc(p.value)}">${esc(p.value)}</a>` : "" },
-    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#1E8E3E" : "#B06000", fontWeight: 600 }) }, { field: "total", headerName: "Total (₹)", width: 110, valueFormatter: (p) => money(p.value) }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
+    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#5FBF9F" : "#B06000", fontWeight: 600 }) }, { field: "total", headerName: "Total (₹)", width: 110, valueFormatter: (p) => money(p.value) }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
   else coGrid.setGridOption("rowData", coRows);
   if (!apiGrid) apiGrid = agGrid.createGrid($("#api-grid"), { rowData: calls, columnDefs: [{ field: "t", width: 90 }, { field: "method", width: 85 }, { field: "path", flex: 1 }, { field: "status", width: 85 }, { field: "mode", width: 95 }] });
   else apiGrid.setGridOption("rowData", calls);
@@ -639,10 +642,10 @@ async function loadModel() {
   $("#model-kpis").innerHTML = [kpi("test AUC", m.test_auc, "ok"), kpi("precision", m.precision), kpi("recall", m.recall),
     kpi("graph nodes", m.graph.nodes), kpi("edges", m.graph.edges), kpi("attention heads", `${m.heads} + 1`)].join("");
   const data = { labels: m.history.map((h) => h.epoch), datasets: [
-    { label: "training loss", data: m.history.map((h) => h.loss), borderColor: "#003087", backgroundColor: "#003087", yAxisID: "y" },
-    { label: "validation AUC", data: m.history.map((h) => h.val_auc), borderColor: "#009CDE", backgroundColor: "#009CDE", yAxisID: "y1" }] };
+    { label: "training loss", data: m.history.map((h) => h.loss), borderColor: "#40826D", backgroundColor: "#40826D", yAxisID: "y" },
+    { label: "validation AUC", data: m.history.map((h) => h.val_auc), borderColor: "#8FD9BF", backgroundColor: "#8FD9BF", yAxisID: "y1" }] };
   if (trainChart) { trainChart.data = data; trainChart.update(); } else trainChart = new Chart($("#train-chart"), { type: "line", data,
-    options: { plugins: { legend: { labels: { color: "#001435" } } }, scales: { x: { ticks: { color: "#5B6B82" } }, y: { ticks: { color: "#5B6B82" } }, y1: { position: "right", min: 0.4, max: 1, ticks: { color: "#5B6B82" } } } } });
+    options: { plugins: { legend: { labels: { color: "#E6F2EC" } } }, scales: { x: { ticks: { color: "#8FB3A6" } }, y: { ticks: { color: "#8FB3A6" } }, y1: { position: "right", min: 0.4, max: 1, ticks: { color: "#8FB3A6" } } } } });
 }
 $("#btn-retrain").onclick = async (e) => { e.target.disabled = true; await api("/api/model/retrain", {}); e.target.disabled = false; loadModel(); refresh(); };
 

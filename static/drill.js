@@ -72,12 +72,12 @@ async function runDrill() {
     ].join("");
     $("#ds-4").classList.add("show");  // show before drawing so Chart.js can measure the canvas
     const data = { labels: ["Attack ₹ that got through", "False-positive cost ₹"], datasets: [
-      { label: "Before", data: [s.breach_evaded_before_inr, s.fp_cost_before_inr], backgroundColor: "#003087" },
-      { label: "After", data: [s.breach_evaded_after_inr ?? 0, s.fp_cost_after_inr ?? 0], backgroundColor: "#009CDE" }] };
+      { label: "Before", data: [s.breach_evaded_before_inr, s.fp_cost_before_inr], backgroundColor: "#40826D" },
+      { label: "After", data: [s.breach_evaded_after_inr ?? 0, s.fp_cost_after_inr ?? 0], backgroundColor: "#8FD9BF" }] };
     if (drillChart) { drillChart.data = data; drillChart.update(); } else {
       drillChart = new Chart($("#d-chart"), { type: "bar", data, options: {
-        plugins: { legend: { labels: { color: "#001435" } } },
-        scales: { x: { ticks: { color: "#5B6B82" } }, y: { ticks: { color: "#5B6B82" }, grid: { color: "#E3E8EF" } } } } });
+        plugins: { legend: { labels: { color: "#E6F2EC" } } },
+        scales: { x: { ticks: { color: "#8FB3A6" } }, y: { ticks: { color: "#8FB3A6" }, grid: { color: "#1B3B33" } } } } });
     }
     drillChart.resize();
     await sleep(600);
@@ -107,11 +107,11 @@ function renderCompare(c) {
       <td class="n">${money(e.fraud_blocked_inr)} / ${money(e.fraud_reviewed_inr)}</td><td class="n">${e.good_reviewed} of ${e.good_total}</td>
       <td class="n">${money(e.good_blocked_inr)}</td><td class="n">${money(e.false_positive_cost_inr)}</td><td class="n">${money(e.fraud_stopped_per_100_flagged_inr)}</td></tr>`; }).join("")}</table>`;
   const kinds = Object.keys(c.by_attack).filter((k) => k !== "live fraud traffic");
-  const colors = { rules_only: "#B8C4D6", gat_only: "#7FB8F0", gat_rules: "#0070E0", gat_rules_hardened: "#003087" };
+  const colors = { rules_only: "#8FB3A6", gat_only: "#2F6B58", gat_rules: "#5FBF9F", gat_rules_hardened: "#40826D" };
   const data = { labels: kinds.map((k) => ATTACK_LABEL[k] || k), datasets: names.map((n) => ({ label: ENGINE[n],
     data: kinds.map((k) => Math.round((c.by_attack[k][n] || 0) * 100)), backgroundColor: colors[n] })) };
-  const opts = { plugins: { legend: { labels: { color: "#001435" } } }, scales: { x: { ticks: { color: "#5B6B82" } },
-    y: { max: 100, ticks: { color: "#5B6B82", callback: (v) => v + "%" }, grid: { color: "#E3E8EF" } } } };
+  const opts = { plugins: { legend: { labels: { color: "#E6F2EC" } } }, scales: { x: { ticks: { color: "#8FB3A6" } },
+    y: { max: 100, ticks: { color: "#8FB3A6", callback: (v) => v + "%" }, grid: { color: "#1B3B33" } } } };
   $("#ds-5").classList.add("show");
   if (cmpChart) { cmpChart.data = data; cmpChart.update(); } else cmpChart = new Chart($("#d-cmp-chart"), { type: "bar", data, options: opts });
   cmpChart.resize();
@@ -186,18 +186,18 @@ window.renderFlow = (d) => {
     while (passSet.size < pass) passSet.add(lanes.find((i) => !passSet.has(i)));
     return `<g transform="translate(${ox} 0)">
       <text x="10" y="22" class="fl-title">${title}</text><text x="10" y="40" class="fl-sub">${sub}</text>
-      <g transform="translate(250 56)"><path d="M30 0 0 11v22c0 20 13 35 30 41 17-6 30-21 30-41V11Z" fill="${shieldCol}"/><path d="M18 36l9 9 16-18" stroke="#fff" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <g transform="translate(250 56)"><path d="M30 0 0 11v22c0 20 13 35 30 41 17-6 30-21 30-41V11Z" fill="${shieldCol}"/><path d="M18 36l9 9 16-18" stroke="#0F2620" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></g>
       ${lanes.map((i) => { const y = 58 + i * 7.2, ok = !passSet.has(i), dir = i < N / 2 ? -1 : 1;
-        return `<g class="arrow ${ok ? "defl" : "pass"}" style="--dy:${dir * (40 + (i % 3) * 14)}px;animation-delay:${(i * 0.37).toFixed(2)}s"><path d="M10 ${y}h26" stroke="${ok ? "#0070E0" : "#D93025"}" stroke-width="2.4" stroke-linecap="round"/><path d="M33 ${y - 4}l6 4-6 4" fill="${ok ? "#0070E0" : "#D93025"}"/></g>`; }).join("")}
+        return `<g class="arrow ${ok ? "defl" : "pass"}" style="--dy:${dir * (40 + (i % 3) * 14)}px;animation-delay:${(i * 0.37).toFixed(2)}s"><path d="M10 ${y}h26" stroke="${ok ? "#5FBF9F" : "#FF5C5C"}" stroke-width="2.4" stroke-linecap="round"/><path d="M33 ${y - 4}l6 4-6 4" fill="${ok ? "#5FBF9F" : "#FF5C5C"}"/></g>`; }).join("")}
     </g>`;
   };
   const sub = (p) => `${p} of ${N} arrows get through`;
   el.innerHTML = `<div class="cardhead"><h3>Attack flow <span class="tag synth">Synthetic attack traffic</span></h3>
       <small class="muted">${d ? `Each arrow is a tenth of the ${money(att)} attempted. Red got through; blue was intercepted.` : "Illustration until you run a drill: then the arrows follow the real result."}</small></div>
     <svg class="flowsvg" viewBox="0 0 900 140" role="img" aria-label="Before hardening ${passB} of ${N} attack arrows pass the shield; after hardening ${passA} of ${N}">
-      ${panel(0, passB, "Before hardening", d ? `${money(s.breach_evaded_before_inr)} got through · ${sub(passB)}` : "Today's policy", "#5B6B82")}
-      <line x1="450" y1="20" x2="450" y2="130" stroke="#E3E8EF" stroke-width="2"/>
-      ${panel(460, passA, "After hardening", d ? (d.chosen ? `${money(s.breach_evaded_after_inr)} got through · ${sub(passA)}` : "No better policy found") : "Run a drill to see it", "#003087")}
+      ${panel(0, passB, "Before hardening", d ? `${money(s.breach_evaded_before_inr)} got through · ${sub(passB)}` : "Today's policy", "#8FB3A6")}
+      <line x1="450" y1="20" x2="450" y2="130" stroke="#1B3B33" stroke-width="2"/>
+      ${panel(460, passA, "After hardening", d ? (d.chosen ? `${money(s.breach_evaded_after_inr)} got through · ${sub(passA)}` : "No better policy found") : "Run a drill to see it", "#40826D")}
     </svg>`;
 };
 

@@ -18,7 +18,7 @@ function renderEvidence(c) {
     const r = await api(`/api/evidence/${encodeURIComponent(c.id)}/ask`, { question: q });
     c.chat.push({ q, a: r.answer, brain: r.brain }); renderEvidence(c);
   };
-  loadLedger();
+  loadComplianceLedger();
   loadTimeline(c.account);
 }
 
@@ -30,7 +30,7 @@ async function loadTimeline(acc) {
       "Event timeline (sequence transformer is off; start with TWIN_SEQ=1 to see its attention)";
     $("#ev-out").insertAdjacentHTML("beforeend", `<details><summary class="muted">${esc(head)}</summary><ol class="ev-steps small">${t.events.map((e) =>
       `<li>${esc(e.event)} · ${money(e.inr)}${e.new_device ? " · new device" : ""}${e.new_place ? " · new place/counterparty" : ""}${
-        e.attention != null ? ` <span style="display:inline-block;height:6px;width:${Math.round(e.attention * 300)}px;background:#0070E0;border-radius:3px"></span> ${e.attention}` : ""}</li>`).join("")}</ol></details>`);
+        e.attention != null ? ` <span style="display:inline-block;height:6px;width:${Math.round(e.attention * 300)}px;background:#5FBF9F;border-radius:3px"></span> ${e.attention}` : ""}</li>`).join("")}</ol></details>`);
   } catch (e) { /* the timeline is extra context */ }
 }
 
@@ -39,7 +39,7 @@ async function openEvidence(acc) {
   try { renderEvidence(await api(`/api/evidence/${encodeURIComponent(acc)}`, {})); } catch (e) { $("#ev-out").innerHTML = `<p class="muted">${esc(e.message)}</p>`; }
 }
 
-async function loadLedger() {
+async function loadComplianceLedger() {
   try {
     const l = await api("/api/ledger?limit=5");
     $("#ev-ledger").textContent = `Ledger: ${l.verify.records} records, hash chain ${l.verify.ok ? "verified" : "BROKEN at #" + l.verify.broken_at}` +
@@ -61,4 +61,4 @@ $("#btn-ev-top").onclick = async () => {
   const f = (await api("/api/accounts")).filter((a) => a.status === "active").sort((a, b) => b.risk - a.risk);
   if (f.length) { $("#ev-account").value = f[0].id; openEvidence(f[0].id); }
 };
-document.querySelectorAll('#tabs button[data-tab="investigator"]').forEach((b) => b.addEventListener("click", loadLedger));
+document.querySelectorAll('#tabs button[data-tab="investigator"]').forEach((b) => b.addEventListener("click", loadComplianceLedger));
