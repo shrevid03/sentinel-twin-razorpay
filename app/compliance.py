@@ -103,34 +103,57 @@ class Ledger:
         self.path = path if path is not None else os.getenv("LEDGER_PATH", "")
         self._records: list[dict] = []
         self._lock = threading.Lock()
+        self._audit = None
+
+    def attach(self, audit):
+        """Back the ledger with the database: the chain continues across restarts and is shared by every writer
+        (each append takes a database lock and chains onto the latest row). Refuses a chain that does not verify."""
+        with self._lock:
+            rows = audit.ledger_rows()
+            if rows and not self.verify(rows)["ok"]:
+                raise ValueError("the persisted ledger fails its hash-chain check")
+            pending, self._records, self._audit = self._records, [], audit
+        for r in pending:  # records made before attaching (e.g. during start-up) join the durable chain
+            self.append({k: v for k, v in r.items() if k not in ("seq", "ts", "prev", "hash")})
+        return self.verify()
 
     def append(self, rec):
         with self._lock:
-            rec = {**rec, "seq": len(self._records) + 1, "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
-                   "prev": self._records[-1]["hash"] if self._records else "genesis"}
-            rec["hash"] = _hash(rec)
-            self._records.append(rec)
+            def build(seq, prev):
+                r = {**rec, "seq": seq, "ts": time.strftime("%Y-%m-%d %H:%M:%S"), "prev": prev}
+                r["hash"] = _hash(r)
+                return json.loads(json.dumps(r, default=str)) if self._audit is not None else r
+            if self._audit is not None:  # the database decides seq and prev, so several writers share one chain
+                rec = self._audit.ledger_append(build)
+            else:
+                rec = build(len(self._records) + 1, self._records[-1]["hash"] if self._records else "genesis")
+                self._records.append(rec)
             if self.path:
                 os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
                 with open(self.path, "a", encoding="utf-8") as f:
                     f.write(json.dumps(rec, default=str) + "\n")
             return dict(rec)
 
+    def _rows(self):
+        return self._audit.ledger_rows() if self._audit is not None else self._records
+
     def records(self, case_id=None, kind=None):
-        return [dict(r) for r in self._records
+        return [dict(r) for r in self._rows()
                 if (case_id is None or r.get("case_id") == case_id) and (kind is None or r.get("type") == kind)]
 
-    def verify(self):
+    def verify(self, rows=None):
+        rows = self._rows() if rows is None else rows
         prev = "genesis"
-        for i, r in enumerate(self._records):
+        for i, r in enumerate(rows):
             if r["prev"] != prev or _hash(r) != r["hash"] or r["seq"] != i + 1:
-                return {"ok": False, "broken_at": r.get("seq"), "records": len(self._records)}
+                return {"ok": False, "broken_at": r.get("seq"), "records": len(rows)}
             prev = r["hash"]
-        return {"ok": True, "records": len(self._records), "head": prev[:16]}
+        return {"ok": True, "records": len(rows), "head": prev[:16]}
 
     def metrics(self):
-        recs = {r["case_id"]: r for r in self._records if r["type"] == "recommendation"}
-        dec = [r for r in self._records if r["type"] == "decision" and r["case_id"] in recs]
+        rows = self._rows()
+        recs = {r["case_id"]: r for r in rows if r["type"] == "recommendation"}
+        dec = [r for r in rows if r["type"] == "decision" and r["case_id"] in recs]
         if not dec:
             return {"resolved": 0}
 

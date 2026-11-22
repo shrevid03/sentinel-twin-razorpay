@@ -1,4 +1,5 @@
 """Parallel requests cannot double-capture, double-release or double-count spend."""
+import os
 import threading
 
 from app.agents import Team
@@ -9,8 +10,13 @@ from app.twin import Twin
 def _team():
     t = Twin(seed=3)
     t.train(20)
-    team = Team(t, Razorpay())
-    return team
+    pg = os.getenv("TEST_DATABASE_URL")
+    if pg:  # the same races against Postgres: separate pooled connections, row locks, conditional UPDATEs
+        from app.store import Store
+        s = Store(pg)
+        s.reset()
+        return Team(t, Razorpay(), store=s)
+    return Team(t, Razorpay())
 
 
 def _parallel(fn, n=12):

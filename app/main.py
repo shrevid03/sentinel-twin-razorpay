@@ -90,6 +90,7 @@ def _traffic():
         if ticks % 12 == 0:  # about once a minute: resolve in-flight captures, release abandoned reservations
             try:
                 team.reconcile()
+                twin.flush_events()  # keep the durable graph event log current between decisions
             except Exception as e:  # noqa: BLE001 - keep the loop alive; the next pass retries
                 print("reconcile error", type(e).__name__)
         if auto["on"]:
@@ -376,7 +377,7 @@ def reset():
         t.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
         razorpay.calls.clear()
         store.reset()
-        twin, team = t, Team(t, razorpay, store=store)
+        twin, team = t, Team(t, razorpay, store=store, load_receipts=False)  # audit rows stay in the database
         LAST_DRILL.clear()
         twin._event("system", "Demo reset: fresh twin, default policy, empty queues", level="info")
     return {"ok": True, "seed": int(os.getenv("TWIN_SEED", "3")), "policy": twin.policy}
@@ -523,10 +524,23 @@ def decision(decision_id: str):
         if d in twin.decisions:
             return twin.decisions[d]
         for prefix, fork in getattr(twin, "replay_forks", {}).items():
-            if d.startswith(prefix):
+            if d.startswith(prefix) and d in fork.decisions:
                 return fork.decisions[d]
-        raise KeyError(d)
+        rec = twin.audit.decision(d) if twin.audit is not None else None  # made before a restart
+        if rec is None:
+            raise KeyError(d)
+        return rec
     return _review(get, decision_id)
+
+
+@app.get("/api/audit/status")
+def audit_status():
+    """What survives a restart: stored decisions, graph events, model artifacts, receipts and ledger rows."""
+    if twin.audit is None:
+        return {"durable": False}
+    twin.flush_events()
+    return {"durable": True, "database": store.engine.dialect.name, "epoch": twin.epoch,
+            "counts": twin.audit.counts(), "ledger": team.ledger.verify()}
 
 
 @app.post("/api/decisions/{decision_id}/replay")
@@ -615,6 +629,8 @@ def receipt(receipt_id: str):
     if not r:
         co = team.checkouts.get(receipt_id) or team.holds.get(receipt_id)
         r = team.receipts.get((co or {}).get("receipt_id"))
+    if not r and team.audit_store is not None:  # from before a demo reset: still in the database
+        r = team.audit_store.receipt(receipt_id)
     if not r:
         raise HTTPException(404, "unknown receipt")
     return team.receipt_view(r)

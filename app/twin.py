@@ -132,7 +132,7 @@ class Account:
 
 
 class Twin:
-    def __init__(self, seed: int = 11):
+    def __init__(self, seed: int = 11, populate: bool = True):
         self.rng = random.Random(seed)
         self.lock = threading.RLock()
         self.clock = 0.0  # simulated minutes
@@ -166,7 +166,12 @@ class Twin:
         self.known_fraud: set[str] = set()  # ...of which fraud
         self._dirty = True
         self._n = {"A": 0, "D": 0, "IP": 0, "O": 0, "UPI": 0, "CARD": 0, "CT": 0}
-        self._populate()
+        self.label_events: list[dict] = []  # each training run's labels, with their evidence sequence
+        self.audit = None  # AuditStore: durable decisions, graph events, model artifacts (attach_audit)
+        self.epoch = None
+        self._flushed_seq = 0
+        if populate:
+            self._populate()
 
     # ----------------------------------------------------------- id helpers
     def _next(self, kind):
@@ -600,6 +605,8 @@ class Twin:
             self.known_labelled = {nodes[i] for i in tr}
             self.known_fraud = {nodes[i] for i in tr if y[i] == 1}
             lseq = self._bump()
+            self.label_events.append({"seq": lseq, "at": round(self.clock, 2), "prov": "training label",
+                                      "labelled": sorted(self.known_labelled), "fraud": sorted(self.known_fraud)})
             for a in self.known_fraud:
                 self.label_meta.setdefault(a, {"seq": lseq, "at": round(self.clock, 2), "prov": "training label"})
             if os.getenv("TWIN_SEQ", "0") == "1" and self.seq_model is None:
@@ -640,7 +647,11 @@ class Twin:
             self.model_version = self._model_hash(self.model) + (
                 "+" + self.order_model.version if self.order_model is not None else "")
             self.model_versions[self.model_version] = {"gat": copy.deepcopy(self.model),
-                                                       "order_model": copy.deepcopy(self.order_model)}
+                                                       "order_model": copy.deepcopy(self.order_model),
+                                                       "seq_model": copy.deepcopy(self.seq_model),
+                                                       "features": list(self.features)}
+            if self.audit is not None:
+                self.audit.save_model(self.model_version, self.model_versions[self.model_version])
             P = self.model.predict_proba(X, mask)
             te_pred = P[te] >= 0.5
             tp = int(np.sum(te_pred & (y[te] == 1)))
@@ -847,15 +858,21 @@ class Twin:
             pol = {**DEFAULT_POLICY, **(policy or self.policy)}
             s_ = self.score_order(account, merchant, amount, device, ip)
             decision = self.decide(s_["risk"], amount, new_device, pol, s_["spend_ratio"])
-            did = f"{getattr(self, 'decision_prefix', 'DEC-')}{len(self.decisions) + 1:05d}"
+            n = self.audit.next("decision") if self.audit is not None else len(self.decisions) + 1
+            did = f"{getattr(self, 'decision_prefix', 'DEC-')}{n:05d}"  # unique across restarts when durable
             rec = {"id": did, "point": point, "decided_at": round(self.clock, 2), "seq": self._eseq,
                    "inputs": {"account": account, "merchant": merchant, "amount": round(float(amount), 2),
-                              "device": device, "ip": ip, "new_device": bool(new_device)},
+                              "device": device, "ip": ip, "new_device": bool(new_device),
+                              "ip_country": self.ips.get(ip)},
                    "evidence": self._evidence(account, device, ip), "model_version": getattr(self, "model_version", None),
                    "policy_version": hashlib.sha256(json.dumps(pol, sort_keys=True).encode()).hexdigest()[:8],
                    "policy": pol, "features": s_["features"], "score": s_["risk"], "gat_risk": s_["gat_risk"],
                    "txn_score": s_["txn_score"], "factors": s_["factors"], "outcome": decision}
             self.decisions[did] = rec
+            if self.audit is not None:  # graph events up to this decision, then the decision itself
+                self.flush_events()
+                rec["epoch"] = self.epoch
+                self.audit.save_decision(self.epoch, rec)
             if self.ledger is not None:
                 self.ledger.append({"type": "risk_decision", "case_id": did, "by": "model", "point": point,
                                     "account": account, "decided_at": rec["decided_at"], "seq": rec["seq"],
@@ -892,8 +909,17 @@ class Twin:
         t._dirty = True
         return t
 
-    def replay(self, decision_id):
-        """Re-run a stored decision on the graph as it was at decision time, with the stored model and policy."""
+    def replay(self, decision_id, durable=None):
+        """Re-run a stored decision on the graph as it was at decision time, with the stored model and policy.
+
+        With a durable audit store (the default when one is attached) the graph is rebuilt from the persisted graph
+        event log and scored with the persisted model artifact, so this works the same after a restart."""
+        if durable is None:
+            durable = self.audit is not None
+        if durable and self.audit is not None:
+            out = self.replay_durable(decision_id)
+            if out is not None:
+                return out
         if decision_id not in self.decisions:  # made on a scenario's copy of the twin: replay it there
             for prefix, fork in getattr(self, "replay_forks", {}).items():
                 if decision_id.startswith(prefix):
@@ -1272,7 +1298,11 @@ class Twin:
                 edges.append({"from": t["src"], "to": t["dst"], "kind": "money"})
         return {"nodes": nodes, "edges": edges}
 
-    def fork(self):
+    def fork(self, durable=False):
+        """A private copy. durable=True: its decisions are persisted too, in a child epoch of this twin's event log
+        (the copy's events start after the evidence sequence it was copied at)."""
+        if durable and self.audit is not None:
+            self.flush_events()
         with self.lock:
             # Never touch the live twin's lock or hook while copying: other request threads may be
             # using them. The memo makes deepcopy give the fork a fresh lock and no event hook.
@@ -1284,9 +1314,167 @@ class Twin:
                 memo[id(self.ledger)] = None
             if "replay_forks" in self.__dict__:  # nor carries other scenarios' copies
                 memo[id(self.replay_forks)] = {}
+            if self.audit is not None:  # the database handle is shared, never copied
+                memo[id(self.audit)] = self.audit if durable else None
             twin = copy.deepcopy(self, memo)
             twin.on_event = None
+            if durable and self.audit is not None:
+                twin.epoch = self.audit.new_epoch(self.epoch, self._eseq, "scenario copy")
+                twin._flushed_seq = self._eseq
+            else:
+                twin.audit, twin.epoch = None, None
             return twin
+
+    # ------------------------------------------------- durable audit trail
+    def attach_audit(self, audit, note="live twin"):
+        """Persist this twin's graph events, model artifacts and decisions from now on (see app/audit.py)."""
+        with self.lock:
+            self.audit = audit
+            self.epoch = audit.new_epoch(note=note)
+            self._flushed_seq = 0
+            for ver, art in self.model_versions.items():
+                audit.save_model(ver, art)
+            self.flush_events()
+        return self.epoch
+
+    def _graph_delta(self, after):
+        ev = []
+        for a in self.accounts.values():
+            cs = getattr(a, "created_seq", 0)
+            if cs > after:
+                ev.append(("account", a.id, cs, {"id": a.id, "name": a.name, "country": a.country,
+                                                 "age_days": a.age_days, "email": a.email, "kyc": a.kyc,
+                                                 "fraud": a.fraud, "segment": a.segment,
+                                                 "at": getattr(a, "created_at", 0),
+                                                 "prov": getattr(a, "created_prov", "seed fixture")}))
+            fs = getattr(a, "frozen_seq", 0)
+            if fs > after:
+                lm = self.label_meta.get(a.id, {})
+                ev.append(("freeze", f"{a.id}@{fs}", fs, {"account": a.id, "at": lm.get("at", 0),
+                                                         "prov": lm.get("prov", "freeze")}))
+        for (acc, node), m in self.link_meta.items():
+            if m["seq"] > after:
+                ev.append(("link", f"{acc}|{node}", m["seq"], {"account": acc, "node": node, "at": m["at"],
+                                                              "prov": m["prov"], "country": self.ips.get(node)}))
+        ev += [("order", o["id"], o["seq"], o) for o in self.orders if o.get("seq", 0) > after]
+        ev += [("transfer", str(x["seq"]), x["seq"], x) for x in self.transfers if x.get("seq", 0) > after]
+        ev += [("labels", f"labels@{le['seq']}", le["seq"], le) for le in self.label_events if le["seq"] > after]
+        return ev
+
+    def flush_events(self):
+        """Append every graph event since the last flush to the durable event log."""
+        if self.audit is None:
+            return 0
+        with self.lock:
+            upto = self._eseq
+            ev = self._graph_delta(self._flushed_seq)
+            self.audit.append_events(self.epoch, ev)
+            self._flushed_seq = upto
+            return len(ev)
+
+    @classmethod
+    def from_events(cls, events, seq=None, at=None):
+        """Rebuild the graph from the persisted event log alone (no seed): accounts, links, orders, transfers,
+        labels and freezes, in evidence-sequence order."""
+        t = cls(populate=False)
+        for kind, _key, s_, p in events:
+            if kind == "account":
+                a = Account(id=p["id"], name=p["name"], country=p["country"], age_days=p["age_days"],
+                            email=p["email"], kyc=p["kyc"], fraud=p["fraud"], segment=p["segment"])
+                a.devices, a.ips, a.pay_ids = TrackedSet(), TrackedSet(), TrackedSet()
+                for ts_ in (a.devices, a.ips, a.pay_ids):
+                    ts_._twin, ts_._owner = t, a.id
+                a.created_seq, a.created_at, a.created_prov = s_, p["at"], p["prov"]
+                t.accounts[a.id] = a
+            elif kind == "link":
+                a, node = t.accounts.get(p["account"]), p["node"]
+                if a is None:
+                    continue
+                if node.startswith("D-"):
+                    set.add(a.devices, node)
+                    t.devices.add(node)
+                elif node.startswith("IP-"):
+                    set.add(a.ips, node)
+                    t.ips[node] = p.get("country") or a.country
+                else:
+                    set.add(a.pay_ids, node)
+                    t.pay_ids.add(node)
+                t.link_meta[(a.id, node)] = {"seq": s_, "at": p["at"], "prov": p["prov"]}
+            elif kind == "order":
+                t.orders.append(dict(p))
+                if p.get("device"):
+                    t.devices.add(p["device"])
+                if p.get("ip"):
+                    t.ips.setdefault(p["ip"], p.get("ip_country"))
+            elif kind == "transfer":
+                t.transfers.append(dict(p))
+                t.xfer_nb.setdefault(p["src"], set()).add(p["dst"])
+                t.xfer_nb.setdefault(p["dst"], set()).add(p["src"])
+            elif kind == "labels":
+                t.known_labelled, t.known_fraud = set(p["labelled"]), set(p["fraud"])
+                t.label_events.append(dict(p))
+                for a in p["fraud"]:
+                    t.label_meta.setdefault(a, {"seq": s_, "at": p["at"], "prov": p["prov"]})
+            elif kind == "freeze" and p["account"] in t.accounts:
+                t.accounts[p["account"]].status = "frozen"
+                t.accounts[p["account"]].frozen_seq = s_
+                t.label_meta[p["account"]] = {"seq": s_, "at": p["at"], "prov": p["prov"]}
+        t._eseq = seq if seq is not None else max((e[2] for e in events), default=0)
+        if at is not None:
+            t.clock = at
+        t._dirty = True
+        return t
+
+    def replay_durable(self, decision_id):
+        """Replay from the database only: the stored decision record, the graph event log and the model artifact."""
+        a = self.audit
+        rec = a.decision(decision_id)
+        if rec is None:
+            return None
+        cur = getattr(self, "model_version", None)
+        base = {"decision": decision_id, "point": rec["point"], "decided_at": rec["decided_at"],
+                "model_version": rec["model_version"], "current_model_version": cur,
+                "policy_version": rec["policy_version"],
+                "source": "persisted graph event log + stored model artifact (survives restarts)"}
+        art = a.load_model(rec["model_version"])
+        if art is None:
+            return {**base, "replayable": False, "identical": False,
+                    "reason": f"model artifact {rec['model_version']} is not in the artifact store, so this decision "
+                              "cannot be replayed (it is never re-scored with a different model)"}
+        self.flush_events()
+        evs = a.events(rec["epoch"], upto=rec["seq"])
+        t = Twin.from_events(evs, rec["seq"], rec["decided_at"])
+        i = rec["inputs"]
+        if i["account"] not in t.accounts:
+            return {**base, "replayable": False, "identical": False,
+                    "reason": "the decision's account is missing from the persisted event log"}
+        if i.get("device"):
+            t.devices.add(i["device"])
+        if i.get("ip"):
+            t.ips.setdefault(i["ip"], i.get("ip_country") or t.accounts[i["account"]].country)
+        t.model, t.order_model = copy.deepcopy(art["gat"]), copy.deepcopy(art.get("order_model"))
+        t.seq_model = copy.deepcopy(art.get("seq_model"))
+        t.features = list(art.get("features") or FEATURES)
+        t.model_version = rec["model_version"]
+        s_ = t.score_order(i["account"], i["merchant"], i["amount"], i["device"], i["ip"])
+        outcome = t.decide(s_["risk"], i["amount"], i["new_device"], rec["policy"], s_["spend_ratio"])
+        ev_now = t._evidence(i["account"], i["device"], i["ip"])
+        same_ev = [(e["item"], e["seq"]) for e in ev_now] == [(e["item"], e["seq"]) for e in rec["evidence"]]
+        later_t = Twin.from_events(a.events(rec["epoch"]))
+        later = []
+        if i["account"] in later_t.accounts:
+            later_t.devices.add(i["device"])
+            later_t.ips.setdefault(i["ip"], i.get("ip_country"))
+            later = [e for e in later_t._evidence(i["account"], i["device"], i["ip"])
+                     if e["seq"] > rec["seq"] and e["provenance"] != "this request (checkout session)"]
+        return {**base, "replayable": True, "events_replayed": len(evs),
+                "stored": {"score": rec["score"], "outcome": rec["outcome"]},
+                "replayed": {"score": s_["risk"], "outcome": outcome},
+                "identical": abs(s_["risk"] - rec["score"]) < 1e-9 and outcome == rec["outcome"] and same_ev
+                and s_["features"] == rec["features"],
+                "evidence_identical": same_ev, "features_identical": s_["features"] == rec["features"],
+                "evidence_added_since": [{k: e[k] for k in ("item", "kind", "available_at", "provenance")}
+                                         for e in later]}
 
 
 def _mask_email(e):

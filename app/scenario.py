@@ -54,9 +54,10 @@ def _new_account(t, name, prov):
 
 
 def new_account_joins_ring(twin, cart=None):
-    t = twin.fork()
+    t = twin.fork(durable=True)  # its decisions are persisted (child epoch of the live event log)
     forks = twin.__dict__.setdefault("replay_forks", {})
-    t.decision_prefix = f"SCN{len(forks) + 1}-"
+    n = twin.audit.next("scenario") if twin.audit is not None else len(forks) + 1
+    t.decision_prefix = f"SCN{n}-"
     forks[t.decision_prefix] = t  # so "Replay decision" can find these decisions later
     while len(forks) > 5:
         forks.pop(next(iter(forks)))

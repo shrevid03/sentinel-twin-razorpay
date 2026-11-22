@@ -244,11 +244,15 @@ class Store:
                                                     source="checkout opened", at=time.time()))
 
     def payment(self, order_id):
+        if not isinstance(order_id, str) or "\x00" in order_id:  # Postgres text cannot hold NUL: never a real id
+            return None
         with self.tx() as c:
             r = c.execute(select(payments).where(payments.c.order_id == order_id)).mappings().first()
         return dict(r) if r else None
 
     def payment_by_payment_id(self, payment_id):
+        if not isinstance(payment_id, str) or "\x00" in payment_id:
+            return None
         with self.tx() as c:
             r = c.execute(select(payments).where(payments.c.payment_id == payment_id)).mappings().first()
         return dict(r) if r else None
@@ -305,6 +309,7 @@ class Store:
     # -------------------------------------------------------------- webhooks
     def first_delivery(self, event_id, event_type):
         """True the first time an event id is seen (survives restarts, unlike an in-memory set)."""
+        event_id, event_type = str(event_id).replace("\x00", ""), str(event_type).replace("\x00", "")
         try:
             with self.tx() as c:
                 c.execute(insert(webhook_events).values(event_id=event_id[:120], event_type=event_type[:80],

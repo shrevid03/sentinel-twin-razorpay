@@ -133,7 +133,54 @@ Payment and mandate state live in a database (`app/store.py`, SQLAlchemy): **Pos
   * refunded: "refund initiated", reaching the customer in 5-7 working days.
 * **Webhooks**: deliveries are deduplicated by event id in the database (so a restart remembers them), and every business effect is a forward-only state transition anyway, because deduplicating deliveries alone does not protect the action.
 
-Tests (`tests/test_payments.py`, 12): exactly one of two concurrent reservations, and exactly 6 of 12 for a budget that fits 6, using separate database connections; captured before authorized and refund before capture converge; **the worker dies after Razorpay accepted the capture, before recording it**: on restart the reconciler records the capture once, debits the mandate once, Razorpay was asked to capture once, and a retry tells the customer it is complete; a lost capture response says "confirming", then reconciles; a crash before the capture call is finished by the reconciler; an abandoned checkout releases its budget; duplicate, out-of-order and replayed webhooks record one capture and one refund. The same tests run against Postgres with `TEST_DATABASE_URL=postgresql://... pytest tests/test_payments.py`.
+**Which gateway those tests used.** Every test in `tests/` runs on the in-process **demo gateway** (Razorpay simulated, no network), including the ₹2,699 crash-and-restart test, because the suite must run offline and must never reach Razorpay with real keys. The real Razorpay test-mode APIs are exercised by `scripts/razorpay_live_check.py` (below), and every receipt says which gateway it used.
+
+Tests (`tests/test_payments.py`, 12): exactly one of two concurrent reservations, and exactly 6 of 12 for a budget that fits 6, using separate database connections; captured before authorized and refund before capture converge; **the worker dies after Razorpay accepted the capture, before recording it**: on restart the reconciler records the capture once, debits the mandate once, Razorpay was asked to capture once, and a retry tells the customer it is complete; a lost capture response says "confirming", then reconciles; a crash before the capture call is finished by the reconciler; an abandoned checkout releases its budget; duplicate, out-of-order and replayed webhooks record one capture and one refund. The same tests run against Postgres with `TEST_DATABASE_URL=postgresql://... pytest` (the whole suite then uses Postgres, including the concurrency races in `tests/test_concurrency.py`); see **Postgres run** below.
+
+### Postgres run
+
+The whole suite was run against a real **PostgreSQL 16** (throwaway `postgres:16-alpine` container, random port and password, removed afterwards) with `TEST_DATABASE_URL=postgresql://... pytest`: the app, the payment tests, the race tests in `tests/test_concurrency.py` (separate pooled connections, row locks, conditional UPDATEs), duplicate and out-of-order webhooks, crash recovery and the durable-audit tests. It found two bugs that SQLite had hidden, both fixed:
+
+* **Two writers forked the ledger.** Two Team objects on one database each chained ledger records from their own in-memory copy and collided on the next sequence number. Each append now takes a database lock (a Postgres advisory lock, or SQLite's write lock), reads the chain head and chains onto it. A regression test has two writers append in parallel and checks that one verified chain results.
+* **A NUL byte in an id gave a 500.** Postgres text cannot hold `\x00`, so the fuzzed route `/api/razorpay/orders/%00/capture` raised a database error. Lookups now treat such ids as unknown, so the route returns a clean client error, never a 500.
+
+### Real Razorpay test mode, end to end
+
+`scripts/razorpay_live_check.py` runs one payment through the **real Razorpay test-mode APIs**. It refuses `rzp_live_` keys and runs only with `rzp_test_` keys in `.env`:
+
+1. create a Razorpay order (manual capture) through the guarded checkout;
+2. you pay once in real Razorpay Checkout on a local page (UPI `success@razorpay`);
+3. verify the Checkout signature, and check a forged one is rejected;
+4. run the pre-capture risk check;
+5. capture at Razorpay, then **simulate a crash before the database write**;
+6. restart (new twin, team and database connection);
+7. the reconciler asks Razorpay's real API and records the capture once (a second pass changes nothing);
+8. refund through the Refunds API;
+9. replay the pre-capture decision from the database.
+
+`tests/test_live_check_script.py` runs the same script against a local fake of the API, which checks only the script's own logic.
+
+### Durable auditability: decisions replay after a restart
+
+Durable payments are not durable auditability, so everything a replay needs is stored in the same database (`app/audit.py`):
+
+* **an append-only graph event log**: every account, link (device, IP, UPI ID, card, contact), order, transfer, training label and freeze, with its evidence sequence number, simulated time and provenance;
+* **the full decision record**: inputs, evidence with timing, a feature snapshot, score, outcome, and the policy (hash plus the policy itself);
+* **the model artifact**, pickled and keyed by its version hash, with a sha256 integrity check;
+* **policy versions, receipts and the hash-chained ledger**: the chain continues across restarts and must verify before it is loaded;
+* **decision ids** from a database counter, so they never repeat after a restart.
+
+After a restart the live twin is a new **epoch** of the event log, and scenario copies are child epochs. Replay never re-creates the world from the seed: `Twin.from_events` rebuilds the graph as of the decision's evidence sequence from the event log alone, and scores it with the stored artifact. A missing artifact gives **not replayable**; the decision is never re-scored with a different model. `GET /api/audit/status` shows what is stored.
+
+`tests/test_durable_audit.py` (4 tests) does this:
+
+* make a decision;
+* add a later fraud-linked UPI ID to the buyer;
+* restart with a **different seed**, so a seed-based replay could not match;
+* add more evidence after the restart;
+* replay: the result is identical (score, outcome, evidence and features), built from the persisted events, and lists the later UPI link as evidence that arrived later and was ignored.
+
+The same tests check that receipts, ledger and decision ids survive, that a deleted artifact gives "not replayable", and that scenario decisions are durable too.
 
 ### One click: a new account joins a fraud ring
 
@@ -456,9 +503,10 @@ tests/
 * The skip connection and neighbour filter are opt-in options (`GAT(skip=True, filter_keep=0.5)`). The app's own model still uses the original setting, and the filter did not help on Amazon or Elliptic. Elliptic was run with one seed.
 * In the new-account and hybrid tests, a random forest with simple neighbour features matches or beats the GAT (T-Finance new accounts: 0.955 vs 0.935 AUC; Amazon: 0.82 vs 0.69). The GAT's own score adds little once those features are present. On Amazon no graph feature beats the plain random forest. These tests used 3 seeds (Elliptic one), and new accounts keep their links, the graph's best case.
 * Prompt-injection screening is heuristic: the guarantee is that no model can reach a privileged action, not that every odd phrasing is caught.
-* The ledger lives in memory (and in `LEDGER_PATH` if set); it is tamper-evident, not stored on write-once media.
+* The ledger is stored in the database and is tamper-evident (hash-chained, verified on load), not on write-once media. It assumes a single writer process.
 * Agent checkouts are scored for one demo buyer; the twin does not yet mirror a whole real merchant's Razorpay history.
-* State is in memory: a restart (or Reset demo) starts from the seed again.
+* After a restart (or Reset demo) the *live* twin starts again from the seed, as a new epoch. Payments, mandates, decisions, the graph event log, model artifacts, receipts and the ledger are in the database, so past decisions still replay exactly. Reset hides old receipts from the queues but never deletes audit rows.
+* The payment tests use the demo gateway; the real Razorpay test-mode run is `scripts/razorpay_live_check.py`.
 
 ## License
 

@@ -1244,6 +1244,23 @@
         }
       }
     },
+    "/api/audit/status": {
+      "get": {
+        "summary": "Audit Status",
+        "description": "What survives a restart: stored decisions, graph events, model artifacts, receipts and ledger rows.",
+        "operationId": "audit_status_api_audit_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/decisions/{decision_id}/replay": {
       "post": {
         "summary": "Replay Decision",

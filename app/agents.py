@@ -230,7 +230,7 @@ class WorkerCrash(Exception):
 
 
 class Team:
-    def __init__(self, twin, gateway, store=None):
+    def __init__(self, twin, gateway, store=None, load_receipts=True):
         from .store import Store
         self.store = store or Store("sqlite://")  # durable payment + mandate state (Postgres via DATABASE_URL)
         self._fault = None
@@ -260,6 +260,15 @@ class Team:
         self.ledger = self.casebook.ledger
         guard.LEDGER = self.ledger
         twin.ledger = self.ledger
+        self.audit_store = None
+        if store is not None and not getattr(twin, "_no_audit", False):  # durable: survives a restart
+            from .audit import AuditStore
+            self.audit_store = AuditStore(self.store)
+            self.ledger.attach(self.audit_store)
+            for rc in (self.audit_store.receipts() if load_receipts else []):  # after a restart
+                self.receipts.setdefault(rc["id"], rc)
+            if twin.audit is None:
+                twin.attach_audit(self.audit_store)
         self._recent_turns: dict[str, list] = {}
 
     # ================================================================ mandate
@@ -329,9 +338,10 @@ class Team:
         self.receipts[rid] = r
         return r
 
-    @staticmethod
-    def _stamp(receipt, event):
+    def _stamp(self, receipt, event):
         receipt["timeline"].append({"at": time.strftime("%H:%M:%S"), "event": event})
+        if self.audit_store is not None and receipt.get("id") in self.receipts:
+            self.audit_store.save_receipt(receipt)  # receipts survive a restart
 
     def guarded_checkout(self, items, note="", dry_run=False, log=None):
         mnd = self.mandate

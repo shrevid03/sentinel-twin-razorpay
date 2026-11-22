@@ -17,4 +17,6 @@ os.environ["AUTO_TRAFFIC"] = "0"
 # The server's default database is a file in data/; tests use a throwaway SQLite file instead.
 import tempfile  # noqa: E402
 
-os.environ["DATABASE_URL"] = "sqlite:///" + os.path.join(tempfile.mkdtemp(prefix="sentinel-test-"), "test.db")
+# TEST_DATABASE_URL=postgresql://... runs the whole app and every store-backed test against Postgres instead.
+os.environ["DATABASE_URL"] = (os.getenv("TEST_DATABASE_URL") or
+                              "sqlite:///" + os.path.join(tempfile.mkdtemp(prefix="sentinel-test-"), "test.db"))
