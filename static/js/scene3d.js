@@ -586,35 +586,42 @@ const lake = (() => {
   } };
 })();
 
-// ------------------------------------------------------------------ chapter xi: a curved stone staircase up to a moonlit window; steps light as evidence
-const stair = (() => {
-  const sc = baseScene(0x040b09);
-  sc.userData.sun.position.set(4, 16, -6); sc.userData.sun.intensity = 1.3;
-  const fl = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), floor.material); fl.rotation.x = -Math.PI / 2; fl.receiveShadow = true; sc.add(fl);
-  const col = new THREE.Mesh(new THREE.CylinderGeometry(.55, .65, 9, 24), traceryMat); col.position.y = 4.5; col.castShadow = col.receiveShadow = true; sc.add(col);
-  const EVT = [0, 0, 24, 61, 88, 120, 136, 172], R = 2.6, steps = [], edges = [];
-  const stepGeo = new THREE.BoxGeometry(2.2, .28, 1.05);
-  for (let i = 0; i < 16; i++) {  // 16 steps; every second one carries a piece of evidence
-    const a = -Math.PI * .2 + i * .34, y = .14 + i * .42;
-    const s = new THREE.Mesh(stepGeo, traceryMat); s.position.set(Math.cos(a) * R, y, Math.sin(a) * R); s.rotation.y = -a; s.castShadow = s.receiveShadow = true; sc.add(s); steps.push(s);
-    if (i % 2 === 0 && edges.length < EVT.length) { const m = new THREE.MeshBasicMaterial({ color: 0x2b3f37 });
-      const strip = new THREE.Mesh(new THREE.BoxGeometry(2.0, .04, .04), m); strip.position.set(0, .16, .53); s.add(strip); edges.push({ m, t: EVT[edges.length], dec: edges.length === 5 }); }
-  }
-  const top = steps[15].position;
-  const win = new THREE.Group(); win.position.set(top.x * 1.9, top.y + 2.4, top.z * 1.9); win.lookAt(0, top.y + 2.4, 0);
-  const ws = new THREE.Shape(); archPath(1.1, 1.8, ws); ws.lineTo(-1.1, 0);
-  const wr = new THREE.Shape(); archPath(1.45, 1.8, wr); wr.lineTo(-1.45, 0); wr.holes.push(archPath(1.1, 1.8, new THREE.Path()));
-  win.add(new THREE.Mesh(new THREE.ExtrudeGeometry(wr, { depth: .4, bevelEnabled: false, curveSegments: 32 }), traceryMat));
-  const pane = new THREE.Mesh(new THREE.ShapeGeometry(ws, 32), new THREE.MeshBasicMaterial({ color: 0x18302a })); pane.position.z = -.05; win.add(pane);
-  const mw = new THREE.Mesh(new THREE.SphereGeometry(.55, 48, 32), moonMat); mw.position.set(.15, 2.1, -1.5); win.add(mw); sc.add(win);
-  const wl = new THREE.PointLight(0xbfd8cc, 3, 9, 2); wl.position.copy(win.position).multiplyScalar(.85); sc.add(wl);
+// ------------------------------------------------------------------ chapter xi: across the same lake on stepping stones to a ruined arch
+// (it shares the lake scene, so lake -> replay is one continuous camera move, not a cut)
+const causeway = (() => {
+  const sc = lake.sc;
+  const EVT = [0, 0, 24, 61, 88, 120, 136, 172], stones = [], rims = [];
+  const stoneGeo = new THREE.CylinderGeometry(1, 1.08, .22, 28, 1);
+  { const pp = stoneGeo.attributes.position; for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), z = pp.getZ(i), a = Math.atan2(z, x);
+      const r = 1 + .08 * Math.sin(a * 3 + 1) + .05 * Math.sin(a * 7); pp.setX(i, x * r); pp.setZ(i, z * r); } stoneGeo.computeVertexNormals(); }
+  const rimGeo = new THREE.TorusGeometry(1.02, .035, 8, 48);
+  EVT.forEach((tv, i) => {
+    const u = i / (EVT.length - 1), x = -1.2 + Math.sin(u * 2.4) * 1.6, z = 3 - u * 27;
+    const st = new THREE.Mesh(stoneGeo, traceryMat); st.position.set(x, .06, z); st.scale.set(.85 + (i % 3) * .08, 1, .7 + (i % 2) * .1); st.rotation.y = i * .7;
+    st.castShadow = st.receiveShadow = true; sc.add(st); stones.push(st);
+    const m = new THREE.MeshBasicMaterial({ color: 0x24382f, transparent: true, opacity: .9 });
+    const rim = new THREE.Mesh(rimGeo, m); rim.rotation.x = Math.PI / 2; rim.position.set(x, .18, z); rim.scale.copy(st.scale).setY(1); sc.add(rim);
+    rims.push({ m, t: tv, dec: i === 5 });
+  });
+  // a small ruined gothic arch on the far shore, faintly lit inside
+  const shrine = new THREE.Group(); shrine.position.set(.4, 0, -29);
+  const ringS = new THREE.Shape(); archPath(1.9, 2.8, ringS); ringS.lineTo(-1.9, 0); ringS.holes.push(archPath(1.45, 2.8, new THREE.Path()));
+  shrine.add(new THREE.Mesh(new THREE.ExtrudeGeometry(ringS, { depth: .55, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 2, curveSegments: 36 }), traceryMat));
+  [-1, 1].forEach((sd) => { const ruin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1 + (sd > 0 ? .6 : 0), .6), traceryMat); ruin.position.set(sd * 3, .55, .2); ruin.rotation.z = sd * .08; shrine.add(ruin); });
+  const glow = new THREE.Mesh(new THREE.ShapeGeometry(archPath(1.45, 2.8, new THREE.Shape()), 24), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd1b9).multiplyScalar(.35), transparent: true, opacity: .25, depthWrite: false }));
+  glow.position.z = .1; shrine.add(glow);
+  const sl = new THREE.PointLight(0x9fd8c4, 2.5, 10, 2); sl.position.set(0, 2, 1.2); shrine.add(sl);
+  shrine.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); sc.add(shrine);
   const scrub = document.getElementById("scrub");
   return { sc, update(p, t) {
-    const e = smooth(p), ang = -Math.PI * .5 + e * 2.4, rr = 8.5 - e * 1.5;
-    camera.position.set(Math.cos(ang) * rr + px * .3, 2.2 + e * 4.2 - py * .2, Math.sin(ang) * rr); look.set(0, 1.6 + e * 4, 0); camera.lookAt(look);
+    const e = smooth(p), k = Math.min(stones.length - 1, e * (stones.length - 1.2));
+    const i0 = Math.floor(k), f = k - i0, a = stones[i0].position, b2 = stones[Math.min(stones.length - 1, i0 + 1)].position;
+    camera.position.set(a.x + (b2.x - a.x) * f + px * .4, 2.6 + Math.sin(t * .6) * .03 - py * .2, a.z + (b2.z - a.z) * f + 7.5);
+    look.set(.2, 1.3 + e * .6, -29); camera.lookAt(look);
     const T = scrub ? +scrub.value : 200;
-    edges.forEach((E) => { const known = E.t <= T;
-      E.m.color.copy(new THREE.Color(!known ? 0x2b3f37 : E.dec ? 0xf5b84b : E.t <= 120 ? 0x7fd1b9 : 0xe8766a).multiplyScalar(!known ? 1 : E.dec ? 2.2 : 1.6)); });
+    rims.forEach((R) => { const known = R.t <= T;
+      R.m.color.copy(new THREE.Color(!known ? 0x24382f : R.dec ? 0xf5b84b : R.t <= 120 ? 0x7fd1b9 : 0xe8766a).multiplyScalar(!known ? 1 : R.dec ? 2.2 : 1.6)); });
+    glow.material.opacity = .2 + .1 * Math.sin(t * 1.1);
   } };
 })();
 
@@ -631,17 +638,21 @@ const chapters = [
   { id: "cart", el: document.getElementById("mandate"), sc: cart.sc, update: cart.update },
   { id: "corridor", el: document.getElementById("pipeline"), sc: corridor.sc, update: corridor.update },
   { id: "lake", el: document.getElementById("redteam"), sc: lake.sc, update: lake.update },
-  { id: "stair", el: document.getElementById("replay"), sc: stair.sc, update: stair.update },
+  { id: "causeway", el: document.getElementById("replay"), sc: causeway.sc, update: causeway.update },
 ];
 let progress = 0, ringP = 0, mode = "hero", chapOpacity = 0, active = null;
 const onScroll = () => {
   const r = hero.getBoundingClientRect(); progress = clamp(-r.top / Math.max(1, r.height - innerHeight));
-  if (r.bottom > innerHeight * .2) { mode = "hero"; return; }
+  if (r.bottom > innerHeight * .2 && progress < .62) { mode = "hero"; return; }
   let best = null, bestO = 0;
   chapters.forEach((c) => { if (!c.el) return; const s = c.el.getBoundingClientRect();
     const o = s.top < innerHeight * .85 && s.bottom > innerHeight * .15 ? Math.min(clamp((innerHeight * .85 - s.top) / (innerHeight * .6)), clamp((s.bottom - innerHeight * .15) / (innerHeight * .5))) : 0;
     c.p = clamp(-s.top / Math.max(1, s.height - innerHeight)); if (o > bestO) { bestO = o; best = c; } });
-  mode = best ? best.id : "off"; active = best; chapOpacity = bestO; ringP = chapters[0].p || 0;
+  if (!best) { best = chapters[0]; bestO = 1; }            // between the order card and the wall: stay with the lantern light
+  chapters.forEach((c) => { if (c !== best && c.sc === best.sc && c.el) { const s2 = c.el.getBoundingClientRect();
+    const o2 = s2.top < innerHeight * .85 && s2.bottom > innerHeight * .15 ? 1 : 0; bestO = Math.max(bestO, o2); } });
+  if (best.id === "ring" && r.bottom > 0) bestO = Math.max(bestO, clamp((progress - .62) / .15));  // the window's glow dissolves into the lantern's
+  mode = best.id; active = best; chapOpacity = bestO; ringP = chapters[0].p || 0;
 };
 addEventListener("scroll", onScroll, { passive: true }); onScroll();
 // compile every chapter's shaders up front (idle time), so no backdrop hitches the first time it appears
@@ -664,6 +675,7 @@ document.addEventListener("visibilitychange", () => { running = !document.hidden
 document.documentElement.classList.add("has-3d");
 const atmos = [fireflies, ...fogBanks];
 let atmosIn = scene, caughtFired = false;
+let lastMode = "", blendT = 1; const prevPos = new THREE.Vector3(), prevQuat = new THREE.Quaternion(), lastPos = new THREE.Vector3(), lastQuat = new THREE.Quaternion();
 
 function loop() {
   if (!running) return;
@@ -689,7 +701,10 @@ function loop() {
     // the camera dollies along the vines toward the ring; vines grow, the ring blooms
     const p = ringP, e = p * p * (3 - 2 * p);
     camera.position.set(-8 + e * 11.5 + px * .5, 6.3 + Math.sin(t * .3) * .08 - py * .3, 14 - e * 1.2);
-    look.set(-5 + e * 8.8, 6.2, 0); camera.lookAt(look);
+    look.set(-5 + e * 8.8, 6.2, 0);
+    const intro = smooth(clamp(1 - p / .14));                 // close on the lantern's glow, then pull back to reveal the wall
+    if (intro > 0) { camera.position.lerp(new THREE.Vector3(-6.4, 5.75, 3.2), intro); look.lerp(new THREE.Vector3(-6.5, 5.6, 0), intro); }
+    camera.lookAt(look);
     canvas.style.opacity = String(chapOpacity);
     const grow = clamp((p - .18) / .35), bloomP = clamp((p - .5) / .25);
     vines3.forEach((v) => { const g = v.lit ? grow : 1; v.mesh.geometry.setDrawRange(0, Math.floor(v.count * g / 6) * 6); v.grow = g; });
@@ -718,6 +733,10 @@ function loop() {
   for (let i = 0; i < FF; i++) { const ph = ffPh[i] += dt * .35; f[i * 3] += Math.cos(ph * 1.3) * dt * .12 + px * dt * .12; f[i * 3 + 1] += Math.sin(ph) * dt * .1; f[i * 3 + 2] += Math.sin(ph * .7) * dt * .1; }
   ffGeo.attributes.position.needsUpdate = true; fireflies.position.copy(mode === "hero" ? new THREE.Vector3() : new THREE.Vector3(ox, camera.position.y - 4, camera.position.z - 8));
   fireflies.material.opacity = .4 + .15 * Math.sin(t * 1.2);
+  if (mode !== lastMode) { prevPos.copy(lastPos); prevQuat.copy(lastQuat); blendT = mode === "hero" || lastMode === "hero" || lastMode === "" ? 1 : 0; lastMode = mode; }
+  if (blendT < 1) { blendT = Math.min(1, blendT + dt / 1.1); const k = smooth(blendT);
+    camera.position.lerpVectors(prevPos, camera.position.clone(), k); camera.quaternion.slerpQuaternions(prevQuat, camera.quaternion.clone(), k); }
+  lastPos.copy(camera.position); lastQuat.copy(camera.quaternion);
   composer.render(dt);
 }
 requestAnimationFrame(loop);
