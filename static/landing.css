@@ -316,3 +316,6 @@ html.has-3d #cartPanel, html.has-3d #pipePanel, html.has-3d #attack, html.has-3d
 
 /* the journey: the story section is a long walk (corridor, door, lake, bridge, ivy wall), so its steps get room */
 html.has-3d #story .step { min-height: 118vh; }
+
+/* the clockwork tower: the replay needs room to glide in, turn back time, and step out */
+html.has-3d #replay .step { min-height: 130vh; }

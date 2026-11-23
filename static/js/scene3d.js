@@ -499,6 +499,7 @@ const graph = new THREE.Group();
 // ------------------------------------------------------------------ the journey (stage A): one connected world the camera walks through
 // corridor -> a heavy door opens onto the moonlit lake -> a stone bridge assembles across the water -> the ivy wall
 // where the fraud-ring graph lives. One scene, one camera path; nothing cuts.
+const stoneAt = (rx, ry) => { const m = wallMat.clone(); ["map", "normalMap", "roughnessMap"].forEach((k) => { m[k] = wallMat[k].clone(); m[k].repeat.set(rx, ry); m[k].needsUpdate = true; }); return m; };
 const journey = (() => {
   const J = new THREE.Scene(); J.background = new THREE.Color(0x040a08); J.fog = new THREE.FogExp2(0x0c1a16, .0022);
   J.add(new THREE.HemisphereLight(0x7f9f92, 0x0c1612, .5));
@@ -532,7 +533,6 @@ const journey = (() => {
   const em = new THREE.Mesh(new THREE.SphereGeometry(20, 16, 16), new THREE.MeshBasicMaterial({ color: 0xbfd2c9 })); em.position.set(70, 95, -330); envS.add(em);
   J.environment = pmrem.fromScene(envS, 0.02).texture; J.environmentIntensity = .7;
 
-  const stoneAt = (rx, ry) => { const m = wallMat.clone(); ["map", "normalMap", "roughnessMap"].forEach((k) => { m[k] = wallMat[k].clone(); m[k].repeat.set(rx, ry); m[k].needsUpdate = true; }); return m; };
   const cWallMat = stoneAt(13.5, 1.2), vaultMat = stoneAt(13.5, 2), ivyWallMat = stoneAt(15, 7.5); vaultMat.side = THREE.BackSide;
   // ---- room 1: the corridor (vaulted, torch-lit, ivy creeping), z 12 .. -40
   const CW = 2.4, CS = 3.4, GAP = 5.2, N = 10;
@@ -658,10 +658,10 @@ const journey = (() => {
     const cp = camera.position;
     anchors.sort((a, b) => a.pos.distanceToSquared(cp) - b.pos.distanceToSquared(cp));
     pool.forEach((l, i) => { const A = anchors[i]; if (!A || ((A.group && !A.group.visible) || (A.item && !A.item.visible))) { l.intensity = 0; return; }
-      l.position.copy(A.pos); l.color.setHex(A.color); l.intensity = A.intensity * (A.flicker ? .85 + .15 * Math.sin(t * 13 + i * 3) * Math.sin(t * 7.3 + i) : 1); });
+      l.position.copy(A.pos); l.color.setHex(A.color); l.distance = A.dist || 9; l.intensity = A.intensity * (A.flicker ? .85 + .15 * Math.sin(t * 13 + i * 3) * Math.sin(t * 7.3 + i) : 1); });
     anchors.forEach((A) => { if (A.flicker && A.mesh) A.mesh.scale.set(1, .9 + .2 * Math.abs(Math.sin(t * 11 + A.pos.z)), 1); });
     sun.intensity = .9 + .5 * out; J.environmentIntensity = .32 + .38 * out;
-    sun.position.set(cp.x - 8 + 16 * out, 14 + 18 * out, cp.z + 10); sun.target.position.set(cp.x, 0, cp.z - 22);   // moonlight from above and behind: it rakes the brick, never grazes the wall from behind
+    sun.position.set(cp.x - 8 + 16 * out, Math.max(0, cp.y - 3) + 14 + 18 * out, cp.z + 10); sun.target.position.set(cp.x, Math.max(0, cp.y - 3), cp.z - 22);   // moonlight from above and behind: it rakes the brick, never grazes the wall from behind
   }
   return api;
 })();
@@ -814,6 +814,7 @@ const city = (() => {
     while (x < 150 && bi < BN) {
       const w = 3 + rng() * 5, dz = 4 + rng() * 5, cx = Math.abs(x + w / 2 - C.x) / 110, h = (5 + rng() * 9) * (1.6 - cx) + row * 1.4 + (rng() < .08 ? 14 : 0);
       const z = z0 - rng() * 3;
+      if (Math.abs(x + w / 2 - 95) < 13 && z > -306) { x += w + .4; continue; }
       d.position.set(x + w / 2, 0, z); d.rotation.set(0, 0, 0); d.scale.set(w, h, dz); d.updateMatrix(); blocks.setMatrixAt(bi, d.matrix);
       c.setHex(0x223029).offsetHSL(0, 0, (rng() - .5) * .05); blocks.setColorAt(bi++, c);
       if (si < SN && (h > 13 || rng() < .25)) { d.position.set(x + w / 2, h, z); d.scale.set(w * .5, 3 + rng() * (h > 16 ? 10 : 4), dz * .5); d.updateMatrix(); spires.setMatrixAt(si++, d.matrix); }
@@ -877,7 +878,8 @@ const city = (() => {
   const tmp = new THREE.Vector3(), P = new THREE.Vector3(), L = new THREE.Vector3();
   const cam = {   // keyframes: over the gate wall, down to the far lip of the cliff facing the city, then up to the panorama
     rt: [[0, [33, 23.2, -151], [37.5, 25.6, -170]], [.22, [36, 38, -168], [36, 20, -260]], [.45, [36, 27, -184], [36, 14, -330]], [1, [30, 26, -190], [38, 13, -335]]],
-    rp: [[0, [30, 26, -190], [38, 13, -335]], [.5, [26, 40, -175], [38, 14, -335]], [1, [36, 50, -168], [44, 20, -340]]] };
+    rp: [[0, [30, 26, -190], [38, 13, -335]], [.14, [95, 56.9, -257], [95, 56.5, -276]], [.24, [95, 56.4, -276.2], [95, 59.4, -290]], [.44, [92.6, 56.4, -276.3], [97.2, 60.4, -289]],
+         [.62, [97.4, 57, -276.6], [93.4, 60.2, -289.5]], [.75, [95, 55.8, -287.6], [95, 55.5, -300]], [.88, [95, 56, -292.6], [78, 44, -360]], [1, [94, 57, -294.2], [58, 34, -392]]] };
   const along = (K, p) => { let i = 0; while (i < K.length - 2 && p > K[i + 1][0]) i++; const a = K[i], b = K[i + 1], f = smooth(clamp((p - a[0]) / (b[0] - a[0])));
     P.set(...a[1]).lerp(tmp.set(...b[1]), f); L.set(...a[2]).lerp(tmp.set(...b[2]), f); };
   let lastT = -1;
@@ -890,7 +892,7 @@ const city = (() => {
   };
   const setTowers = (T) => { if (T === lastT) return; lastT = T;
     marks.forEach((M) => { const known = M.t <= T, col = !known ? 0x24382f : M.dec ? 0xf5b84b : M.t <= DEC ? 0x7fd1b9 : 0xe8766a;
-      M.crown.material.color.setHex(col).multiplyScalar(known ? 2.2 : 1); M.beam.material.color.setHex(col); M.beam.material.opacity = known ? (M.t > DEC ? .035 : M.dec ? .09 : .06) : 0;
+      M.crown.material.color.setHex(col).multiplyScalar(known ? 2.2 : 1); M.beam.material.color.setHex(col); M.beam.material.opacity = known ? (M.t > DEC ? .02 : M.dec ? .05 : .03) : 0;
       for (let k = 0; k < 14; k++) { c.setHex(known ? col : 0x1c2a24).multiplyScalar(known ? 1.8 : 1); street.setColorAt(M.i * 14 + k, c); } });
     street.instanceColor.needsUpdate = true; };
   setTowers(200);
@@ -910,9 +912,118 @@ const city = (() => {
     } },
     replay: { sc: J, update(p, t, dt) {
       along(cam.rp, p); common(t, dt); shieldU.strength.value = Math.max(.12, .9 - p * 1.6);
-      atk.count = 0; setTowers(scrub ? +scrub.value : 200);
+      atk.count = 0; const T = scrub ? +scrub.value : 200; setTowers(T); clockTower.update(p, t, dt, T);
+      const bq = smooth(clamp((p - .3) / .55)), B = balloon.B; B.position.set(43.5 + (79 - 43.5) * bq, 21.5 + (61 - 21.5) * bq + Math.sin(bq * Math.PI) * 18 + Math.sin(t * .7) * .15, -163.5 + (-314 + 163.5) * bq);   // the balloon follows you to the tower
       marks.forEach((M) => { M.beam.rotation.y = t * .1; });
     } } };
+})();
+
+// ------------------------------------------------------------------ the clockwork tower: the replay happens inside a clock. You glide in through a high arch;
+// brass and verdigris gears turn as the slider drags time; a spiral of hanging lanterns are the evidence (mint used, amber the decision, coral
+// arrived later). At the end the great clock face swings open like a window and you step out onto a balcony over the city.
+const clockTower = (() => {
+  const J = journey.sc, A = journey.anchors, X = 95, Z = -282, FL = 52, CEIL = 72, d = new THREE.Object3D(), c = new THREE.Color();
+  const CX = X, CY = FL + 6.4, CZ = -290, CR = 4.2;        // the clock face, in the north wall
+  const T0 = new THREE.Group(); J.add(T0);
+  const base = new THREE.Mesh(new THREE.BoxGeometry(16, FL, 16).translate(0, FL / 2, 0), traceryMat); base.position.set(X, 0, Z); base.castShadow = base.receiveShadow = true; T0.add(base);
+  const inner = stoneAt(4, 3), H = CEIL - FL + 2;
+  // south wall with the high arch you enter by
+  const sS = new THREE.Shape(); sS.moveTo(-8, 0); sS.lineTo(8, 0); sS.lineTo(8, H); sS.lineTo(-8, H); sS.lineTo(-8, 0);
+  const ah = archPath(2.3, 3.2, new THREE.Path()); sS.holes.push(new THREE.Path(ah.getPoints(48).map((v) => new THREE.Vector2(v.x, v.y + .6))));
+  const south = new THREE.Mesh(new THREE.ExtrudeGeometry(sS, { depth: 1, bevelEnabled: false, curveSegments: 40 }), inner); south.position.set(X, FL, Z + 7); south.castShadow = south.receiveShadow = true; T0.add(south);
+  const archRim = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPath(2.3, 3.2, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y + .6, 1.05))), 80, .05, 6, false), new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: .7 }));
+  archRim.position.set(X, FL, Z + 7); T0.add(archRim);
+  // north wall with the round clock window
+  const nS = new THREE.Shape(); nS.moveTo(-8, 0); nS.lineTo(8, 0); nS.lineTo(8, H); nS.lineTo(-8, H); nS.lineTo(-8, 0);
+  const hole = new THREE.Path(); hole.absarc(0, CY - FL, CR, 0, Math.PI * 2, true); nS.holes.push(hole);
+  const north = new THREE.Mesh(new THREE.ExtrudeGeometry(nS, { depth: 1, bevelEnabled: false, curveSegments: 64 }), inner); north.position.set(X, FL, Z - 9); north.castShadow = north.receiveShadow = true; T0.add(north);
+  [-1, 1].forEach((sd) => { const w = new THREE.Mesh(new THREE.BoxGeometry(1, H, 16), inner); w.position.set(X + sd * 7.5, FL + H / 2, Z); w.castShadow = w.receiveShadow = true; T0.add(w); });
+  const ceil = new THREE.Mesh(new THREE.BoxGeometry(16, 1.2, 18), traceryMat); ceil.position.set(X, CEIL + .6, Z - 1); ceil.castShadow = true; T0.add(ceil);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(12, 20, 4), new THREE.MeshPhysicalMaterial({ color: 0x1b2723, roughness: .6, clearcoat: .3 })); roof.rotation.y = Math.PI / 4; roof.position.set(X, CEIL + 11.2, Z - 1); roof.castShadow = true; T0.add(roof);
+  [-1, 1].forEach((sx) => [-1, 1].forEach((sz) => { const pin = new THREE.Mesh(new THREE.ConeGeometry(.9, 9, 6), roof.material); pin.position.set(X + sx * 8, CEIL + 5.5, Z + sz * 8); T0.add(pin); }));
+  const floorC = new THREE.Mesh(new THREE.PlaneGeometry(14, 16), floor.material); floorC.rotation.x = -Math.PI / 2; floorC.position.set(X, FL + .02, Z - 1); floorC.receiveShadow = true; T0.add(floorC);
+  // the balcony outside the clock window
+  const bal = new THREE.Mesh(new THREE.BoxGeometry(12, .6, 5), traceryMat); bal.position.set(X, FL - .3, CZ - 3.4); bal.castShadow = bal.receiveShadow = true; T0.add(bal);
+  for (let i = -5; i <= 5; i++) { const b = new THREE.Mesh(new THREE.CylinderGeometry(.13, .17, 1, 8), traceryMat); b.position.set(X + i * 1.1, FL + .5, CZ - 5.6); T0.add(b); }
+  const rail = new THREE.Mesh(new THREE.BoxGeometry(12, .22, .4), traceryMat); rail.position.set(X, FL + 1.1, CZ - 5.6); T0.add(rail);
+  // ivy creeping through the cracks inside and up the outside
+  const IV = 520, ivy = new THREE.InstancedMesh(leafGeo, leafMat, IV);
+  for (let i = 0; i < IV; i++) { const side = i % 3, y = FL + Math.pow(rng(), 1.5) * (H - 2);
+    if (side === 0) { const sx = rng() < .5 ? -1 : 1; d.position.set(X + sx * 6.95, y, Z - 7 + rng() * 14); d.lookAt(X, y + .3, d.position.z); }
+    else if (side === 1) { d.position.set(X - 7 + rng() * 14, y * .5 + FL * .5 + rng() * 6, Z + 8.08); d.lookAt(d.position.x, d.position.y + .3, Z + 10); }
+    else { const a = rng() * Math.PI * 2, r = CR + .4 + rng() * 1.8; d.position.set(CX + Math.cos(a) * r, CY + Math.sin(a) * r, CZ - 1.05); d.lookAt(d.position.x, d.position.y + .3, CZ - 3); }
+    d.rotateZ((rng() - .5) * 2.2); d.scale.setScalar(.45 + rng() * .5); d.updateMatrix(); ivy.setMatrixAt(i, d.matrix); c.setHex(hues[(rng() * 5) | 0]); ivy.setColorAt(i, c); }
+  T0.add(ivy);
+  // gears: brass and verdigris, on both side walls and above the clock
+  const gearGeo = (r, n) => { const s = new THREE.Shape(); for (let i = 0; i < n; i++) { const a0 = (i / n) * Math.PI * 2, da = Math.PI * 2 / n;
+      [[a0, r * .84], [a0 + da * .12, r], [a0 + da * .45, r], [a0 + da * .57, r * .84]].forEach(([a, rr], k) => (i === 0 && k === 0 ? s.moveTo : s.lineTo).call(s, Math.cos(a) * rr, Math.sin(a) * rr)); }
+    const hc = new THREE.Path(); hc.absarc(0, 0, r * .16, 0, Math.PI * 2, true); s.holes.push(hc);
+    for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, h2 = new THREE.Path(); h2.absarc(Math.cos(a) * r * .52, Math.sin(a) * r * .52, r * .19, 0, Math.PI * 2, true); s.holes.push(h2); }
+    return new THREE.ExtrudeGeometry(s, { depth: .32, bevelEnabled: true, bevelThickness: .04, bevelSize: .04, bevelSegments: 1, curveSegments: 6 }); };
+  const brass = new THREE.MeshPhysicalMaterial({ color: 0xb08a4a, metalness: .85, roughness: .36, clearcoat: .2 });
+  const verd = new THREE.MeshPhysicalMaterial({ color: 0x4f8a76, metalness: .45, roughness: .55 });
+  const gears = [];
+  [[-1, FL + 12.5, -285, 3.4, 28, .8], [-1, FL + 7, -279.5, 2.2, 18, -1.25], [-1, FL + 17, -278, 1.6, 14, 1.7], [1, FL + 10.5, -284, 3, 24, -.9], [1, FL + 16, -279, 2.1, 16, 1.3], [1, FL + 5, -279, 1.5, 12, -1.8]].forEach(([sd, y, z, r, n, k], i) => {
+    const g = new THREE.Mesh(gearGeo(r, n), i % 2 ? verd : brass); g.position.set(X + sd * 6.75, y, z); g.rotation.y = sd * Math.PI / 2; g.castShadow = true; T0.add(g);
+    const axle = new THREE.Mesh(new THREE.CylinderGeometry(r * .15, r * .15, .8, 12), iron); axle.rotation.z = Math.PI / 2; axle.position.copy(g.position); T0.add(axle);
+    gears.push({ g, k }); });
+  [[-4.4, FL + 14.5, 2.4, 18, 1.1], [4.2, FL + 15, 1.9, 14, -1.4], [0, FL + 16.6, 1.3, 10, 2]].forEach(([dx, y, r, n, k], i) => { const g = new THREE.Mesh(gearGeo(r, n), i % 2 ? brass : verd); g.position.set(X + dx, y, CZ + 1.3); g.castShadow = true; T0.add(g); gears.push({ g, k, face: true }); });
+  // the pendulum
+  const pend = new THREE.Group(); pend.position.set(X + 5.6, CEIL - .2, CZ + 1.4); T0.add(pend);
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, 12, 8), brass); rod.position.y = -6; pend.add(rod);
+  const bob = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, .22, 40), brass); bob.rotation.x = Math.PI / 2; bob.position.y = -12; bob.scale.setScalar(.8); bob.castShadow = true; pend.add(bob);
+  // a spiral of hanging lanterns; eight of them are the evidence
+  const EV = [0, 0, 24, 61, 88, 120, 136, 172], DEC = 120, lan = [], chainPts = [];
+  for (let k = 0; k < 12; k++) { const a = k * .95 + .4, r = 3.6 + (k % 2) * .5, y = CEIL - 2.2 - k * 1.25, g = new THREE.Group(); g.position.set(X + Math.cos(a) * r, y, Z - 1 + Math.sin(a) * r * .8);
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(.26, 18, 12), k >= 2 && k < 10 ? glassL.clone() : glassL), co = new THREE.Mesh(new THREE.SphereGeometry(.13, 12, 10), new THREE.MeshBasicMaterial({ color: 0xffc37a, toneMapped: false }));
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(.09, .16, .1, 12), iron); cap.position.y = .28; g.add(sh, co, cap); T0.add(g);
+    chainPts.push(g.position.x, y + .32, g.position.z, g.position.x, CEIL, g.position.z);
+    const ev = k >= 2 && k < 10 ? k - 2 : -1, anc = { pos: g.position, color: 0xffc37a, intensity: 30, dist: 14, flicker: true }; A.push(anc);
+    lan.push({ g, co, sh, ev, anc, ph: rng() * 6.28, y0: y }); }
+  T0.add(new THREE.LineSegments(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(chainPts, 3)), new THREE.LineBasicMaterial({ color: 0x2c2a24 })));
+  // the great clock face: translucent glass with tracery and numerals; two leaves that swing open; hands and evidence marks ride on them
+  const faceTex = (() => { const N = 1024, cv = document.createElement("canvas"); cv.width = cv.height = N; const x = cv.getContext("2d"), m = N / 2;
+    const g = x.createRadialGradient(m, m, 0, m, m, m); g.addColorStop(0, "rgba(232,245,238,.13)"); g.addColorStop(.7, "rgba(190,220,205,.07)"); g.addColorStop(1, "rgba(160,200,185,.14)"); x.fillStyle = g; x.beginPath(); x.arc(m, m, m - 4, 0, 7); x.fill();
+    x.strokeStyle = "rgba(201,162,78,.95)"; x.lineWidth = 14; x.beginPath(); x.arc(m, m, m - 12, 0, 7); x.stroke(); x.lineWidth = 6; x.beginPath(); x.arc(m, m, m * .72, 0, 7); x.stroke(); x.beginPath(); x.arc(m, m, m * .2, 0, 7); x.stroke();
+    for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; x.lineWidth = 5; x.beginPath(); x.moveTo(m + Math.cos(a) * m * .2, m + Math.sin(a) * m * .2); x.lineTo(m + Math.cos(a) * m * .72, m + Math.sin(a) * m * .72); x.stroke();
+      x.beginPath(); x.arc(m + Math.cos(a + .26) * m * .46, m + Math.sin(a + .26) * m * .46, m * .1, 0, 7); x.stroke(); }
+    x.fillStyle = "rgba(225,200,140,.95)"; x.font = "600 64px Georgia, serif"; x.textAlign = "center"; x.textBaseline = "middle";
+    ["XII", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI"].forEach((s, i) => { const a = i / 12 * Math.PI * 2 - Math.PI / 2; x.fillText(s, m + Math.cos(a) * m * .85, m + Math.sin(a) * m * .85); });
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; })();
+  const faceMat = new THREE.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false, side: THREE.DoubleSide, toneMapped: false, color: new THREE.Color(.95, .95, .95) });
+  const leaves2 = [-1, 1].map((sd) => { const pv = new THREE.Group(); pv.position.set(CX + sd * CR, CY, CZ - .5); T0.add(pv);
+    const m = new THREE.Mesh(new THREE.CircleGeometry(CR, 64, sd < 0 ? -Math.PI / 2 : Math.PI / 2, Math.PI), faceMat); m.position.x = -sd * CR; pv.add(m);
+    const frame = new THREE.Mesh(new THREE.TorusGeometry(CR, .12, 8, 64, Math.PI), brass); frame.rotation.z = sd < 0 ? Math.PI / 2 : -Math.PI / 2; frame.position.x = -sd * CR; pv.add(frame);
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(.18, CR * 2, .18), brass); bar.position.x = -sd * CR - sd * .02; pv.add(bar);
+    return { pv, sd }; });
+  const hands = new THREE.Group(); hands.position.set(-(-1) * CR, 0, .25); leaves2[0].pv.add(hands);
+  const hourH = new THREE.Mesh(new THREE.BoxGeometry(.18, 1.9, .1).translate(0, .95, 0), brass), minH = new THREE.Mesh(new THREE.BoxGeometry(.11, 3.1, .08).translate(0, 1.55, 0), brass);
+  hourH.position.z = .05; minH.position.z = .12; hands.add(hourH, minH, new THREE.Mesh(new THREE.CylinderGeometry(.3, .3, .3, 16).rotateX(Math.PI / 2), brass));
+  const marks = EV.map((tv, i) => { const a = tv / 200 * Math.PI * 2 + (i === 1 ? .08 : 0), px2 = Math.sin(a) * (CR - .9), py2 = Math.cos(a) * (CR - .9), L = px2 < 0 || (px2 === 0 && i === 0) ? leaves2[0] : leaves2[1];
+    const m = new THREE.Mesh(new THREE.SphereGeometry(.3, 14, 10), new THREE.MeshBasicMaterial({ color: 0x24382f, toneMapped: false })); m.position.set(px2 + L.sd * CR, py2, .22); L.pv.add(m); return { m, t: tv, dec: i === 5 }; });
+  // moonbeams through the clock window, dust in them
+  const DN = 600, dGeo = new THREE.BufferGeometry(), dPos = new Float32Array(DN * 3), dPh = new Float32Array(DN);
+  for (let i = 0; i < DN; i++) { dPos.set([X - 6.5 + rng() * 13, FL + rng() * (H - 2), Z - 8 + rng() * 15], i * 3); dPh[i] = rng() * 6.28; }
+  dGeo.setAttribute("position", new THREE.BufferAttribute(dPos, 3));
+  const motes = new THREE.Points(dGeo, new THREE.PointsMaterial({ size: .09, map: ffSprite, color: 0xf0d79a, transparent: true, opacity: .8, depthWrite: false, blending: THREE.AdditiveBlending })); T0.add(motes);
+  A.push({ pos: new THREE.Vector3(X, FL + 5, Z + 5.5), color: 0xffb070, intensity: 30, dist: 14, flicker: true });
+  const fill = new THREE.PointLight(0xffb27a, 170, 24, 2); fill.position.set(X, FL + 8, Z - 2); T0.add(fill);   // the room's warm glow (a constant light: no recompiles)
+  let lastT = -1;
+  const paint = (T) => { if (T === lastT) return; lastT = T;
+    lan.forEach((Ln) => { if (Ln.ev < 0) return; const tv = EV[Ln.ev], known = tv <= T, col = !known ? 0x2a3a32 : Ln.ev === 5 ? 0xf5b84b : tv <= DEC ? 0x7fd1b9 : 0xe8766a;
+      Ln.co.material.color.setHex(col).multiplyScalar(known ? (tv > DEC ? 1.4 : 2.4) : 1); Ln.sh.material.emissive.setHex(col); Ln.sh.material.emissiveIntensity = known ? (tv > DEC ? .45 : .8) : .1; Ln.anc.color = known ? col : 0x2a3a32; Ln.anc.intensity = known ? (tv > DEC ? 16 : 30) : 6; });
+    marks.forEach((M) => { const known = M.t <= T; M.m.material.color.setHex(!known ? 0x24382f : M.dec ? 0xf5b84b : M.t <= DEC ? 0x7fd1b9 : 0xe8766a).multiplyScalar(known ? 2.4 : 1); }); };
+  paint(200);
+  return { update(p, t, dt, T) {
+    paint(T);
+    const turn = T / 200;                                    // dragging time turns the hands and every gear, forward or back
+    minH.rotation.z = -turn * Math.PI * 2 * 4; hourH.rotation.z = -turn * Math.PI * 2;
+    gears.forEach((G) => { if (G.face) G.g.rotation.z = turn * G.k * 6 + t * .02 * G.k; else G.g.rotation.z = turn * G.k * 6 + t * .02 * G.k; });
+    pend.rotation.z = .2 * Math.sin(t * 1.25);
+    lan.forEach((Ln, k) => { Ln.g.position.y = Ln.y0 + Math.sin(t * .9 + Ln.ph) * .08; Ln.g.rotation.z = Math.sin(t * .7 + Ln.ph) * .06; });
+    for (let i = 0; i < DN; i++) { dPh[i] += dt * .25; dPos[i * 3] += Math.cos(dPh[i]) * dt * .05; dPos[i * 3 + 1] += Math.sin(dPh[i] * 1.3) * dt * .04; } dGeo.attributes.position.needsUpdate = true;
+    const open = smooth(clamp((p - .64) / .12)); leaves2.forEach(({ pv, sd }) => { pv.rotation.y = -sd * open * 2.95; });
+  } };
 })();
 
 // ------------------------------------------------------------------ sizing, scroll, adaptive quality, loop

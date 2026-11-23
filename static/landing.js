@@ -301,10 +301,10 @@
     const rp = { t: 0 };
     window.__renderReplay(0);
     let crossed = false;
-    scrubbed("#replay").to(rp, { t: 200, duration: 1, ease: "none", onUpdate: () => {
+    scrubbed("#replay").to({}, { duration: 1 }, 0).to(rp, { t: 200, duration: .36, ease: "none", onUpdate: () => {
       window.__renderReplay(Math.round(rp.t));
       if (rp.t >= DEC && !crossed) { crossed = true; S("sparkle"); } else if (rp.t < DEC) crossed = false;
-    } });
+    } }, .26);
   }
 
   // 7. proof: count up once; gold veins in the marble dividers draw in as they pass
