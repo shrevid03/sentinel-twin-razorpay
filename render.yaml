@@ -21,6 +21,10 @@ services:
         value: "3"
       - key: AUTO_TRAFFIC
         value: "1"
+      # Cap simulated live orders per process: keeps memory near 400 MB on the free plan's 512 MB
+      # (measured: fresh start about 215 MB; 3,000 extra orders plus a retrain peaks about 366 MB).
+      - key: AUTO_TRAFFIC_MAX
+        value: "3000"
       # Optional. Left empty, reviewers can press every button (reset, apply a policy, confirm a fraud case).
       # Set a value in the Render dashboard to make those admin actions ask for it.
       - key: ADMIN_TOKEN

@@ -35,6 +35,7 @@ STATIC = Path(__file__).resolve().parent.parent / "static"
 twin = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
 twin.on_event = integrations.publish
 twin.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
+twin.seed_orders = len(twin.orders)
 razorpay = Razorpay()
 def _db_url():
     """DATABASE_URL (Postgres in production), else a SQLite file next to the app so payments survive a restart."""
@@ -78,7 +79,9 @@ def rate(bucket, per_minute):
             raise HTTPException(429, f"too many requests to {bucket}: limit {per_minute} per minute, try again shortly")
     return [Depends(dep)]
 _reset_lock = threading.Lock()
-auto = {"on": os.getenv("AUTO_TRAFFIC", "1") == "1", "n": 3}
+auto = {"on": os.getenv("AUTO_TRAFFIC", "1") == "1", "n": 3,
+        # optional cap on simulated live orders per process (small free servers: memory grows with the twin)
+        "max": int(os.getenv("AUTO_TRAFFIC_MAX", "0") or 0)}
 
 app = FastAPI(title="Sentinel Twin API", version="1.0.0",
               description="Digital twin + GAT risk engine + agent team on Razorpay (Orders, Checkout, webhooks).")
@@ -96,7 +99,7 @@ def _traffic():
                 twin.flush_events()  # keep the durable graph event log current between decisions
             except Exception as e:  # noqa: BLE001 - keep the loop alive; the next pass retries
                 print("reconcile error", type(e).__name__)
-        if auto["on"]:
+        if auto["on"] and not (auto["max"] and len(twin.orders) - getattr(twin, "seed_orders", 0) >= auto["max"]):
             try:
                 twin.tick(auto["n"], fraud_rate=0.12)
             except Exception as e:  # keep the simulator alive
@@ -384,6 +387,7 @@ def reset():
         t = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
         t.on_event = integrations.publish
         t.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
+        t.seed_orders = len(t.orders)
         razorpay.calls.clear()
         store.reset()
         twin, team = t, Team(t, razorpay, store=store, load_receipts=False)  # audit rows stay in the database
