@@ -6,3 +6,6 @@ __pycache__/
 *.log
 
 data/
+
+# assembled Hugging Face Space folder (built by deploy/hf/build_space.sh)
+deploy/hf/space/

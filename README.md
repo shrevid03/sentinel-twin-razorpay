@@ -10,6 +10,12 @@ An AI shopping agent pays through Razorpay Checkout (UPI, cards, netbanking). A 
 
 **Payment flow in one line:** agent proposes a cart → mandate checked in code → GAT + rules risk gate → Razorpay order (manual capture) → buyer pays in Razorpay Checkout → server verifies `HMAC-SHA256(order_id|payment_id)` → mandate re-checked → payment captured exactly once.
 
+> **Demo mode (what a reviewer sees without keys).** The hosted demo runs on an in-process **demo gateway** that follows the same flow as Razorpay test mode: an order with manual capture, a Checkout signature checked with HMAC-SHA256, the pre-capture risk check, capture exactly once, and signed webhooks. It makes no call to Razorpay and moves no money, and every screen and receipt says *Demo mode*. The real test-mode integration is [`app/razorpay.py`](app/razorpay.py) plus [`scripts/razorpay_live_check.py`](scripts/razorpay_live_check.py); it switches on when `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` are set, and refuses `rzp_live_` keys by default (the live-check script runs only with `rzp_test_` keys).
+>
+> **Run it with your own Razorpay test keys:** `git clone https://github.com/shrevid03/sentinel-twin-razorpay && cd sentinel-twin-razorpay && pip install -r requirements.txt`, then `RAZORPAY_KEY_ID=rzp_test_… RAZORPAY_KEY_SECRET=… uvicorn app.main:app --port 8000` and open http://localhost:8000/app. Pay with UPI `success@razorpay` in the real Razorpay Checkout.
+>
+> **Signatures are tested against Razorpay's documented formulas:** `tests/test_razorpay.py` checks the Checkout signature (`HMAC-SHA256(order_id + "|" + payment_id, key_secret)`), that a forged signature never reaches capture, that a signed webhook (`HMAC-SHA256(raw body, webhook secret)`) is processed and a tampered one is not, and that a replayed webhook is processed once.
+
 ![Scrolling the landing page: through a moonlit gothic window into the fraud graph](docs/img/landing-scroll.gif)
 
 | | |

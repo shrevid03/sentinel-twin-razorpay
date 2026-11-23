@@ -393,7 +393,7 @@ const SYM = { INR: "₹", USD: "$" };
 const fmtCharge = (ch) => ch && ch.amount != null ? `${SYM[ch.currency] || (ch.currency + " ")}${(ch.amount / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "";
 const safeUrl = (u) => (/^https:\/\//.test(u || "") ? u : "");
 function productCards(ps) {
-  return `<div class="c3-label">Live product data via Channel3 · payment in Razorpay sandbox</div><div class="pcards">${ps.slice(0, 6).map((p) => `
+  return `<div class="c3-label">Live product data via Channel3 · ${CFG.pay_mode === "demo" ? "payment simulated (demo gateway)" : "payment in Razorpay test mode"}</div><div class="pcards">${ps.slice(0, 6).map((p) => `
     <div class="pcard">${safeUrl(p.image) ? `<img src="${esc(safeUrl(p.image))}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div class="noimg"></div>`}
       <div class="pc-body"><div class="pc-name">${esc(p.name)}</div><div class="pc-meta"><b>${money(p.price)}</b> · ${esc(p.merchant)}</div>
       ${p.category === "gift_cards" ? `<div class="pc-warn">gift card · blocked by your mandate</div>` : ""}
@@ -406,15 +406,15 @@ async function renderPay(co) {
   const dec = rc?.risk?.decision || "approve";
   const checks = rc?.mandate_checks || [];
   slot.innerHTML = `<div class="paybox">
-    ${co.cart.some((c) => c.source === "channel3") ? `<div class="c3-label">Live product data via Channel3 · payment in Razorpay sandbox (we don't buy from the retailer)</div>` : ""}
+    ${co.cart.some((c) => c.source === "channel3") ? `<div class="c3-label">Live product data via Channel3 · ${CFG.pay_mode === "demo" ? "payment simulated (demo gateway)" : "payment in Razorpay test mode"} (we don't buy from the retailer)</div>` : ""}
     ${co.cart.filter((c) => c.source === "channel3" && safeUrl(c.image)).slice(0, 1).map((c) => `<div class="pc-hero"><img src="${esc(safeUrl(c.image))}" alt="" referrerpolicy="no-referrer"><span>${esc(c.merchant)}${safeUrl(c.retailer_url) ? ` · <a href="${esc(safeUrl(c.retailer_url))}" target="_blank" rel="noopener noreferrer">View at retailer ↗</a>` : ""}</span></div>`).join("")}
     ${co.cart.map((c) => `<div class="item"><span>${esc(c.qty > 1 ? c.qty + " × " : "")}${esc(c.name)}</span><span class="price">${money(c.price * (c.qty || 1))}</span></div>`).join("")}
     ${checks.length ? `<ul class="checks">${checks.map((c) => `<li class="${c.pass ? "" : "no"}">${esc(c.check)}</li>`).join("")}</ul>` : ""}
     <div class="meta"><span>Risk decision <span class="decision ${esc(dec)}">${esc(dec)}</span> · score ${Number(co.risk ?? rc?.risk?.score ?? 0).toFixed(2)}</span>
-      <span>Razorpay order ${esc(co.pay_order_id)}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</span></div>
+      <span>${CFG.pay_mode === "demo" ? "Demo order" : "Razorpay order"} ${esc(co.pay_order_id)}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</span></div>
     <div id="pp-buttons"></div></div>`;
   const charge = fmtCharge({ amount: co.amount, currency: co.currency });
-  const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ Razorpay payment <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
+  const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ ${CFG.pay_mode === "demo" ? "Simulated payment (demo gateway)" : "Razorpay test-mode payment"} <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
   const fail = (e) => { const m = String(e?.message || e); if (/not captured/i.test(m)) window.STSound?.hold(); addMsg("sys", esc(/captured|charged|confirm/i.test(m) ? m : "Payment not completed: " + m)); };
   const capture = (body) => api(`/api/razorpay/orders/${encodeURIComponent(co.pay_order_id)}/capture`, body).then(done, fail);
   if (CFG.pay_mode !== "demo" && CFG.razorpay_key_id) {
@@ -432,7 +432,7 @@ async function renderPay(co) {
       rzp.open();
     };
   } else {
-    $("#pp-buttons").innerHTML = `<button id="demo-approve">Pay ${esc(charge)} (demo mode)</button> <small class="muted">Add Razorpay test keys for the real Razorpay Checkout.</small>`;
+    $("#pp-buttons").innerHTML = `<button id="demo-approve">Pay ${esc(charge)} · simulated</button> <small class="muted">Demo gateway: no Razorpay call and no real money. It follows the Razorpay test-mode flow (order with manual capture, signature check, pre-capture risk check, capture once). Add Razorpay test keys to use the real Razorpay Checkout.</small>`;
     $("#demo-approve").onclick = () => capture({});
   }
 }
