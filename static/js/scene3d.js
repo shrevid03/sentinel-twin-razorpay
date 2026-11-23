@@ -492,139 +492,6 @@ const cart = (() => {
   } };
 })();
 
-// ------------------------------------------------------------------ chapter vi: a gothic corridor; the risky payment meets an iron portcullis
-const corridor = (() => {
-  const sc = baseScene(0x030907);
-  sc.userData.sun.position.set(6, 12, 8); sc.userData.sun.intensity = .9;
-  const CW = 2.3, CS = 3.3, N = 7, GAP = 5.2;
-  const fl = new THREE.Mesh(new THREE.PlaneGeometry(9, 60), floor.material); fl.rotation.x = -Math.PI / 2; fl.position.z = -18; fl.receiveShadow = true; sc.add(fl);
-  const ringS = new THREE.Shape(); archPath(CW + .5, CS, ringS); ringS.lineTo(-CW - .5, 0); ringS.holes.push(archPath(CW, CS, new THREE.Path()));
-  const archGeo = new THREE.ExtrudeGeometry(ringS, { depth: .7, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 2, curveSegments: 40 });
-  const glowArches = [];
-  for (let i = 0; i < N; i++) {
-    const a = new THREE.Mesh(archGeo, traceryMat); a.position.z = -i * GAP; a.castShadow = a.receiveShadow = true; sc.add(a);
-    const path = archPath(CW - .02, CS, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y, .72));
-    const gm = new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: 0 });
-    const g = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path), 80, .025, 6, false), gm); g.position.z = -i * GAP; sc.add(g); glowArches.push(g);
-    [-1, 1].forEach((s) => { const w = new THREE.Mesh(new THREE.BoxGeometry(.5, CS + 3.2, GAP - .7), rWallMat); w.position.set(s * (CW + 1.1), (CS + 3.2) / 2, -i * GAP - GAP / 2); w.receiveShadow = true; sc.add(w); });
-  }
-  [1, 3, 5].forEach((i) => { const l = new THREE.PointLight(0xd9a070, 1.6, 9, 2); l.position.set((i % 2 ? -1 : 1) * (CW - .3), 2.6, -i * GAP + .8); sc.add(l); });
-  // the portcullis: an iron grid with spikes, at the pre-capture gate
-  const port = new THREE.Group(), PG = 4;
-  for (let i = -4; i <= 4; i++) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, CS + 2.4, 10), iron); bar.position.set(i * .5, (CS + 2.4) / 2, 0); bar.castShadow = true; port.add(bar);
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(.08, .28, 10), iron); sp.position.set(i * .5, -.12, 0); sp.rotation.x = Math.PI; port.add(sp); }
-  for (let j = 0; j < 5; j++) { const h = new THREE.Mesh(new THREE.BoxGeometry(4.4, .08, .09), iron); h.position.y = .45 + j * 1.05; h.castShadow = true; port.add(h); }
-  port.position.z = -PG * GAP + .3; sc.add(port);
-  const rimP = new THREE.PointLight(0x9fc8b8, 3, 6, 2); rimP.position.set(0, 3, -PG * GAP + 2); sc.add(rimP);
-  const good = orb(0x9fe0c8, 2.2, .16, 2.6), bad = orb(0xe8766a, 2.0, .16, 2.4); sc.add(good, bad);
-  return { sc, update(p, t) {
-    const e = smooth(p);
-    camera.position.set(px * .3, 1.9 - py * .2, 9 - e * 17); look.set(0, 1.7, camera.position.z - 10); camera.lookAt(look);
-    const gz = 6 - clamp((p - .05) / .55) * 34;                       // the approved payment runs the whole corridor
-    good.position.set(Math.sin(t * 2) * .05, 1.4 + Math.sin(t * 3) * .05, gz);
-    const drop = clamp((p - .5) / .1); port.position.y = (1 - smooth(drop)) * (CS + 1.6);
-    const bz = Math.max(-PG * GAP + 1.0, 6 - clamp((p - .2) / .45) * 30);  // the risky one stops at the portcullis
-    const stopped = bz <= -PG * GAP + 1.0001 && drop >= 1;
-    bad.position.set(Math.sin(t * 2 + 1) * .05, 1.2 + Math.sin(t * 3 + 1) * .05 + (stopped ? Math.sin(t * 9) * .03 : 0), bz);
-    bad.children[0].scale.setScalar(stopped ? 1 + Math.sin(t * 6) * .12 : 1);
-    glowArches.forEach((g, i) => { const z = -i * GAP, dz = Math.abs(gz - z); g.material.opacity = Math.max(0, .9 - dz * .45) + (i === PG && stopped ? .3 : 0);
-      g.material.color.setHex(i === PG && stopped ? 0xe8766a : 0x7fd1b9); });
-  } };
-})();
-
-// ------------------------------------------------------------------ chapter ix: a crisp moonlit lake; attack waves break on a shield of light
-const lake = (() => {
-  const sc = baseScene(0x050d0b);
-  sc.userData.sun.intensity = 1.1;
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(120, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
-    vertexShader: "varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }",
-    fragmentShader: `varying vec3 vP; float h(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
-      void main(){ float y=normalize(vP).y; vec3 c=mix(vec3(.04,.09,.08),vec3(.006,.016,.014),smoothstep(-.05,.6,y));
-        float s=step(.9985,h(floor(normalize(vP)*420.)))*smoothstep(.05,.4,y); c+=vec3(.7,.78,.74)*s*.8; gl_FragColor=vec4(c,1.);
-        #include <colorspace_fragment>
-      }` }));
-  sc.add(sky);
-  const moonL = new THREE.Mesh(new THREE.SphereGeometry(3.2, 64, 48), moonMat); moonL.position.set(14, 22, -70); sc.add(moonL);
-  // the far shore: layers of dark pines
-  const pine = new THREE.ConeGeometry(1, 4, 7); pine.translate(0, 2, 0);
-  const PN = 260, pines = new THREE.InstancedMesh(pine, new THREE.MeshStandardMaterial({ color: 0x0d1c17, roughness: .95 }), PN), d = new THREE.Object3D();
-  for (let i = 0; i < PN; i++) { const row = i % 3, x = (i / PN) * 140 - 70 + (rng() - .5) * 1.5;
-    d.position.set(x, -.3, -34 - row * 5 - rng() * 2); d.scale.set(.8 + rng() * .8, 1.2 + rng() * 2.4 - row * .2, .8 + rng() * .8); d.updateMatrix(); pines.setMatrixAt(i, d.matrix); }
-  sc.add(pines);
-  // water: a dark, slightly glossy surface with slowly moving ripples (normal map scroll) and soft reflections of the moon
-  const wn = (() => { const N = 256, n = fbm(N, 8, 4); return normalFrom(N, n, 3.2); })(); wn.repeat.set(10, 10);
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(160, 120), new THREE.MeshPhysicalMaterial({ color: 0x0a1814, roughness: .16, metalness: 0, normalMap: wn, normalScale: new THREE.Vector2(.35, .35), clearcoat: .6, clearcoatRoughness: .2, envMapIntensity: 1 }));
-  water.rotation.x = -Math.PI / 2; water.position.z = -20; sc.add(water);
-  const envS = new THREE.Scene(); envS.background = new THREE.Color(0x061210);
-  const em = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 16), new THREE.MeshBasicMaterial({ color: 0xbfd2c9 })); em.position.set(14, 22, -70); envS.add(em);
-  sc.environment = pmrem.fromScene(envS, 0.02).texture; sc.environmentIntensity = .9;
-  // the shield of light on the near shore
-  const shield = new THREE.Group(); shield.position.set(4.6, 2.2, -4);
-  const sh = new THREE.Shape(); sh.moveTo(0, 2.1); sh.bezierCurveTo(1.4, 1.8, 1.6, 1.2, 1.55, .3); sh.bezierCurveTo(1.45, -1, .7, -1.8, 0, -2.3); sh.bezierCurveTo(-.7, -1.8, -1.45, -1, -1.55, .3); sh.bezierCurveTo(-1.6, 1.2, -1.4, 1.8, 0, 2.1);
-  const shieldMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd1b9).multiplyScalar(.5), transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false });
-  shield.add(new THREE.Mesh(new THREE.ShapeGeometry(sh, 40), shieldMat));
-  const edge = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sh.getSpacedPoints(80).map((v) => new THREE.Vector3(v.x, v.y, 0)), true), 160, .035, 8, true), glowMat(0x7fd1b9, 1.6));
-  shield.add(edge); shield.lookAt(-6, 2, 12); sc.add(shield);
-  const shL = new THREE.PointLight(0x7fd1b9, 4, 10, 2); shL.position.set(4.6, 2.2, -3); sc.add(shL);
-  // attack orbs skim the water; ripples spread where they touch
-  const AN = 16, attacks = [], ripples = [];
-  for (let i = 0; i < AN; i++) { const o = orb(0xe8766a, 1.7, .09, 0); o.userData = { x0: -16 - rng() * 6, z0: -10 + rng() * 9, lag: (i % 8) * .045 + (i >= 8 ? .32 : 0), h: .35 + rng() * .5 }; attacks.push(o); sc.add(o);
-    const rg = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({ color: 0x9fb8ac, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
-    rg.rotation.x = -Math.PI / 2; rg.position.y = .02; ripples.push(rg); sc.add(rg); }
-  const wisps = [0, 1, 2, 3, 4].map((i) => { const w = orb(0xbfeedd, 1.1, .06, 0); w.position.set(-8 + i * 3.5, .6, 2 - i * 1.6); sc.add(w); return w; });
-  return { sc, update(p, t) {
-    const e = smooth(p);
-    camera.position.set(-5 + e * 4 + px * .5, 1.7 - py * .2, 11 - e * 2.5); look.set(1.5, 1.4, -6); camera.lookAt(look);
-    wn.offset.set(t * .006, t * .004);
-    attacks.forEach((o, i) => { const u = o.userData, a = clamp((p - .08 - u.lag) / .28);
-      const tx = 4.6 - 1.2, x = u.x0 + (tx - u.x0) * a, z = u.z0 + (-4 - u.z0) * a;
-      o.position.set(x, u.h + Math.sin(a * 18 + i) * .08, z); o.visible = a > 0 && a < 1; o.scale.setScalar(a >= .98 ? 2 : 1);
-      const r = ripples[i], ra = clamp((a - .2) / .8); r.position.set(x, .02, z); r.scale.setScalar(.2 + ra * 2.2); r.material.opacity = a > 0 && a < 1 ? .35 * (1 - ra) : 0; });
-    const hit = attacks.some((o) => o.visible && o.position.x > 2.6);
-    edge.material.color.copy(new THREE.Color(0x7fd1b9).multiplyScalar(hit ? 2.4 : 1.6)); shieldMat.opacity = hit ? .26 : .16 + Math.sin(t * 1.5) * .02;
-    wisps.forEach((w, i) => { w.position.y = .6 + Math.sin(t * .8 + i) * .2; w.children[0].material.color.setScalar(.9 + Math.sin(t * 1.3 + i * 2) * .3); });
-  } };
-})();
-
-// ------------------------------------------------------------------ chapter xi: across the same lake on stepping stones to a ruined arch
-// (it shares the lake scene, so lake -> replay is one continuous camera move, not a cut)
-const causeway = (() => {
-  const sc = lake.sc;
-  const EVT = [0, 0, 24, 61, 88, 120, 136, 172], stones = [], rims = [];
-  const stoneGeo = new THREE.CylinderGeometry(1, 1.08, .22, 28, 1);
-  { const pp = stoneGeo.attributes.position; for (let i = 0; i < pp.count; i++) { const x = pp.getX(i), z = pp.getZ(i), a = Math.atan2(z, x);
-      const r = 1 + .08 * Math.sin(a * 3 + 1) + .05 * Math.sin(a * 7); pp.setX(i, x * r); pp.setZ(i, z * r); } stoneGeo.computeVertexNormals(); }
-  const rimGeo = new THREE.TorusGeometry(1.02, .035, 8, 48);
-  EVT.forEach((tv, i) => {
-    const u = i / (EVT.length - 1), x = -1.2 + Math.sin(u * 2.4) * 1.6, z = 3 - u * 27;
-    const st = new THREE.Mesh(stoneGeo, traceryMat); st.position.set(x, .06, z); st.scale.set(.85 + (i % 3) * .08, 1, .7 + (i % 2) * .1); st.rotation.y = i * .7;
-    st.castShadow = st.receiveShadow = true; sc.add(st); stones.push(st);
-    const m = new THREE.MeshBasicMaterial({ color: 0x24382f, transparent: true, opacity: .9 });
-    const rim = new THREE.Mesh(rimGeo, m); rim.rotation.x = Math.PI / 2; rim.position.set(x, .18, z); rim.scale.copy(st.scale).setY(1); sc.add(rim);
-    rims.push({ m, t: tv, dec: i === 5 });
-  });
-  // a small ruined gothic arch on the far shore, faintly lit inside
-  const shrine = new THREE.Group(); shrine.position.set(.4, 0, -29);
-  const ringS = new THREE.Shape(); archPath(1.9, 2.8, ringS); ringS.lineTo(-1.9, 0); ringS.holes.push(archPath(1.45, 2.8, new THREE.Path()));
-  shrine.add(new THREE.Mesh(new THREE.ExtrudeGeometry(ringS, { depth: .55, bevelEnabled: true, bevelThickness: .05, bevelSize: .05, bevelSegments: 2, curveSegments: 36 }), traceryMat));
-  [-1, 1].forEach((sd) => { const ruin = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1 + (sd > 0 ? .6 : 0), .6), traceryMat); ruin.position.set(sd * 3, .55, .2); ruin.rotation.z = sd * .08; shrine.add(ruin); });
-  const glow = new THREE.Mesh(new THREE.ShapeGeometry(archPath(1.45, 2.8, new THREE.Shape()), 24), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd1b9).multiplyScalar(.35), transparent: true, opacity: .25, depthWrite: false }));
-  glow.position.z = .1; shrine.add(glow);
-  const sl = new THREE.PointLight(0x9fd8c4, 2.5, 10, 2); sl.position.set(0, 2, 1.2); shrine.add(sl);
-  shrine.traverse((o) => { if (o.isMesh) o.castShadow = o.receiveShadow = true; }); sc.add(shrine);
-  const scrub = document.getElementById("scrub");
-  return { sc, update(p, t) {
-    const e = smooth(p), k = Math.min(stones.length - 1, e * (stones.length - 1.2));
-    const i0 = Math.floor(k), f = k - i0, a = stones[i0].position, b2 = stones[Math.min(stones.length - 1, i0 + 1)].position;
-    camera.position.set(a.x + (b2.x - a.x) * f + px * .4, 2.6 + Math.sin(t * .6) * .03 - py * .2, a.z + (b2.z - a.z) * f + 7.5);
-    look.set(.2, 1.3 + e * .6, -29); camera.lookAt(look);
-    const T = scrub ? +scrub.value : 200;
-    rims.forEach((R) => { const known = R.t <= T;
-      R.m.color.copy(new THREE.Color(!known ? 0x24382f : R.dec ? 0xf5b84b : R.t <= 120 ? 0x7fd1b9 : 0xe8766a).multiplyScalar(!known ? 1 : R.dec ? 2.2 : 1.6)); });
-    glow.material.opacity = .2 + .1 * Math.sin(t * 1.1);
-  } };
-})();
-
 // the fraud-ring graph (lanterns, vines, blooms) is gathered into one group so it can hang on the journey's ivy wall
 const graph = new THREE.Group();
 [...Object.values(lanterns), sigil, ...vines3.map((v) => v.mesh), rLeaves, petals, halo, sparks].forEach((o) => graph.add(o));
@@ -642,7 +509,7 @@ const journey = (() => {
   const pool = [0, 1, 2, 3].map(() => { const l = new THREE.PointLight(0xffb070, 0, 9, 2); J.add(l); return l; });
   const anchors = [];   // { pos, color, intensity, flicker }
   // sky, moon, far pines, water (the lake look she likes)
-  const skyM = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+  const skyM = new THREE.Mesh(new THREE.SphereGeometry(660, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
     vertexShader: "varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }",
     fragmentShader: `varying vec3 vP; float h(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
       void main(){ float y=normalize(vP).y; vec3 c=mix(vec3(.045,.1,.085),vec3(.006,.016,.014),smoothstep(-.05,.6,y));
@@ -650,17 +517,17 @@ const journey = (() => {
         #include <colorspace_fragment>
       }` }));
   J.add(skyM);
-  const moonJ = new THREE.Mesh(new THREE.SphereGeometry(9, 64, 48), moonMat); moonJ.position.set(70, 95, -330); J.add(moonJ);
+  const moonJ = new THREE.Mesh(new THREE.SphereGeometry(17, 64, 48), moonMat); moonJ.position.set(130, 112, -600); J.add(moonJ);
   const pineG = new THREE.ConeGeometry(1, 4, 7); pineG.translate(0, 2, 0);
   const PN = 520, pines = new THREE.InstancedMesh(pineG, new THREE.MeshStandardMaterial({ color: 0x0d1c17, roughness: .95 }), PN), d = new THREE.Object3D();
   for (let i = 0; i < PN; i++) { const side = i % 2 ? 1 : -1, row = (i >> 1) % 4;
     d.position.set(side * (22 + row * 5 + rng() * 6), -.3, -45 - ((i >> 3) / (PN / 8)) * 190 + rng() * 3);
-    d.scale.set(1 + rng(), 1.6 + rng() * 2.6, 1 + rng()); if (d.position.x > 20 && d.position.x < 58 && d.position.z < -80 && d.position.z > -165) d.scale.setScalar(0);
+    d.scale.set(1 + rng(), 1.6 + rng() * 2.6, 1 + rng()); if ((d.position.x > 20 && d.position.x < 58 && d.position.z < -80 && d.position.z > -165) || d.position.z < -182) d.scale.setScalar(0);
     d.updateMatrix(); pines.setMatrixAt(i, d.matrix); }
   J.add(pines);
-  const wn = (() => { const N = 256, n = fbm(N, 8, 4); return normalFrom(N, n, 3.2); })(); wn.repeat.set(24, 30);
-  const water = new THREE.Mesh(new THREE.PlaneGeometry(220, 300), new THREE.MeshPhysicalMaterial({ color: 0x0a1814, roughness: .16, normalMap: wn, normalScale: new THREE.Vector2(.35, .35), clearcoat: .6, clearcoatRoughness: .2 }));
-  water.rotation.x = -Math.PI / 2; water.position.set(0, 0, -192); J.add(water);
+  const wn = (() => { const N = 256, n = fbm(N, 8, 4); return normalFrom(N, n, 3.2); })(); wn.repeat.set(46, 36);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(420, 360), new THREE.MeshPhysicalMaterial({ color: 0x0a1814, roughness: .16, normalMap: wn, normalScale: new THREE.Vector2(.35, .35), clearcoat: .6, clearcoatRoughness: .2, transparent: true, opacity: .74 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(20, -.03, -222); J.add(water);
   const envS = new THREE.Scene(); envS.background = new THREE.Color(0x061210);
   const em = new THREE.Mesh(new THREE.SphereGeometry(20, 16, 16), new THREE.MeshBasicMaterial({ color: 0xbfd2c9 })); em.position.set(70, 95, -330); envS.add(em);
   J.environment = pmrem.fromScene(envS, 0.02).texture; J.environmentIntensity = .7;
@@ -922,6 +789,132 @@ const gate = (() => {
   } };
 })();
 
+// ------------------------------------------------------------------ the journey (stage C): over the gate, a gothic city across a second lake.
+// The red team's attacks break on a shield of light over it; then the camera rises to a panorama where each piece of evidence is a tower.
+const city = (() => {
+  const J = journey.sc, C = new THREE.Vector3(36, 0, -335), d = new THREE.Object3D(), c = new THREE.Color();
+  // blocks of houses and halls, taller toward the centre; spires on the tall ones; thousands of lit windows facing the lake
+  const stoneDark = new THREE.MeshStandardMaterial({ color: 0x223029, roughness: .82, metalness: .05 });
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0x18231f, roughness: .6, metalness: .2 });
+  const BN = 620, blocks = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, .5, 0), stoneDark, BN);
+  const SN = 260, spires = new THREE.InstancedMesh(new THREE.ConeGeometry(1, 1, 6).translate(0, .5, 0), roofMat, SN);
+  const WN = 7000, winGeo = new THREE.PlaneGeometry(.42, .7), winMat = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  const wins = new THREE.InstancedMesh(winGeo, winMat, WN), mirror = new THREE.InstancedMesh(winGeo, new THREE.MeshBasicMaterial({ color: 0xc8c8c8, toneMapped: false, side: THREE.DoubleSide }), WN);
+  const flip = new THREE.Matrix4().makeScale(1, -1, 1), stretch = new THREE.Matrix4().makeScale(.8, 2.2, 1);  // reflections smear a little on the water
+  let bi = 0, si = 0, wi = 0;
+  const winCols = [0xffc37a, 0xffb060, 0xffd9a0, 0x8fe0c4, 0xe8a060];
+  const addWindows = (x, z, w, h) => { const cols = Math.max(1, Math.floor(w / 1.15)), rows = Math.max(1, Math.floor((h - 1) / 1.7));
+    for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) { if (wi >= WN || rng() > .5) continue;
+      d.position.set(x - w / 2 + (k + .5) * (w / cols), 1 + r * 1.7, z + .02); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix();
+      wins.setMatrixAt(wi, d.matrix); mirror.setMatrixAt(wi, new THREE.Matrix4().multiplyMatrices(flip, d.matrix).multiply(stretch));
+      const k2 = rng(); c.setHex(winCols[k2 < .08 ? 3 : (rng() * 5) | 0]).multiplyScalar(.7 + rng() * .9); if (k2 < .08) c.setHex(winCols[3]);
+      wins.setColorAt(wi, c); mirror.setColorAt(wi, c); wi++; } };
+  for (let row = 0; row < 9 && bi < BN; row++) {
+    let x = -78 + rng() * 4; const z0 = -290 - row * 11;
+    while (x < 150 && bi < BN) {
+      const w = 3 + rng() * 5, dz = 4 + rng() * 5, cx = Math.abs(x + w / 2 - C.x) / 110, h = (5 + rng() * 9) * (1.6 - cx) + row * 1.4 + (rng() < .08 ? 14 : 0);
+      const z = z0 - rng() * 3;
+      d.position.set(x + w / 2, 0, z); d.rotation.set(0, 0, 0); d.scale.set(w, h, dz); d.updateMatrix(); blocks.setMatrixAt(bi, d.matrix);
+      c.setHex(0x223029).offsetHSL(0, 0, (rng() - .5) * .05); blocks.setColorAt(bi++, c);
+      if (si < SN && (h > 13 || rng() < .25)) { d.position.set(x + w / 2, h, z); d.scale.set(w * .5, 3 + rng() * (h > 16 ? 10 : 4), dz * .5); d.updateMatrix(); spires.setMatrixAt(si++, d.matrix); }
+      addWindows(x + w / 2, z + dz / 2, w, h);
+      x += w + .4 + rng() * 1.6;
+    }
+  }
+  blocks.count = bi; spires.count = si; wins.count = wi; mirror.count = wi;
+  blocks.receiveShadow = true; J.add(blocks, spires, wins, mirror);
+  // eight landmark towers, one per piece of evidence (left to right in time); ivy climbs them; a lantern crown shows what the replay may use
+  const EVT = [0, 0, 24, 61, 88, 120, 136, 172], DEC = 120, marks = [];
+  const crownGeo = new THREE.SphereGeometry(1.1, 20, 14), beamGeo = new THREE.CylinderGeometry(.25, .9, 46, 16, 1, true).translate(0, 30, 0);
+  const ivyT = new THREE.InstancedMesh(leafGeo, leafMat, 1600); let li = 0;
+  const streetN = 8 * 14, street = new THREE.InstancedMesh(new THREE.SphereGeometry(.32, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), streetN);
+  EVT.forEach((tv, i) => {
+    const x = -46 + i * 23 + (rng() - .5) * 4, z = -318 - (i % 3) * 14, h = 30 + (i === 5 ? 14 : 0) + rng() * 8, g = new THREE.Group(); g.position.set(x, 0, z); J.add(g);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(5, h, 5).translate(0, h / 2, 0), stoneDark); g.add(body);
+    [-1, 1].forEach((sd) => { const b = new THREE.Mesh(new THREE.BoxGeometry(1.4, h * .8, 1.4).translate(0, h * .4, 0), stoneDark); b.position.set(sd * 3, 0, 2.2); g.add(b); });
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(3.4, 12, 8).translate(0, 6, 0), roofMat); sp.position.y = h; g.add(sp);
+    const crown = new THREE.Mesh(crownGeo, new THREE.MeshBasicMaterial({ color: 0x24382f, toneMapped: false })); crown.position.y = h + 1.4; g.add(crown);
+    const beam = new THREE.Mesh(beamGeo, new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide })); beam.position.y = h + 1.4; g.add(beam);
+    for (let k = 0; k < 190 && li < 1600; k++) { const yy = Math.pow(rng(), 1.4) * h * .85, xx = (rng() - .5) * 5;
+      d.position.set(x + xx, yy, z + 2.56); d.lookAt(x + xx, yy + .3, z + 4); d.rotateZ((rng() - .5) * 2.4); d.scale.setScalar(1.4 + rng() * 1.4); d.updateMatrix(); ivyT.setMatrixAt(li, d.matrix);
+      c.setHex(hues[(rng() * 5) | 0]); ivyT.setColorAt(li++, c); }
+    for (let k = 0; k < 14; k++) { const u = k / 13; d.position.set(x + (C.x - x) * .15 * (1 - u) + Math.sin(u * 5 + i) * 1.5, .9, -283 + (z + 4 + 283) * u); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); street.setMatrixAt(i * 14 + k, d.matrix); }
+    // the windows of every tower face the lake
+    const cols = 3, rows = Math.floor(h / 2.4); for (let r = 0; r < rows; r++) for (let k = 0; k < cols; k++) { if (wi >= WN || rng() > .55) continue;
+      d.position.set(x - 1.6 + k * 1.6, 2 + r * 2.4, z + 2.52); d.rotation.set(0, 0, 0); d.scale.set(1.3, 1.3, 1); d.updateMatrix(); wins.setMatrixAt(wi, d.matrix); mirror.setMatrixAt(wi, new THREE.Matrix4().multiplyMatrices(flip, d.matrix).multiply(stretch));
+      c.setHex(winCols[(rng() * 3) | 0]); wins.setColorAt(wi, c); mirror.setColorAt(wi, c); wi++; }
+    marks.push({ t: tv, dec: i === 5, crown, beam, i });
+  });
+  wins.count = wi; mirror.count = wi; ivyT.count = li; J.add(ivyT, street);
+  // gold dust drifting over the roofs
+  const GD = 1400, gdGeo = new THREE.BufferGeometry(), gdPos = new Float32Array(GD * 3), gdPh = new Float32Array(GD);
+  for (let i = 0; i < GD; i++) { gdPos.set([-80 + rng() * 240, 2 + rng() * 50, -280 - rng() * 110], i * 3); gdPh[i] = rng() * 6.28; }
+  gdGeo.setAttribute("position", new THREE.BufferAttribute(gdPos, 3));
+  const dust = new THREE.Points(gdGeo, new THREE.PointsMaterial({ size: .5, map: ffSprite, color: 0xe8c27a, transparent: true, opacity: .7, depthWrite: false, blending: THREE.AdditiveBlending })); J.add(dust);
+  // the shield: a flattened dome of light over the city; attacks that hit it ripple outward
+  const HITS = 6, shieldU = { strength: { value: 0 }, t: { value: 0 }, hits: { value: Array.from({ length: HITS }, () => new THREE.Vector4(0, -999, 0, 9)) } };
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(1, 72, 36, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.ShaderMaterial({
+    uniforms: shieldU, transparent: true, depthWrite: false, side: THREE.FrontSide, blending: THREE.AdditiveBlending,
+    vertexShader: "varying vec3 vW; varying vec3 vN; varying vec3 vV; void main(){ vec4 w = modelMatrix * vec4(position,1.); vW = w.xyz; vN = normalize(mat3(modelMatrix) * normal); vV = normalize(cameraPosition - w.xyz); gl_Position = projectionMatrix * viewMatrix * w; }",
+    fragmentShader: `uniform float strength; uniform float t; uniform vec4 hits[${HITS}]; varying vec3 vW; varying vec3 vN; varying vec3 vV;
+      void main(){ float f = pow(1. - abs(dot(normalize(vN), vV)), 2.2); float hex = .5 + .5 * sin(vW.x * .9 + t * .6) * sin(vW.y * .9) * sin(vW.z * .9 - t * .4);
+        float a = (pow(f, 2.6) * .34 + hex * .012) * strength; vec3 col = vec3(.5, .86, .74) * a;
+        for (int i = 0; i < ${HITS}; i++) { float age = hits[i].w; if (age > 1.5) continue; float dd = distance(vW, hits[i].xyz); float fade = 1. - age / 1.5, ring = exp(-pow((dd - age * 18.) * .9, 2.)) * fade * fade;
+          col += vec3(.95, .55, .45) * ring * .35 + vec3(.6, .95, .8) * exp(-dd * .3) * fade * .35; }
+        gl_FragColor = vec4(col, 1.);
+      }` }));
+  shield.scale.set(118, 62, 70); shield.position.copy(C).setZ(C.z + 5); J.add(shield);
+  // three waves of attacks, sixteen each; each wave the shield is stronger (rules 22.4%, graph 86.7%, hardened 93.9% caught)
+  const AN = 48, caughtPer = [4, 14, 15], atk = new THREE.InstancedMesh(new THREE.SphereGeometry(1.3, 12, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe8766a).multiplyScalar(2.2), toneMapped: false }), AN);
+  const attacks = []; for (let w = 0; w < 3; w++) { const caught = new Set(); while (caught.size < caughtPer[w]) caught.add((rng() * 16) | 0);
+    for (let k = 0; k < 16; k++) { const from = new THREE.Vector3(-60 + rng() * 190, 4 + rng() * 10, -215 - rng() * 15), ang = rng() * Math.PI - Math.PI / 2;
+      const hit = new THREE.Vector3(C.x + Math.sin(ang) * 118 * .62, 8 + rng() * 26, C.z + 5 + 70 * .82); hit.x = Math.max(-60, Math.min(130, from.x * .5 + hit.x * .5));
+      attacks.push({ w, k, from, hit, caught: caught.has(k), start: .06 + w * .24 + k * .009, hitSlot: -1 }); } }
+  d.position.set(0, -500, 0); d.scale.setScalar(0); d.updateMatrix(); for (let i = 0; i < AN; i++) atk.setMatrixAt(i, d.matrix);
+  J.add(atk);
+  const hitsAge = new Float32Array(HITS).fill(9); let hitNext = 0;
+  const scrub = document.getElementById("scrub");
+  const tmp = new THREE.Vector3(), P = new THREE.Vector3(), L = new THREE.Vector3();
+  const cam = {   // keyframes: over the gate wall, down to the far lip of the cliff facing the city, then up to the panorama
+    rt: [[0, [33, 23.2, -151], [37.5, 25.6, -170]], [.22, [36, 38, -168], [36, 20, -260]], [.45, [36, 27, -184], [36, 14, -330]], [1, [30, 26, -190], [38, 13, -335]]],
+    rp: [[0, [30, 26, -190], [38, 13, -335]], [.5, [26, 40, -175], [38, 14, -335]], [1, [36, 50, -168], [44, 20, -340]]] };
+  const along = (K, p) => { let i = 0; while (i < K.length - 2 && p > K[i + 1][0]) i++; const a = K[i], b = K[i + 1], f = smooth(clamp((p - a[0]) / (b[0] - a[0])));
+    P.set(...a[1]).lerp(tmp.set(...b[1]), f); L.set(...a[2]).lerp(tmp.set(...b[2]), f); };
+  let lastT = -1;
+  const common = (t, dt) => {
+    for (let i = 0; i < GD; i++) { gdPh[i] += dt * .3; gdPos[i * 3] += Math.cos(gdPh[i]) * dt * .25; gdPos[i * 3 + 1] += Math.sin(gdPh[i] * 1.3) * dt * .18; }
+    for (let i = 0; i < HITS; i++) { hitsAge[i] += dt; shieldU.hits.value[i].w = hitsAge[i]; }
+    gdGeo.attributes.position.needsUpdate = true; dust.material.opacity = .5 + .2 * Math.sin(t * .8); shieldU.t.value = t;
+    camera.position.copy(P); camera.position.x += px * .8; camera.position.y -= py * .4; look.copy(L); camera.lookAt(look);
+    journey.light(t, 1);
+  };
+  const setTowers = (T) => { if (T === lastT) return; lastT = T;
+    marks.forEach((M) => { const known = M.t <= T, col = !known ? 0x24382f : M.dec ? 0xf5b84b : M.t <= DEC ? 0x7fd1b9 : 0xe8766a;
+      M.crown.material.color.setHex(col).multiplyScalar(known ? 2.2 : 1); M.beam.material.color.setHex(col); M.beam.material.opacity = known ? (M.t > DEC ? .035 : M.dec ? .09 : .06) : 0;
+      for (let k = 0; k < 14; k++) { c.setHex(known ? col : 0x1c2a24).multiplyScalar(known ? 1.8 : 1); street.setColorAt(M.i * 14 + k, c); } });
+    street.instanceColor.needsUpdate = true; };
+  setTowers(200);
+  return {
+    sc: J,
+    redteam: { sc: J, update(p, t, dt) {
+      along(cam.rt, p); common(t, dt); setTowers(200);
+      shieldU.strength.value = .25 + smooth(clamp((p - .3) / .2)) * .45 + smooth(clamp((p - .55) / .2)) * .35;
+      attacks.forEach((A, i) => { const q = (p - A.start) / .1;
+        if (q <= 0) { d.scale.setScalar(0); if (A.hitSlot >= 0) A.hitSlot = -1; }
+        else if (q < 1 || !A.caught) { const qq = Math.min(q, A.caught ? 1 : 1.6); tmp.lerpVectors(A.from, A.hit, qq); tmp.y += Math.sin(Math.min(1, qq) * Math.PI) * 6;
+          if (!A.caught && qq > 1) tmp.y -= (qq - 1) * 14;            // the ones that slip through sink into the city, dimming
+          d.position.copy(tmp); d.scale.setScalar(!A.caught && qq > 1 ? Math.max(0, 1 - (qq - 1) * 1.6) : 1); }
+        else { d.scale.setScalar(0); if (A.hitSlot < 0) { A.hitSlot = hitNext; shieldU.hits.value[hitNext].set(A.hit.x, A.hit.y, A.hit.z, 0); hitsAge[hitNext] = 0; hitNext = (hitNext + 1) % HITS; } }
+        d.rotation.set(0, 0, 0); d.updateMatrix(); atk.setMatrixAt(i, d.matrix); });
+      atk.instanceMatrix.needsUpdate = true;
+    } },
+    replay: { sc: J, update(p, t, dt) {
+      along(cam.rp, p); common(t, dt); shieldU.strength.value = Math.max(.12, .9 - p * 1.6);
+      atk.count = 0; setTowers(scrub ? +scrub.value : 200);
+      marks.forEach((M) => { M.beam.rotation.y = t * .1; });
+    } } };
+})();
+
 // ------------------------------------------------------------------ sizing, scroll, adaptive quality, loop
 const renderPass = composer.passes[0];
 function resize() {
@@ -934,8 +927,8 @@ const chapters = [
   { id: "journey", el: storyEl, sc: journey.sc, update: journey.update },
   { id: "balloon", el: document.getElementById("mandate"), sc: balloon.sc, update: balloon.update },
   { id: "gate", el: document.getElementById("pipeline"), sc: gate.sc, update: gate.update },
-  { id: "lake", el: document.getElementById("redteam"), sc: lake.sc, update: lake.update },
-  { id: "causeway", el: document.getElementById("replay"), sc: causeway.sc, update: causeway.update },
+  { id: "city", el: document.getElementById("redteam"), sc: city.sc, update: city.redteam.update },
+  { id: "panorama", el: document.getElementById("replay"), sc: city.sc, update: city.replay.update },
 ];
 let progress = 0, ringP = 0, mode = "hero", chapOpacity = 0, active = null;
 const onScroll = () => {
@@ -945,7 +938,7 @@ const onScroll = () => {
   chapters.forEach((c) => { if (!c.el) return; const s = c.el.getBoundingClientRect();
     const o = s.top < innerHeight * .85 && s.bottom > innerHeight * .15 ? Math.min(clamp((innerHeight * .85 - s.top) / (innerHeight * .6)), clamp((s.bottom - innerHeight * .15) / (innerHeight * .5))) : 0;
     c.p = clamp(-s.top / Math.max(1, s.height - innerHeight)); if (o > bestO) { bestO = o; best = c; } });
-  if (!best) { best = chapters[0]; bestO = 1; }            // between the order card and the wall: stay with the lantern light
+  if (!best) { const rr = document.getElementById("replay").getBoundingClientRect(); best = rr.bottom < innerHeight * .5 ? chapters[chapters.length - 1] : chapters[0]; bestO = 1; }            // between the order card and the wall: stay with the lantern light
   chapters.forEach((c) => { if (c !== best && c.sc === best.sc && c.el) { const s2 = c.el.getBoundingClientRect();
     const o2 = s2.top < innerHeight * .85 && s2.bottom > innerHeight * .15 ? 1 : 0; bestO = Math.max(bestO, o2); } });
   if (best.id === "journey" && r.bottom > 0) bestO = Math.max(bestO, clamp((progress - .62) / .15));  // the window's glow dissolves into the lantern's
