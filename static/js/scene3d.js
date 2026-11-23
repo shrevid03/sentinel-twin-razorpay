@@ -8,7 +8,7 @@
    Loaded only on wide screens that allow motion and have WebGL 2; everything else keeps the 2D artwork. */
 import * as THREE from "three";
 import { EffectComposer, RenderPass, EffectPass, BloomEffect, GodRaysEffect, VignetteEffect, NoiseEffect,
-  ToneMappingEffect, ToneMappingMode, BlendFunction, HueSaturationEffect } from "postprocessing";
+  ToneMappingEffect, ToneMappingMode, BlendFunction, HueSaturationEffect, BrightnessContrastEffect } from "postprocessing";
 
 const canvas = document.getElementById("gl3d");
 const hero = document.querySelector(".hero");
@@ -104,19 +104,26 @@ const moonTex = (() => {
   const at = (a, x, y) => a[((y % 512) * 512) + (x % 512)];
   for (let y = 0; y < Ht; y++) for (let x = 0; x < Wd; x++) {
     const i = y * Wd + x, m = at(low, x >> 1, y), d = at(mid, x >> 1, y);
-    const mare = Math.min(1, Math.max(0, (m - .47) * 5));              // dark basaltic seas
+    const mare = Math.min(1, Math.max(0, (m - .47 + (d - .5) * .12) * 4));  // dark basaltic seas, with soft irregular edges
     alb[i] = (.80 - mare * .36) * (.9 + d * .2); h[i] = -mare * .2 + d * .06;
   }
   const craters = [];
-  for (let k = 0; k < 320; k++) { const r = 1.5 + Math.pow(rng(), 3.6) * 40; craters.push([rng() * Wd, (.08 + rng() * .84) * Ht, r]); }
-  craters.forEach(([cx, cy, r]) => {
-    const x0 = Math.max(0, cx - r * 1.6 | 0), x1 = Math.min(Wd - 1, cx + r * 1.6 | 0), y0 = Math.max(0, cy - r * 1.6 | 0), y1 = Math.min(Ht - 1, cy + r * 1.6 | 0);
+  for (let k = 0; k < 900; k++) { const r = 1 + Math.pow(rng(), 4) * 34; craters.push([rng() * Wd, (.06 + rng() * .88) * Ht, r, .25 + rng() * .75, rng() * 6.283, .75 + rng() * .5]); }
+  const wob = fbm(256, 8, 3);
+  craters.forEach(([cx, cy, r, age, rot, ell]) => {  // soft bowls and rims; old craters are shallow and faint, outlines wobble
+    const x0 = Math.max(0, cx - r * 1.8 | 0), x1 = Math.min(Wd - 1, cx + r * 1.8 | 0), y0 = Math.max(0, cy - r * 1.8 | 0), y1 = Math.min(Ht - 1, cy + r * 1.8 | 0);
+    const depth = .3 * age * Math.min(1, r / 10), cs = Math.cos(rot), sn = Math.sin(rot);
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const d = Math.hypot(x - cx, y - cy) / r, i = y * Wd + x;
-      if (d < 1) { h[i] -= .35 * (1 - d * d) * Math.min(1, r / 12); alb[i] *= .97; }
-      else if (d < 1.35) { h[i] += .12 * (1 - (d - 1) / .35) * Math.min(1, r / 12); alb[i] *= 1.04; }
+      const dx = x - cx, dy = y - cy, ux = (dx * cs + dy * sn), uy = (-dx * sn + dy * cs) * ell;
+      const w = 1 + (wob[((y & 255) << 8) + (x & 255)] - .5) * .35;
+      const d = Math.hypot(ux, uy) / (r * w), i = y * Wd + x;
+      const bowl = d < 1 ? (1 - d * d) : 0, rim = Math.exp(-Math.pow((d - 1.05) / .18, 2));
+      h[i] += -depth * bowl * bowl + depth * .45 * rim;
+      alb[i] *= 1 - .05 * bowl * age + .05 * rim * age;
     }
   });
+  const fine = fbm(512, 32, 3);
+  for (let y = 0; y < Ht; y++) for (let x = 0; x < Wd; x++) { const i = y * Wd + x; alb[i] *= .93 + .14 * fine[((y % 512) * 512) + (x % 512)]; }
   for (let k = 0; k < 6; k++) {  // a few young craters with bright ray systems
     const cx = rng() * Wd, cy = (.2 + rng() * .6) * Ht, n = 14 + (rng() * 10 | 0);
     for (let j = 0; j < n; j++) { const a = rng() * 6.283, L = 30 + rng() * 120;
@@ -129,7 +136,7 @@ const moonTex = (() => {
   const nc = document.createElement("canvas"); nc.width = Wd; nc.height = Ht; const nx = nc.getContext("2d"), ni = nx.createImageData(Wd, Ht);
   const H = (xx, yy) => h[Math.min(Ht - 1, Math.max(0, yy)) * Wd + ((xx + Wd) % Wd)];
   for (let y = 0; y < Ht; y++) for (let xx = 0; xx < Wd; xx++) {
-    const dx = (H(xx + 1, y) - H(xx - 1, y)) * 3.2, dy = (H(xx, y + 1) - H(xx, y - 1)) * 3.2, l = Math.hypot(dx, dy, 1), i = (y * Wd + xx) * 4;
+    const dx = (H(xx + 1, y) - H(xx - 1, y)) * 2.2, dy = (H(xx, y + 1) - H(xx, y - 1)) * 2.2, l = Math.hypot(dx, dy, 1), i = (y * Wd + xx) * 4;
     ni.data[i] = (-dx / l * .5 + .5) * 255; ni.data[i + 1] = (-dy / l * .5 + .5) * 255; ni.data[i + 2] = (1 / l * .5 + .5) * 255; ni.data[i + 3] = 255;
   }
   nx.putImageData(ni, 0, 0);
@@ -158,9 +165,11 @@ const haloTex = (() => { const c = document.createElement("canvas"); c.width = c
 const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: false })); moonHalo.scale.set(13, 13, 1); moonHalo.position.set(4.6, 9.8, -41); scene.add(moonHalo);
 
 // lights: cool moonlight from behind the window, faint warm fill, sage sky
-scene.add(new THREE.HemisphereLight(0x7a9a8e, 0x0b1612, 0.46));
-const front = new THREE.SpotLight(0x9fc0b3, 42, 40, .8, 1, 1.6); front.position.set(-7, 9, 14); front.target.position.set(0, 4, 0); scene.add(front, front.target);  // cool moonlit wash on the wall's face
-const moonLight = new THREE.DirectionalLight(0xc4d8d0, 2.3);
+scene.add(new THREE.HemisphereLight(0x7f9f92, 0x101c17, 0.56));  // a very faint cool fill: brick, mortar and ivy read in the mid-tones
+const rimL = new THREE.PointLight(0x8fc9b5, 4, 14, 2); rimL.position.set(-5.5, 7, 3); scene.add(rimL);   // faint rim on the arch and ivy
+const rimR = new THREE.PointLight(0x8fc9b5, 3.5, 14, 2); rimR.position.set(5.5, 6, 3); scene.add(rimR);
+const front = new THREE.SpotLight(0xa2c2b5, 48, 42, .85, 1, 1.55); front.position.set(-7, 9, 14); front.target.position.set(0, 4, 0); scene.add(front, front.target);  // cool moonlit wash on the wall's face
+const moonLight = new THREE.DirectionalLight(0xc4d8d0, 1.25);
 moonLight.position.set(0.6, 14, -18); moonLight.target.position.set(0, 0, 6);
 moonLight.castShadow = true; moonLight.shadow.mapSize.set(2048, 2048);
 Object.assign(moonLight.shadow.camera, { left: -9, right: 9, top: 12, bottom: -4, near: 1, far: 50 });
@@ -181,7 +190,7 @@ const archPath = (w, spring, path) => {  // equilateral pointed arch, left jamb 
 };
 const stone = stoneSet(512, 128, 64, .32);
 const wallMat = new THREE.MeshPhysicalMaterial({ map: stone.albedo, normalMap: stone.normal, roughnessMap: stone.rough, roughness: .82, clearcoat: .2, clearcoatRoughness: .45,
-  normalScale: new THREE.Vector2(1.1, 1.1), color: 0xa9bdb3 });
+  normalScale: new THREE.Vector2(1.1, 1.1), color: 0xb2c5bc });
 [stone.albedo, stone.normal, stone.rough].forEach((t) => t.repeat.set(1 / 4, 1 / 4));
 const wallShape = new THREE.Shape(); wallShape.moveTo(-26, 0); wallShape.lineTo(26, 0); wallShape.lineTo(26, 22); wallShape.lineTo(-26, 22); wallShape.lineTo(-26, 0);
 wallShape.holes.push(archPath(W, SPRING, new THREE.Path()));
@@ -225,7 +234,7 @@ const glass = new THREE.Mesh(new THREE.ShapeGeometry(glassShape, 48), glassMat);
 const floorSet = stoneSet(512, 170, 170, .38);
 [floorSet.albedo, floorSet.normal, floorSet.rough].forEach((t) => t.repeat.set(5, 6));
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 70), new THREE.MeshPhysicalMaterial({
-  map: floorSet.albedo, normalMap: floorSet.normal, roughnessMap: floorSet.rough, roughness: .8, clearcoat: .2, clearcoatRoughness: .4, color: 0x84998f }));
+  map: floorSet.albedo, normalMap: floorSet.normal, roughnessMap: floorSet.rough, roughness: .82, clearcoat: .14, clearcoatRoughness: .45, color: 0x66786f }));
 floor.rotation.x = -Math.PI / 2; floor.position.z = -5; floor.receiveShadow = true; scene.add(floor);
 // an environment for wet reflections: a tiny sky with a bright moon, prefiltered
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -335,13 +344,14 @@ const raySource = new THREE.Mesh(new THREE.SphereGeometry(2.3, 32, 24), new THRE
 raySource.position.copy(moon.position);
 const godRays = new GodRaysEffect(camera, raySource, { density: .82, decay: .88, weight: .16, exposure: .06, samples: 60, clampMax: 1, resolutionScale: .5 });
 const bloom = new BloomEffect({ intensity: .7, luminanceThreshold: .74, luminanceSmoothing: .25, mipmapBlur: true, radius: .72 });
-const grade = new HueSaturationEffect({ hue: .02, saturation: -.17 });
-const vignette = new VignetteEffect({ offset: .28, darkness: .72 });
+const grade = new HueSaturationEffect({ hue: .02, saturation: -.15 });
+const lift = new BrightnessContrastEffect({ brightness: .012, contrast: -.02 });  // lift the black point a touch
+const vignette = new VignetteEffect({ offset: .29, darkness: .66 });
 const grain = new NoiseEffect({ blendFunction: BlendFunction.OVERLAY }); grain.blendMode.opacity.value = .07;
 const tone = new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC });
 const raysPass = new EffectPass(camera, godRays);
 composer.addPass(raysPass);
-composer.addPass(new EffectPass(camera, bloom, grade, vignette, grain, tone));
+composer.addPass(new EffectPass(camera, bloom, grade, vignette, grain, tone, lift));
 
 // ------------------------------------------------------------------ chapter i: the ivy graph on a stone wall (same renderer, same camera)
 const ringScene = new THREE.Scene();
