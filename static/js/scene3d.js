@@ -429,170 +429,94 @@ sparks.visible = false; ringScene.add(sparks);
 let sparkT = -1;
 function burst() { for (let i = 0; i < SP; i++) { spPos.set([3.9, 6.1, .8], i * 3); const a = rng() * 6.283, e = (rng() - .5) * 2, sp = 2 + rng() * 4; spVel.set([Math.cos(a) * sp, Math.sin(a) * sp, e * 2], i * 3); } sparkT = 0; sparks.visible = true; }
 
-// ------------------------------------------------------------------ one continuous world for every chapter after the hero
-// The ring scene becomes "the world": a dim brick wall, moonlight, fireflies. Each chapter only crossfades a few
-// light accents on the right half of the screen (the copy lives on the left), so there are no cuts and no gaps.
-const clamp = (x) => Math.min(1, Math.max(0, x));
-const smooth = (p) => p * p * (3 - 2 * p);
-const world = ringScene;
-rWallMat.color.setHex(0x7d8f86);                          // fainter brick: the world stays behind the text
-glassL.transmission = 0; glassL.opacity = .55; glassL.roughness = .4; glassL.needsUpdate = true;  // no transmission pass (costly)
-const glowMat = (c, k = 2) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k), transparent: true });
-function orb(c, k, r = .14) { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), glowMat(c, k)); return m; }
-// the chapter-i graph moves to the right half and a little back
-const graph = new THREE.Group();
-[...Object.values(lanterns), sigil, ...vines3.map((v) => v.mesh), rLeaves, petals, halo, sparks].forEach((o) => graph.add(o));
-graph.position.set(5.2, 2.1, -1); graph.scale.setScalar(.62); world.add(graph);
-// accents per chapter (all light: a few meshes each)
-const accents = {};
-const fadeable = (g) => { g.traverse((o) => { if (o.isMesh || o.isPoints) { o.material = o.material.clone(); o.material.transparent = true; o.userData.baseOpacity = o.material.opacity ?? 1; } }); g.userData.fade = 0; g.visible = false; world.add(g); return g; };
-// iv · cart: a few giant hosta leaves at the right edge, two sage lights settle, the coral one is turned away
-{ const g = new THREE.Group();
-  const hs = new THREE.Shape(); hs.moveTo(0, 0); hs.bezierCurveTo(-.62, .5, -.55, 1.35, 0, 1.8); hs.bezierCurveTo(.55, 1.35, .62, .5, 0, 0);
-  const hg = new THREE.ShapeGeometry(hs, 18); { const p = hg.attributes.position; for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); p.setZ(i, .28 * Math.sin(Math.PI * y / 1.8) - .45 * x * x + .016 * Math.sin((Math.abs(x) / (.08 + y * .18)) * 9)); } hg.computeVertexNormals(); }
-  const hm = new THREE.MeshPhysicalMaterial({ side: THREE.DoubleSide, roughness: .6, clearcoat: .2, clearcoatRoughness: .45, color: 0x245a4a });
-  [[9.5, 1, 30, 2.6], [10.8, 3.4, 60, 2.2], [8.2, -.4, 10, 2.4], [11.5, 6.2, 80, 1.8], [7, 0, -10, 1.6], [12.2, .4, 40, 2.4]].forEach(([x, y, r, s]) => {
-    const m = new THREE.Mesh(hg, hm); m.position.set(x, y, 1.2); m.rotation.set(-.5, 0, THREE.MathUtils.degToRad(r)); m.scale.setScalar(s); g.add(m); });
-  g.userData.items = [orb(0x9fe0c8, 1.7), orb(0x9fe0c8, 1.7), orb(0xe8766a, 1.5)]; g.userData.items.forEach((o) => g.add(o));
-  accents.cart = fadeable(g); }
-// vi · payment: an iron gate silhouette inside a pointed arch; the risky light stops at it
-{ const g = new THREE.Group(); g.position.set(6.4, 2.2, .4);
-  const ring = new THREE.Shape(); archPath(2.1, 2.6, ring); ring.lineTo(-2.1, 0); ring.holes.push(archPath(1.7, 2.6, new THREE.Path()));
-  g.add(new THREE.Mesh(new THREE.ExtrudeGeometry(ring, { depth: .3, bevelEnabled: false, curveSegments: 32 }), traceryMat));
-  const port = new THREE.Group();
-  for (let i = -3; i <= 3; i++) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(.045, .045, 4.6, 8), iron); bar.position.set(i * .48, 2.3, .15); port.add(bar);
-    const sp = new THREE.Mesh(new THREE.ConeGeometry(.07, .24, 8), iron); sp.position.set(i * .48, -.05, .15); sp.rotation.x = Math.PI; port.add(sp); }
-  for (let j = 0; j < 4; j++) { const h = new THREE.Mesh(new THREE.BoxGeometry(3.4, .07, .08), iron); h.position.set(0, .5 + j * 1.05, .15); port.add(h); }
-  g.add(port); g.userData.port = port;
-  g.userData.good = orb(0x9fe0c8, 2); g.userData.bad = orb(0xe8766a, 1.9); g.add(g.userData.good, g.userData.bad);
-  accents.corridor = fadeable(g); }
-// ix · red team: a shield of light; coral sparks drift in and break on it
-{ const g = new THREE.Group(); g.position.set(6.6, 5.4, .6);
-  const sh = new THREE.Shape(); sh.moveTo(0, 2.1); sh.bezierCurveTo(1.4, 1.8, 1.6, 1.2, 1.55, .3); sh.bezierCurveTo(1.45, -1, .7, -1.8, 0, -2.3); sh.bezierCurveTo(-.7, -1.8, -1.45, -1, -1.55, .3); sh.bezierCurveTo(-1.6, 1.2, -1.4, 1.8, 0, 2.1);
-  const face = new THREE.Mesh(new THREE.ShapeGeometry(sh, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd1b9).multiplyScalar(.5), transparent: true, opacity: .14, side: THREE.DoubleSide, depthWrite: false }));
-  const edge = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sh.getSpacedPoints(64).map((v) => new THREE.Vector3(v.x, v.y, 0)), true), 128, .035, 6, true), glowMat(0x7fd1b9, 1.6));
-  g.add(face, edge); g.userData.edge = edge;
-  g.userData.sparks = Array.from({ length: 10 }, (_, i) => { const o = orb(0xe8766a, 1.6, .07); o.userData = { y: -1.8 + (i % 5) * .9, lag: (i % 5) * .18 + (i >= 5 ? .5 : 0) }; g.add(o); return o; });
-  accents.lake = fadeable(g); }
-// xi · replay: a short flight of stone steps; each one lights as evidence
-{ const g = new THREE.Group(); g.position.set(4.8, .2, .6);
-  const EVT = [0, 0, 24, 61, 88, 120, 136, 172]; g.userData.edges = [];
-  EVT.forEach((tv, i) => { const s = new THREE.Mesh(new THREE.BoxGeometry(2.2, .3, .9), traceryMat); s.position.set(i * .7, .15 + i * .62, -i * .35); g.add(s);
-    const m = new THREE.MeshBasicMaterial({ color: 0x2b3f37, transparent: true }); const e = new THREE.Mesh(new THREE.BoxGeometry(2.0, .05, .05), m); e.position.set(i * .7, .32 + i * .62, -i * .35 + .46); g.add(e);
-    g.userData.edges.push({ m, t: tv, dec: i === 5 }); });
-  accents.stair = fadeable(g); }
-
-// ------------------------------------------------------------------ sizing, cached scroll geometry, adaptive quality, one loop
+// ------------------------------------------------------------------ sizing, scroll, adaptive quality, loop
 const renderPass = composer.passes[0];
-let secs = [];
-const SECTION_IDS = [["ring", "story"], ["cart", "mandate"], ["corridor", "pipeline"], ["lake", "redteam"], ["stair", "replay"]];
-function measure() {  // offsets are read once per resize, never per frame
-  const top = (el) => { let y = 0; while (el) { y += el.offsetTop; el = el.offsetParent; } return y; };
-  secs = SECTION_IDS.map(([id, el]) => { const e = document.getElementById(el); return e ? { id, top: top(e), h: e.offsetHeight } : null; }).filter(Boolean);
-  hero.__top = top(hero); hero.__h = hero.offsetHeight;
-}
 function resize() {
   const w = innerWidth, h = innerHeight;
-  renderer.setPixelRatio(dpr); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); measure();
+  renderer.setPixelRatio(dpr); composer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
 }
-addEventListener("resize", resize); resize(); setTimeout(measure, 1200);
-let progress = 0, chapterP = {}, current = "hero", target = "hero", fadeT = 1;
+addEventListener("resize", resize); resize();
+const storyEl = document.getElementById("story");
+let progress = 0, ringP = 0, mode = "hero", ringOpacity = 0;
+const clamp = (x) => Math.min(1, Math.max(0, x));
 const onScroll = () => {
-  const y = window.scrollY;
-  progress = clamp((y - hero.__top) / Math.max(1, hero.__h - innerHeight));
-  if (progress < .62) { target = "hero"; return; }
-  let best = "ring", bestD = Infinity;
-  secs.forEach((s) => { chapterP[s.id] = clamp((y - s.top) / Math.max(1, s.h - innerHeight)); const mid = s.top + s.h / 2 - innerHeight / 2, d = Math.abs(y - mid); if (d < bestD) { bestD = d; best = s.id; } });
-  target = best;
+  const r = hero.getBoundingClientRect(); progress = clamp(-r.top / Math.max(1, r.height - innerHeight));
+  const s = storyEl.getBoundingClientRect(); ringP = clamp(-s.top / Math.max(1, s.height - innerHeight));
+  const inHero = r.bottom > innerHeight * .2, inRing = s.top < innerHeight * .85 && s.bottom > innerHeight * .15;
+  mode = inHero ? "hero" : inRing ? "ring" : "off";
+  ringOpacity = inRing ? Math.min(clamp((innerHeight * .85 - s.top) / (innerHeight * .6)), clamp((s.bottom - innerHeight * .15) / (innerHeight * .5))) : 0;
 };
 addEventListener("scroll", onScroll, { passive: true }); onScroll();
 let px = 0, py = 0; addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - .5; py = e.clientY / innerHeight - .5; }, { passive: true });
 const look = new THREE.Vector3();
-let level = 2, frames = 0, acc = 0, settledAt = 0, fast = 0;
+let level = 2, frames = 0, acc = 0, settledAt = 0, fast = 0;  // 2 = full, 1 = reduced, 0 = minimal
 function setLevel(l) {
   level = l;
   dpr = l === 2 ? Math.min(devicePixelRatio || 1, 1.5) : l === 1 ? 1 : .75;
-  [moonLight, rMoon].forEach((L) => { const s = l === 2 ? 2048 : 1024; L.shadow.mapSize.set(s, s); L.shadow.map?.dispose(); L.shadow.map = null; });
+  [moonLight, rMoon].forEach((L) => { L.shadow.mapSize.set(l === 2 ? 2048 : 1024, l === 2 ? 2048 : 1024); L.shadow.map?.dispose(); L.shadow.map = null; });
   godRays.blurPass.enabled = l > 0; dew.visible = l > 0; rain.visible = l > 0;
   resize();
 }
 const clock = new THREE.Clock();
 let running = true;
-document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) clock.getDelta(); });
+document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) { clock.getDelta(); requestAnimationFrame(loop); } });
 document.documentElement.classList.add("has-3d");
-const atmos = [fireflies];
-let atmosIn = scene, caughtFired = false, sceneSwap = 0;
-const fadeGroup = (g, f) => { g.visible = f > .01; if (!g.visible) return; g.traverse((o) => { if (o.material && o.userData.baseOpacity !== undefined) o.material.opacity = o.userData.baseOpacity * f; }); };
-const graphMats = []; graph.traverse((o) => { if (o.material && !graphMats.includes(o.material)) { o.material = o.material.clone ? o.material : o.material; } });
+const atmos = [fireflies, ...fogBanks];
+let atmosIn = scene, caughtFired = false;
 
 function loop() {
   if (!running) return;
+  requestAnimationFrame(loop);
+  if (mode === "off") { canvas.style.opacity = "0"; return; }  // nothing 3D on screen: draw nothing
   const dt = Math.min(.05, clock.getDelta()), t = clock.elapsedTime;
   acc += dt; frames++;
   if (acc > 1.5) { const ft = acc / frames * 1000; acc = 0; frames = 0;
     if (ft > 24 && level > 0 && t - settledAt > 2) { setLevel(level - 1); settledAt = t; fast = 0; }
-    else if (ft < 17.5 && level < 2 && t - settledAt > 4 && ++fast >= 2) { setLevel(level + 1); settledAt = t; fast = 0; }
+    else if (ft < 17.5 && level < 2 && t - settledAt > 4 && ++fast >= 2) { setLevel(level + 1); settledAt = t; fast = 0; }  // recover when the machine is quiet again
     else if (ft >= 17.5) fast = 0;
-    window.__st3d = { level, frameMs: +ft.toFixed(1), dpr, mode: current }; }
-  // hero <-> world: a soft 0.35 s dip and back, never a hard cut
-  const wantWorld = target !== "hero";
-  if (wantWorld !== (current !== "hero")) { sceneSwap = Math.min(1, sceneSwap + dt / .35); if (sceneSwap >= 1) { current = wantWorld ? target : "hero"; } }
-  else { sceneSwap = Math.max(0, sceneSwap - dt / .35); if (wantWorld) current = target; }
-  const inHero = current === "hero";
-  const activeScene = inHero ? scene : world;
-  if (atmosIn !== activeScene) { atmos.forEach((o) => activeScene.add(o)); atmosIn = activeScene; }
-  renderPass.mainScene = activeScene; raysPass.enabled = inHero && level > 0;
-  canvas.style.opacity = String(1 - sceneSwap * .85);
-  if (inHero) {
-    const p = progress, ease = smooth(p);
-    camera.position.set(px * .6 * (1 - ease) - ease * W * .5, 4.9 + (-py) * .3 + ease * .2, 15.5 - ease * 21);
+    window.__st3d = { level, frameMs: +ft.toFixed(1), dpr, mode }; }
+  const active = mode === "ring" ? ringScene : scene;
+  if (atmosIn !== active) { atmos.forEach((o) => active.add(o)); atmosIn = active; }
+  renderPass.mainScene = active; raysPass.enabled = mode === "hero" && level > 0;
+  if (mode === "hero") {
+    const p = progress, ease = p * p * (3 - 2 * p);
+    camera.position.set(px * .6 * (1 - ease) - ease * W * .5, 4.9 + (-py) * .3 + ease * .2, 15.5 - ease * 21);  // through the left lancet
     look.set(px * .3 - ease * W * .5, 6.4 - ease * .6, -6 - ease * 10); camera.lookAt(look);
     glass.visible = camera.position.z > 1.6;
-    const a = rainGeo.attributes.position.array;
-    for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 13; a[i + 4] -= dt * 13; if (a[i + 4] < 0) { a[i + 1] += 18; a[i + 4] += 18; } }
-    rainGeo.attributes.position.needsUpdate = true;
+    canvas.style.opacity = String(p > .5 ? Math.max(0, 1 - (p - .5) / .25) : 1);
   } else {
-    // the world camera barely moves: a slow drift and a little parallax; chapters crossfade their accents (~0.7 s)
-    camera.position.set(px * .5, 6.1 - py * .25 + Math.sin(t * .15) * .06, 14); look.set(1.2 + px * .2, 5.6, 0); camera.lookAt(look);
-    const k = Math.min(1, dt / .7);
-    graph.userData.fade = (graph.userData.fade ?? 0) + ((current === "ring" ? 1 : 0) - (graph.userData.fade ?? 0)) * k * 2.2;
-    graph.visible = graph.userData.fade > .01; graph.scale.setScalar(.62 * (.94 + graph.userData.fade * .06));
-    Object.entries(accents).forEach(([id, g]) => { g.userData.fade += ((current === id ? 1 : 0) - g.userData.fade) * k * 2.2; fadeGroup(g, g.userData.fade); });
-    // chapter i: vines grow, the ring blooms (scroll-driven, as before)
-    if (graph.visible) {
-      const p = chapterP.ring || 0, grow = clamp((p - .1) / .35), bloomP = clamp((p - .42) / .25);
-      vines3.forEach((v) => { const g = v.lit ? grow : 1; v.mesh.geometry.setDrawRange(0, Math.floor(v.count * g / 6) * 6); v.grow = g; });
-      rLeafInfo.forEach((L, i) => { if (L.u <= vines3[L.vi].grow) rLeaves.setMatrixAt(i, L.m); else { dummy.scale.setScalar(0); dummy.position.set(0, -50, 0); dummy.updateMatrix(); rLeaves.setMatrixAt(i, dummy.matrix); } });
-      rLeaves.instanceMatrix.needsUpdate = true;
-      petalInfo.forEach((P, i) => { const o = clamp(bloomP * 1.3 - P.bi * .15), open = .25 + o * (P.layer ? .95 : 1.25);
-        dummy.position.copy(P.c).add(new THREE.Vector3(Math.cos(P.ang + Math.PI / 2) * .42, Math.sin(P.ang + Math.PI / 2) * .42, .15)); dummy.rotation.set(0, 0, P.ang); dummy.rotateX(-open); dummy.scale.setScalar(o * (P.layer ? .8 : 1.05)); dummy.updateMatrix(); petals.setMatrixAt(i, dummy.matrix); });
-      petals.instanceMatrix.needsUpdate = true;
-      halo.material.opacity = bloomP * (.5 + .12 * Math.sin(t * 2)); sigil.rotation.y = t * .5;
-      if (bloomP > .6 && !caughtFired) { caughtFired = true; burst(); } else if (bloomP < .3) caughtFired = false;
-      if (sparkT >= 0) { sparkT += dt; for (let i = 0; i < SP; i++) { spVel[i * 3 + 1] -= 3 * dt; for (let q = 0; q < 3; q++) spPos[i * 3 + q] += spVel[i * 3 + q] * dt; }
-        spGeo.attributes.position.needsUpdate = true; sparks.material.opacity = Math.max(0, 1 - sparkT / 1.6); if (sparkT > 1.6) { sparks.visible = false; sparkT = -1; } }
-    }
-    if (accents.cart.visible) { const p = chapterP.cart || 0, it = accents.cart.userData.items, to = [[5.6, 5.4], [6.6, 5.9], [6.1, 6.8]];
-      it.forEach((o, i) => { const q = smooth(clamp((p - .05 - i * .1) / .35)); o.position.set(11 - (11 - to[i][0]) * q + Math.sin(t * 1.2 + i) * .06, 9 - (9 - to[i][1]) * q + Math.sin(t * 1.6 + i) * .05, 1.5);
-        if (i === 2) { const out = clamp((p - .55) / .2); o.position.y -= out * 2.5; o.scale.setScalar(Math.max(.01, 1 - out)); } }); }
-    if (accents.corridor.visible) { const p = chapterP.corridor || 0, u = accents.corridor.userData;
-      const drop = smooth(clamp((p - .35) / .15)); u.port.position.y = (1 - drop) * 3.6;
-      u.good.position.set(-3 + clamp(p / .35) * 6.5, 1.5 + Math.sin(t * 2) * .05, 1.2);
-      const bx = Math.min(-.2, -3.5 + clamp((p - .1) / .45) * 4); u.bad.position.set(bx, 1.2 + Math.sin(t * 2.4) * .05, 1.2);
-      u.bad.scale.setScalar(bx >= -.2 && drop >= 1 ? 1 + Math.sin(t * 6) * .12 : 1); }
-    if (accents.lake.visible) { const p = chapterP.lake || 0, u = accents.lake.userData; let hit = false;
-      u.sparks.forEach((o) => { const a = clamp((p - .05 - o.userData.lag) / .3); o.position.set(-6 + a * 4.6, o.userData.y, .2); o.visible = a > 0 && a < .98; if (a > .9 && a < .98) hit = true; });
-      u.edge.material.color.copy(new THREE.Color(0x7fd1b9).multiplyScalar(hit ? 2.4 : 1.6)); }
-    if (accents.stair.visible) { const T = +(document.getElementById("scrub")?.value ?? 200);
-      accents.stair.userData.edges.forEach((E) => { const known = E.t <= T; E.m.color.copy(new THREE.Color(!known ? 0x2b3f37 : E.dec ? 0xf5b84b : E.t <= 120 ? 0x7fd1b9 : 0xe8766a).multiplyScalar(!known ? 1 : E.dec ? 2.2 : 1.6)); }); }
+    // the camera dollies along the vines toward the ring; vines grow, the ring blooms
+    const p = ringP, e = p * p * (3 - 2 * p);
+    camera.position.set(-8 + e * 11.5 + px * .5, 6.3 + Math.sin(t * .3) * .08 - py * .3, 14 - e * 1.2);
+    look.set(-5 + e * 8.8, 6.2, 0); camera.lookAt(look);
+    canvas.style.opacity = String(ringOpacity);
+    const grow = clamp((p - .18) / .35), bloomP = clamp((p - .5) / .25);
+    vines3.forEach((v) => { const g = v.lit ? grow : 1; v.mesh.geometry.setDrawRange(0, Math.floor(v.count * g / 6) * 6); v.grow = g; });
+    rLeafInfo.forEach((L, i) => { const g = vines3[L.vi].grow; if (L.u <= g) rLeaves.setMatrixAt(i, L.m); else { dummy.scale.setScalar(0); dummy.position.set(0, -50, 0); dummy.updateMatrix(); rLeaves.setMatrixAt(i, dummy.matrix); } });
+    rLeaves.instanceMatrix.needsUpdate = true;
+    petalInfo.forEach((P, i) => { const o = clamp(bloomP * 1.3 - P.bi * .15); const open = .25 + o * (P.layer ? .95 : 1.25);
+      dummy.position.copy(P.c).add(new THREE.Vector3(Math.cos(P.ang + Math.PI / 2) * .42, Math.sin(P.ang + Math.PI / 2) * .42, .15)); dummy.rotation.set(0, 0, P.ang); dummy.rotateX(-open); dummy.scale.setScalar(o * (P.layer ? .8 : 1.05)); dummy.updateMatrix(); petals.setMatrixAt(i, dummy.matrix); });
+    petals.instanceMatrix.needsUpdate = true;
+    ["f1", "f2", "f3"].forEach((k) => { lanterns[k].userData.core.scale.setScalar(.6 + bloomP * .8 + Math.sin(t * 3) * .05 * bloomP); });
+    halo.material.opacity = bloomP * (.55 + .15 * Math.sin(t * 2)); halo.rotation.z = t * .05;
+    sigil.rotation.y = t * .6; sring2.rotation.z = t * .9;
+    if (bloomP > .6 && !caughtFired) { caughtFired = true; burst(); } else if (bloomP < .3) caughtFired = false;
+    if (sparkT >= 0) { sparkT += dt; for (let i = 0; i < SP; i++) { spVel[i * 3 + 1] -= 3 * dt; for (let k = 0; k < 3; k++) spPos[i * 3 + k] += spVel[i * 3 + k] * dt; }
+      spGeo.attributes.position.needsUpdate = true; sparks.material.opacity = Math.max(0, 1 - sparkT / 1.6); if (sparkT > 1.6) { sparks.visible = false; sparkT = -1; } }
+    lanterns.me.userData.core.scale.setScalar(1 + Math.sin(t * 2.2) * .06);
   }
   windU.value = t; skyMat.uniforms.t.value = t; glassMat.uniforms.t.value = t;
+  const ox = camera.position.x;
+  if (mode === "hero") { const a = rainGeo.attributes.position.array;
+    for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 13; a[i + 4] -= dt * 13; if (a[i + 4] < 0) { a[i + 1] += 18; a[i + 4] += 18; } }
+    rainGeo.attributes.position.needsUpdate = true; }
   const f = ffGeo.attributes.position.array;
   for (let i = 0; i < FF; i++) { const ph = ffPh[i] += dt * .35; f[i * 3] += Math.cos(ph * 1.3) * dt * .12 + px * dt * .12; f[i * 3 + 1] += Math.sin(ph) * dt * .1; f[i * 3 + 2] += Math.sin(ph * .7) * dt * .1; }
-  ffGeo.attributes.position.needsUpdate = true; fireflies.position.set(inHero ? 0 : 1, inHero ? 0 : 2, inHero ? 0 : 3);
+  ffGeo.attributes.position.needsUpdate = true; fireflies.position.x = mode === "ring" ? ox : 0;
   fireflies.material.opacity = .4 + .15 * Math.sin(t * 1.2);
+  moonClouds.forEach((m) => { m.material.uniforms.t.value = t; m.position.x += m.userData.v * dt; if (m.position.x > 9) m.position.x = -9; });
+  fogBanks.forEach((m) => { m.material.uniforms.t.value = t; m.position.x += m.userData.v * dt; if (Math.abs(m.position.x) > 8) m.userData.v *= -1; m.quaternion.copy(camera.quaternion); });
   composer.render(dt);
 }
-// one loop: ride GSAP's ticker (the same one that drives Lenis and ScrollTrigger) when it is there
-if (window.gsap) gsap.ticker.add(loop); else { const raf = () => { loop(); requestAnimationFrame(raf); }; requestAnimationFrame(raf); }
-window.__st3dScene = { scene, ringScene, camera, renderer, setLevel, composer, bloom, moon, godRays, raysPass, moonHalo, sky, rain, accents, graph };
+requestAnimationFrame(loop);
+window.__st3dScene = { scene, ringScene, camera, renderer, setLevel, fogBanks, composer, bloom, moon, moonClouds, godRays, raysPass, moonHalo, sky, rain };

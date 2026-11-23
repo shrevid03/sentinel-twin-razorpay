@@ -304,19 +304,3 @@ html.has-3d .hero .btn.ghost { border-color: rgba(201,226,214,.75); color: #F0F8
 html.has-3d .hero .btn.ghost:hover { border-color: #7FD1B9; background: rgba(64,130,109,.35); }
 html.has-3d .hero .btn:not(.ghost) { color: #FFFFFF; text-shadow: 0 1px 2px rgba(0,0,0,.35); }
 html.has-3d body::after { display: none; }  /* the 3D pass has its own vignette; this one dimmed the buttons at the bottom */
-
-/* chapters in 3D: the 2D scenery steps aside; every chapter's copy sits on a soft dark pool; panels are darker glass */
-html.has-3d .story .scenery, html.has-3d #attack svg, html.has-3d #stairs, html.has-3d .edge-ivy { display: none !important; }
-html.has-3d .story .step { position: relative; }
-html.has-3d .story .step::before { content: ""; position: absolute; inset: -40px -60px; z-index: -1; border-radius: 50%;
-  background: radial-gradient(ellipse at 40% 50%, rgba(3,8,6,.84), rgba(3,8,6,.58) 45%, rgba(3,8,6,0) 74%); }
-html.has-3d .story .step p { color: #CFE0D7; text-shadow: 0 1px 2px rgba(0,0,0,.9); }
-html.has-3d .story .step h2 { text-shadow: 0 2px 4px rgba(0,0,0,.9), 0 0 30px rgba(0,0,0,.8); }
-html.has-3d #cartPanel, html.has-3d #pipePanel, html.has-3d #attack, html.has-3d #replayPanel { background: rgba(5,12,10,.78); border-color: rgba(157,181,168,.28); }
-
-/* one continuous world: no black gaps, no stray dividers, tighter chapters */
-html.motion .hero { height: 200vh; }
-html.motion .story .steps { padding: 8vh 0 12vh; }
-html.motion .story .step { min-height: 60vh; }
-html.has-3d .marble { display: none; }
-html.has-3d .fireflies, html.has-3d .smoke-gl { display: none; }

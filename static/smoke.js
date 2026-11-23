@@ -5,8 +5,6 @@
   "use strict";
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (reduce) return;
-  // the 3D world (scene3d.js, wide screens with motion) has its own sky and fireflies: one WebGL context only
-  if (document.documentElement.classList.contains("motion") && "WebGL2RenderingContext" in window) return;
   const hero = document.querySelector(".hero");
   const state = { mx: .5, my: .5, tx: .5, ty: .5, scroll: 0, heroVisible: true, glint: 0 };
   addEventListener("pointermove", (e) => { state.tx = e.clientX / innerWidth; state.ty = 1 - e.clientY / innerHeight; }, { passive: true });

@@ -263,28 +263,38 @@
       verdict.className = "verdict " + (r ? "review" : "approve"); verdict.textContent = r ? "review · caught" : "approve";
     } }, .6);
 
-  // one animation vocabulary for every chapter: text and cards fade in and rise 24px over 0.7 s, same ease, same stagger
-  const REVEAL = { y: 24, opacity: 0, duration: .7, ease: "power2.out", stagger: .08 };
-  const reveal = (targets, trigger, extra = {}) => gsap.from(targets, { ...REVEAL, ...extra,
-    scrollTrigger: { trigger, start: "top 82%", toggleActions: "play none none reverse" } });
-  $$(".story .step").forEach((st) => reveal(st.children, st));
-  $$(".story .panel").forEach((pn) => reveal(pn, pn));
-  reveal(".proof .kicker, .proof h2", ".proof"); reveal(".stat", ".stats");
-  reveal(".cta-band > *", ".cta-band");
-  // panel details play once as their panel arrives, in the same 0.7 s rhythm
-  const onArrive = (sel, fn) => ScrollTrigger.create({ trigger: sel, start: "top 75%", once: true, onEnter: fn });
+  // 3. mandate: leaves drift by in parallax, the cart builds, the meter fills
+  gsap.fromTo("#mandate .scenery", { scale: 1.12 }, { scale: 1, ease: "none", scrollTrigger: { trigger: "#mandate", start: "top bottom", end: "bottom top", scrub: true } });
   const mv = { v: 15302 }, mval = $("#meterVal");
-  gsap.set("#meterFill", { scaleX: .44 });
-  onArrive("#cartPanel", () => { gsap.to("#meterFill", { scaleX: 1, duration: .7, ease: "power2.out", delay: .3 });
-    gsap.to(mv, { v: 28000, duration: .7, ease: "power2.out", delay: .3, onUpdate: () => { mval.textContent = "₹" + Math.round(mv.v).toLocaleString("en-IN"); } }); });
+  gsap.set("#cartPanel .item", { x: 50, opacity: .3 }); gsap.set("#meterFill", { scaleX: .44 });
+  scrubbed("#mandate")
+    .to("#cartPanel .item", { x: 0, opacity: 1, stagger: .18, duration: .3, ease: "power2.out" }, .15)
+    .fromTo("#cartPanel .item.bad", { scale: 1 }, { scale: .97, duration: .1, yoyo: true, repeat: 1 }, .62)
+    .to("#meterFill", { scaleX: 1, duration: .35, ease: "power1.inOut" }, .5)
+    .to(mv, { v: 28000, duration: .35, ease: "power1.inOut", onUpdate: () => { mval.textContent = "₹" + Math.round(mv.v).toLocaleString("en-IN"); } }, .5);
+
+  // 4. pipeline: silk billows; the good payment runs to capture, the risky one stops at pre-capture
+  gsap.fromTo(".silk", { scale: 1.15, yPercent: 6 }, { scale: 1, yPercent: -6, ease: "none", scrollTrigger: { trigger: "#pipeline", start: "top bottom", end: "bottom top", scrub: true } });
   const st = $("#stCheck");
-  gsap.set("#tokGood, #tokBad", { left: "12.5%" });
-  onArrive("#pipePanel", () => { gsap.to("#tokGood", { left: "87.5%", duration: 1.4, ease: "power1.inOut", delay: .3 });
-    gsap.to("#tokBad", { left: "62.5%", duration: 1.1, ease: "power1.inOut", delay: .3, onComplete: () => { st.classList.add("alarm"); S("hold"); } }); });
+  scrubbed("#pipeline")
+    .fromTo("#tokGood", { left: "12.5%" }, { left: "87.5%", duration: .7, ease: "none" }, .1)
+    .fromTo("#tokBad", { left: "12.5%" }, { left: "62.5%", duration: .45, ease: "none" }, .3)
+    .call(() => { st.classList.toggle("alarm"); if (st.classList.contains("alarm")) S("hold"); }, null, .75)
+    .to("#tokBad", { scale: 1.6, duration: .08, yoyo: true, repeat: 3 }, .76)
+    .from("#pipePanel .outcome", { y: 24, opacity: .3, stagger: .12, duration: .2 }, .6);
+
+  // 5. lake: attack waves skim the water toward the shield; ripples spread; catch rates count up
+  const waves = $("#waves"), rip = $("#ripples");
+  for (let i = 0; i < 22; i++) el("circle", { class: "wave", r: 2 + (i % 3), cx: -10, cy: 135 + ((i * 29) % 80) }, waves);
+  for (let i = 0; i < 4; i++) el("ellipse", { cx: 470, cy: 168 + i * 6, rx: 6, ry: 2, "stroke-width": 1.2 }, rip);
   const vals = $$("#attack .v").map((v) => ({ el: v, to: +v.dataset.to, cur: { v: 0 } }));
   gsap.set("#attack .f", { scaleX: 0 });
-  onArrive("#attack", () => { gsap.to("#attack .f", { scaleX: 1, duration: .7, ease: "power2.out", stagger: .08, delay: .3 });
-    vals.forEach((v, i) => gsap.to(v.cur, { v: v.to, duration: .7, ease: "power2.out", delay: .3 + i * .08, onUpdate: () => { v.el.textContent = v.cur.v.toFixed(1) + "%"; } })); });
+  const rt = scrubbed("#redteam");
+  rt.to("#waves circle", { attr: { cx: 470 }, opacity: (i) => (i % 7 === 0 ? 1 : 0), stagger: .02, duration: .25, ease: "power1.in" }, .05);
+  rt.to("#ripples ellipse", { attr: { rx: 120, ry: 14 }, opacity: 0, stagger: .06, duration: .4, ease: "power2.out" }, .2);
+  rt.to("#attack .f", { scaleX: 1, stagger: .15, duration: .3, ease: "power2.out" }, .35);
+  vals.forEach((v, i) => rt.to(v.cur, { v: v.to, duration: .3, onUpdate: () => { v.el.textContent = v.cur.v.toFixed(1) + "%"; } }, .35 + i * .15));
+  rt.to("#attack .shield", { attr: { "stroke-width": 4.5 }, duration: .1, yoyo: true, repeat: 3 }, .3);
 
   // 6. replay: climbing the stairs scrubs the timeline (the slider still works by hand)
   if (window.__renderReplay) {
@@ -304,5 +314,9 @@
       gsap.fromTo(c, { v: 0 }, { v: to, duration: 1.6, ease: "power2.out", onUpdate: () => { n.textContent = c.v.toFixed(dec); } });
     } });
   });
+  $$(".marble .vein").forEach((v) => gsap.fromTo(v, { strokeDashoffset: 1600 }, { strokeDashoffset: 0, ease: "none",
+    scrollTrigger: { trigger: v.closest(".marble"), start: "top 95%", end: "top 40%", scrub: .5 } }));
+  $$(".story .step h2, .proof h2, .cta-band h2").forEach((h) => gsap.from(h, { y: 40, scale: .97, ease: "power2.out",
+    scrollTrigger: { trigger: h, start: "top 95%", end: "top 55%", scrub: .5 } }));
   addEventListener("resize", () => ScrollTrigger.refresh());
 })();
