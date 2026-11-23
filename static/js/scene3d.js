@@ -548,19 +548,27 @@ const journey = (() => {
   // whimsy lanterns: small glass lanterns that float ahead of you, bob and sway, mostly up and to the right; two lead the way to the door
   const floaters = [];
   for (let i = 0; i < 9; i++) { const warm = i % 3 !== 2, col = warm ? 0xffc37a : 0x8fe0c4, g = new THREE.Group();
-    const sh = new THREE.Mesh(new THREE.SphereGeometry(.17, 20, 14), glassL), co = new THREE.Mesh(new THREE.SphereGeometry(.075, 12, 10), glowMat(col, warm ? 2.4 : 2));
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(.06, .1, .06, 12), iron); cap.position.y = .18; g.add(sh, co, cap);
+    const sh = new THREE.Mesh(new THREE.BoxGeometry(.22, .28, .22), glassL), co = new THREE.Mesh(new THREE.SphereGeometry(.065, 12, 10), glowMat(col, warm ? 2.6 : 2.2));
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(.2, .16, 4), iron); cap.rotation.y = Math.PI / 4; cap.position.y = .22;
+    const base = new THREE.Mesh(new THREE.BoxGeometry(.26, .035, .26), iron); base.position.y = -.155;
+    const hnd = new THREE.Mesh(new THREE.TorusGeometry(.06, .012, 6, 16), iron); hnd.position.y = .34; g.add(sh, co, cap, base, hnd);
+    [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(([a, b]) => { const bar = new THREE.Mesh(new THREE.BoxGeometry(.018, .3, .018), iron); bar.position.set(a * .112, 0, b * .112); g.add(bar); });
     const home = new THREE.Vector3(.3 + rng() * 1.7, 2.6 + rng() * 1.6, 8 - i * 5.2 - rng() * 2); g.position.copy(home); J.add(g);
     const F = { g, home, ph: rng() * 6.28, lead: i >= 7, col, core: co }; floaters.push(F);
     anchors.push({ pos: g.position, color: col, intensity: warm ? 1.6 : 1.2, flicker: true, floater: F }); }
-  const flameMat = glowMat(0xffa860, 2.6);
-  for (let i = 0; i < 5; i++) { const sd = i % 2 ? 1 : -1, z = 6 - i * 10;
-    const br = new THREE.Mesh(new THREE.CylinderGeometry(.06, .04, .5, 8), iron); br.position.set(sd * (CW + .4), 2.3, z); br.rotation.z = sd * .5; J.add(br);
-    const fl = new THREE.Mesh(new THREE.ConeGeometry(.1, .32, 10), flameMat); fl.position.set(sd * (CW + .25), 2.65, z); J.add(fl);
-    anchors.push({ pos: new THREE.Vector3(sd * (CW + .1), 2.7, z), color: 0xffa860, intensity: 3.2, flicker: true, mesh: fl }); }
-  [-1, 1].forEach((sd) => { const fl = new THREE.Mesh(new THREE.ConeGeometry(.12, .36, 10), flameMat); fl.position.set(sd * (CW + .2), 2.9, -38.6); J.add(fl);
-    const br = new THREE.Mesh(new THREE.CylinderGeometry(.06, .04, .5, 8), iron); br.position.set(sd * (CW + .35), 2.55, -38.6); br.rotation.z = sd * .5; J.add(br);
-    anchors.push({ pos: new THREE.Vector3(sd * (CW - .1), 3, -38.2), color: 0xffa860, intensity: 4, flicker: true, mesh: fl }); });
+  const flameOut = glowMat(0xff9a48, 2.6), flameIn = glowMat(0xffe0a0, 3.2);
+  const glowSpr = new THREE.SpriteMaterial({ map: ffSprite, color: 0xffa860, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending });
+  const torch = (x, y, z, sd, k = 1) => { const g = new THREE.Group(); g.position.set(x, y, z); J.add(g);
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(.06, .46, .22), iron); plate.position.set(sd * .32, -.25, 0); g.add(plate);
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .46, 8), iron); arm.position.set(sd * .16, -.18, 0); arm.rotation.z = sd * .9; g.add(arm);
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(.12, .06, .2, 12, 1, true), iron); cup.material = iron; cup.position.y = -.02; g.add(cup);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.12, .02, 6, 16), iron); ring.rotation.x = Math.PI / 2; ring.position.y = .08; g.add(ring);
+    const fl = new THREE.Group(); fl.position.y = .1; g.add(fl);
+    const o = new THREE.Mesh(new THREE.ConeGeometry(.11 * k, .42 * k, 12).translate(0, .21 * k, 0), flameOut), i2 = new THREE.Mesh(new THREE.ConeGeometry(.055 * k, .24 * k, 10).translate(0, .12 * k, 0), flameIn); fl.add(o, i2);
+    const sp = new THREE.Sprite(glowSpr); sp.scale.setScalar(1.1 * k); sp.position.y = .22; g.add(sp);
+    anchors.push({ pos: new THREE.Vector3(x - sd * .15, y + .3, z), color: 0xffa860, intensity: 3.2 * k * k * k, flicker: true, mesh: fl }); return g; };
+  for (let i = 0; i < 5; i++) { const sd = i % 2 ? 1 : -1; torch(sd * (CW + .2), 2.6, 6 - i * 10, sd); }
+  [-1, 1].forEach((sd) => torch(sd * (CW + .25), 2.85, -39.2, sd, 1.3));
   const ivyC = new THREE.InstancedMesh(leafGeo, leafMat, 900); ivyC.castShadow = true;
   for (let i = 0; i < 900; i++) { const sd = i % 2 ? 1 : -1, z = 10 - rng() * 50, y = Math.pow(rng(), 1.6) * (CS + .8);
     d.position.set(sd * (CW + .48), y, z); d.lookAt(d.position.x - sd, y + .3, z); d.rotateZ((rng() - .5) * 2); d.scale.setScalar(.6 + rng() * .7); d.updateMatrix(); ivyC.setMatrixAt(i, d.matrix);
@@ -569,15 +577,49 @@ const journey = (() => {
 
   // ---- the heavy door at the corridor's end, z -40
   const DZ = -40.5, doorFrame = new THREE.Shape(); archPath(CW + .9, CS + .2, doorFrame); doorFrame.lineTo(-CW - .9, 0); doorFrame.holes.push(archPath(CW, CS + .2, new THREE.Path()));
-  const df = new THREE.Mesh(new THREE.ExtrudeGeometry(doorFrame, { depth: 1, bevelEnabled: false, curveSegments: 40 }), traceryMat); df.position.z = DZ - .5; df.castShadow = true; J.add(df);
-  const wood = new THREE.MeshPhysicalMaterial({ color: 0x2a2219, roughness: .72, clearcoat: .15, clearcoatRoughness: .5 });
+  const df = new THREE.Mesh(new THREE.ExtrudeGeometry(doorFrame, { depth: 1, bevelEnabled: true, bevelThickness: .12, bevelSize: .12, bevelSegments: 2, curveSegments: 40 }), traceryMat); df.position.z = DZ - .5; df.castShadow = df.receiveShadow = true; J.add(df);
+  const vS = new THREE.Shape(); archPath(CW + 1.7, CS + .2, vS); vS.lineTo(-CW - 1.7, 0); vS.holes.push(archPath(CW + .95, CS + .2, new THREE.Path()));
+  const vou = new THREE.Mesh(new THREE.ExtrudeGeometry(vS, { depth: 1.4, bevelEnabled: true, bevelThickness: .1, bevelSize: .1, bevelSegments: 2, curveSegments: 40 }), traceryMat); vou.position.z = DZ - .6; vou.castShadow = vou.receiveShadow = true; J.add(vou);
+  { const apex = CS + .2 + (CW + 1.3) * Math.sqrt(3); const key = new THREE.Mesh(new THREE.BoxGeometry(.9, 1.1, 1.6), traceryMat); key.position.set(0, apex - .1, DZ + .2); key.castShadow = true; J.add(key); }
+  const step = new THREE.Mesh(new THREE.BoxGeometry(CW * 2 + 2.2, .2, 1.4), traceryMat); step.position.set(0, .1, DZ + 1.05); step.receiveShadow = true; J.add(step);
+  // moonlight from the lake behind the door: a thin bright seam between the leaves and under them, and a cold pool on the floor
+  const moonSeam = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xcfeee2).multiplyScalar(1.15), toneMapped: false, transparent: true });
+  const seamV = new THREE.Mesh(new THREE.PlaneGeometry(.045, CS + .2 + CW * 1.6), moonSeam); seamV.position.set(0, (CS + .2 + CW * 1.6) / 2, DZ - .25); J.add(seamV);
+  const seamH = new THREE.Mesh(new THREE.PlaneGeometry(CW * 2, .07), moonSeam); seamH.position.set(0, .035, DZ - .25); J.add(seamH);
+  const spill = new THREE.Mesh(new THREE.PlaneGeometry(CW * 2.2, 3.2), new THREE.MeshBasicMaterial({ map: haloTex, color: 0x9fd8c4, transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending }));
+  spill.rotation.x = -Math.PI / 2; spill.position.set(0, .03, DZ + 1.6); J.add(spill);
+  anchors.push({ pos: new THREE.Vector3(0, .5, DZ + .9), color: 0x9fd8c4, intensity: 1.4 });
+  const ivyD = new THREE.InstancedMesh(leafGeo, leafMat, 140);
+  for (let i = 0; i < 140; i++) { const sd = i % 2 ? 1 : -1, y = Math.pow(rng(), .8) * (CS + 3.5); d.position.set(sd * (CW + 1.2 + rng() * .9), y, DZ + .85); d.lookAt(d.position.x, y + .3, DZ + 3); d.rotateZ((rng() - .5) * 2.4); d.scale.setScalar(.5 + rng() * .6); d.updateMatrix(); ivyD.setMatrixAt(i, d.matrix); colr.setHex(hues[(rng() * 5) | 0]); ivyD.setColorAt(i, colr); }
+  J.add(ivyD);
+  const planks = (() => { const W = 512, H = 1024, cv = document.createElement("canvas"); cv.width = W; cv.height = H; const x = cv.getContext("2d");
+    const P = 5, pw = W / P; for (let k = 0; k < P; k++) { const base = 78 + ((k * 37) % 22); x.fillStyle = `rgb(${base + 14},${base},${base - 12})`; x.fillRect(k * pw, 0, pw, H);
+      for (let gI = 0; gI < 70; gI++) { const gx = k * pw + 6 + rng() * (pw - 12), w = .6 + rng() * 1.6; x.strokeStyle = `rgba(${rng() < .5 ? "20,14,8" : "90,70,50"},${.15 + rng() * .25})`; x.lineWidth = w; x.beginPath(); x.moveTo(gx, 0);
+        for (let y = 0; y <= H; y += 64) x.lineTo(gx + Math.sin(y * .01 + gI) * 3 + (rng() - .5) * 2, y); x.stroke(); }
+      for (let n = 0; n < 2; n++) { const kx = k * pw + 20 + rng() * (pw - 40), ky = rng() * H; x.strokeStyle = "rgba(20,12,6,.5)"; x.lineWidth = 2; x.beginPath(); x.ellipse(kx, ky, 6, 14, 0, 0, 7); x.stroke(); }
+      x.fillStyle = "rgb(6,5,4)"; x.fillRect(k * pw, 0, 5, H); }
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 2.4, 1 / 4.8); t.anisotropy = 4; return t; })();
+  const plankBump = planks.clone(); plankBump.colorSpace = THREE.NoColorSpace;
+  const wood = new THREE.MeshPhysicalMaterial({ map: planks, bumpMap: plankBump, bumpScale: 2.2, color: 0xd8c2a8, roughness: .74, clearcoat: .12, clearcoatRoughness: .55 });
+  const studGeo = new THREE.SphereGeometry(.035, 8, 6, 0, Math.PI * 2, 0, Math.PI / 2); studGeo.rotateX(Math.PI / 2);
   const leafShape = (sd) => { const sh = new THREE.Shape(); const pth = archPath(CW, CS + .2, new THREE.Path()).getPoints(60).filter((v) => sd < 0 ? v.x <= .001 : v.x >= -.001);
     sh.moveTo(0, 0); pth.forEach((v) => sh.lineTo(v.x, v.y)); sh.lineTo(0, 0); return sh; };
   const doors = [-1, 1].map((sd) => { const pivot = new THREE.Group(); pivot.position.set(sd * CW, 0, DZ);
-    const g = new THREE.ExtrudeGeometry(leafShape(sd), { depth: .16, bevelEnabled: false, curveSegments: 30 }); g.translate(-sd * CW, 0, 0);
-    const m = new THREE.Mesh(g, wood); m.castShadow = true; pivot.add(m);
-    for (let k = 0; k < 4; k++) { const strap = new THREE.Mesh(new THREE.BoxGeometry(CW - .2, .1, .04), iron); strap.position.set(-sd * (CW / 2), .7 + k * .9, .18); pivot.add(strap); }
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(.14, .025, 8, 24), iron); ring.position.set(-sd * (CW - .35), 1.6, .22); pivot.add(ring);
+    pivot.position.y = .06;
+    const g = new THREE.ExtrudeGeometry(leafShape(sd), { depth: .2, bevelEnabled: false, curveSegments: 30 }); g.translate(-sd * CW + sd * .03, 0, 0);
+    const m = new THREE.Mesh(g, wood); m.castShadow = m.receiveShadow = true; pivot.add(m);
+    const studs = new THREE.InstancedMesh(studGeo, iron, 90); let si = 0; const stud = (x, y) => { if (si >= 90) return; d.position.set(x, y, .21); d.rotation.set(0, 0, 0); d.scale.setScalar(1); d.updateMatrix(); studs.setMatrixAt(si++, d.matrix); };
+    [.75, 2.55, 4.35].forEach((y) => {      // wide black strap hinges, curled at the free end, studded along their length
+      const L = CW - .35, strap = new THREE.Mesh(new THREE.BoxGeometry(L, .2, .05), iron); strap.position.set(-sd * (L / 2), y, .22); pivot.add(strap);
+      const curl = new THREE.Mesh(new THREE.TorusGeometry(.13, .035, 6, 16, Math.PI * 1.4), iron); curl.position.set(-sd * (L + .08), y + .1, .22); curl.rotation.z = sd < 0 ? -Math.PI * .2 : Math.PI * 1.2; pivot.add(curl);
+      const knuckle = new THREE.Mesh(new THREE.CylinderGeometry(.07, .07, .34, 10), iron); knuckle.position.set(0, y, .12); pivot.add(knuckle);
+      for (let k = 1; k < 9; k++) stud(-sd * (k * L / 9), y); });
+    for (let y = .3; y < CS; y += .42) { stud(-sd * .14, y); stud(-sd * (CW - .16), y); }
+    studs.count = si; pivot.add(studs);
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, .05, 20).rotateX(Math.PI / 2), iron); boss.position.set(-sd * (CW - .42), 1.95, .23); pivot.add(boss);
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.26, .04, 10, 32), iron); ring.position.set(-sd * (CW - .42), 1.72, .3); ring.rotation.x = .25; pivot.add(ring);
+    if (sd > 0) { const bar = new THREE.Mesh(new THREE.BoxGeometry(1.4, .13, .09), iron); bar.position.set(-CW + .1, 2.95, .27); pivot.add(bar);
+      const staple = new THREE.Mesh(new THREE.TorusGeometry(.09, .025, 6, 12, Math.PI), iron); staple.position.set(-CW + .55, 2.95, .3); pivot.add(staple); }
     J.add(pivot); return { pivot, sd }; });
 
   // ---- the bridge: segments rise out of the water as you walk; lanterns on the parapets
@@ -628,7 +670,7 @@ const journey = (() => {
     camAt(p, tmpP, tmpL);
     camera.position.set(tmpP.x + px * .35, tmpP.y - py * .2 + Math.sin(t * 1.7) * .015, tmpP.z); look.copy(tmpL); camera.lookAt(look);
     // the door swings open as you reach it
-    const open = smooth(clamp((p - .3) / .1)); doors.forEach(({ pivot, sd }) => { pivot.rotation.y = -sd * open * 1.65; });
+    const open = smooth(clamp((p - .3) / .1)); doors.forEach(({ pivot, sd }) => { pivot.rotation.y = sd * open * 1.62; }); moonSeam.opacity = 1 - open * .7;
     // bridge segments rise out of the water just ahead of you
     segs.forEach((g) => { const need = .38 + g.userData.i * .016, r = smooth(clamp((p - need) / .08)); g.position.y = .2 - (1 - r) * 4; g.rotation.x = (1 - r) * .25; g.visible = r > .01; });
     // the fraud-ring graph on the wall: vines grow, the ring blooms (as before)
@@ -744,6 +786,12 @@ const gate = (() => {
     const n = 1 + .18 * Math.sin(v.x * 5.1 + v.y * 2.3) * Math.sin(v.z * 4.3 + 1) + .08 * Math.sin(v.y * 13 + v.x * 7); v.multiplyScalar(n); pp.setXYZ(i, v.x, v.y, v.z); } rockG.computeVertexNormals(); }
   [[GX, -5, GZ - 4, 24, 21, 13], [GX - 19, -6, GZ - 4, 15, 20, 11], [GX + 20, -6, GZ - 5, 16, 21, 11], [GX - 3, -2, GZ + 7, 12, 8, 7]].forEach(([x, y, z, sx, sy, sz]) => {
     const r = new THREE.Mesh(rockG, stoneRock); r.position.set(x, y - 2, z); r.scale.set(sx, sy, sz); r.castShadow = r.receiveShadow = true; J.add(r); });
+  // the cliff itself: a craggy stone mass from the water up to the ledge, so the gatehouse stands on rock
+  const cliffG = new THREE.CylinderGeometry(12.5, 21, GY + 4, 11, 8); { const pp = cliffG.attributes.position; for (let i = 0; i < pp.count; i++) {
+    const x = pp.getX(i), y = pp.getY(i), z = pp.getZ(i), a = Math.atan2(z, x), k = 1 + .13 * Math.sin(a * 5 + y * .45) + .07 * Math.sin(a * 13 - y * 1.1) + (y < (GY + 4) / 2 - .5 ? .05 * Math.sin(y * 2.3 + a * 7) : 0);
+    pp.setX(i, x * k); pp.setZ(i, z * k); } cliffG.computeVertexNormals(); }
+  const cliffMat = stoneRock.clone(); cliffMat.color.setHex(0x8d9891);
+  const cliff = new THREE.Mesh(cliffG, cliffMat); cliff.position.set(GX, (GY + 4) / 2 - 4.2, GZ - 1); cliff.castShadow = cliff.receiveShadow = true; J.add(cliff);
   const ledge = new THREE.Mesh(new THREE.BoxGeometry(18, 1.2, 10), traceryMat); ledge.position.set(GX, GY - .6, GZ + 1); ledge.receiveShadow = true; J.add(ledge);
   // the gatehouse: a wall with a tall pointed arch, two towers with steep roofs, a viridian glow on the arch, an iron portcullis
   const GW = 2.4, GS = 2.2, gh = new THREE.Group(); gh.position.set(GX, GY, GZ); J.add(gh);
@@ -755,10 +803,16 @@ const gate = (() => {
     const win = new THREE.Mesh(new THREE.PlaneGeometry(.5, 1.1), glowMat(0xffc37a, 1.4)); win.position.set(sd * 8.6, 12, 1.15); gh.add(win);
     const fl = new THREE.Mesh(new THREE.ConeGeometry(.13, .38, 10), glowMat(0xffa860, 2.6)); fl.position.set(sd * (GW + 1.1), 3.4, .25); gh.add(fl);
     A.push({ pos: new THREE.Vector3(GX + sd * (GW + 1), GY + 3.6, GZ + .8), color: 0xffa860, intensity: 4, flicker: true, mesh: fl }); });
-  const glowArch = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPath(GW - .02, GS, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y, .05))), 80, .04, 6, false),
+  const vS = new THREE.Shape(); archPath(GW + .75, GS, vS); vS.lineTo(-GW - .75, 0); vS.holes.push(archPath(GW, GS, new THREE.Path()));
+  const vous = new THREE.Mesh(new THREE.ExtrudeGeometry(vS, { depth: 2.3, bevelEnabled: true, bevelThickness: .08, bevelSize: .08, bevelSegments: 2, curveSegments: 40 }), traceryMat);
+  vous.position.z = -1.85; vous.castShadow = vous.receiveShadow = true; gh.add(vous);
+  const keyst = new THREE.Mesh(new THREE.BoxGeometry(.7, 1, .7), traceryMat); keyst.position.set(0, GS + GW * Math.sqrt(3) + .25, .35); gh.add(keyst);
+  const thr = new THREE.Mesh(new THREE.BoxGeometry(GW * 2 + 1.6, .28, 3.4), traceryMat); thr.position.set(0, .1, -.4); thr.receiveShadow = true; gh.add(thr);
+  for (let k = 0; k < 6; k++) { const f = new THREE.Mesh(new THREE.BoxGeometry(2.6 + (k % 2) * .5, .16, 1.05), traceryMat); f.position.set((k % 2 ? .25 : -.2), .06, 1.9 + k * 1.2); f.rotation.y = (k % 3 - 1) * .05; f.receiveShadow = true; gh.add(f); }
+  const glowArch = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPath(GW - .02, GS, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y, .5))), 80, .04, 6, false),
     new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: .8 })); gh.add(glowArch);
   const port = new THREE.Group();
-  for (let i = -4; i <= 4; i++) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 6.6, 10), iron); bar.position.set(i * .52, 3.3, 0); bar.castShadow = true; port.add(bar);
+  for (let i = -4; i <= 4; i++) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(.085, .085, 6.6, 10), iron); bar.position.set(i * .52, 3.3, 0); bar.castShadow = true; port.add(bar);
     const sp = new THREE.Mesh(new THREE.ConeGeometry(.09, .3, 10), iron); sp.position.set(i * .52, -.13, 0); sp.rotation.x = Math.PI; port.add(sp); }
   for (let j = 0; j < 6; j++) { const h = new THREE.Mesh(new THREE.BoxGeometry(4.6, .09, .1), iron); h.position.y = .45 + j * 1.15; port.add(h); }
   port.position.z = -.6; gh.add(port);
@@ -766,10 +820,11 @@ const gate = (() => {
   const good = orb(0x9fe0c8, 2.4, .2, 0), bad = orb(0xe8766a, 2.2, .2, 0); J.add(good, bad);
   A.push({ pos: good.position, color: 0x9fe0c8, intensity: 2.6 }, { pos: bad.position, color: 0xe8766a, intensity: 2.6 });
   const tmp = new THREE.Vector3(), bStart = new THREE.Vector3(36, 14, -110), bEnd = new THREE.Vector3(GX + 7.5, GY + 1.5, GZ + 6.5);
-  const c0 = new THREE.Vector3(27, 16.4, -95), l0 = new THREE.Vector3(34.5, 18.1, -110), c1 = new THREE.Vector3(GX - 3, GY + 3.2, GZ + 19), l1 = new THREE.Vector3(GX + 1.5, GY + 5.6, GZ);
+  const c0 = new THREE.Vector3(27, 16.4, -95), l0 = new THREE.Vector3(34.5, 18.1, -110), c1 = new THREE.Vector3(GX - 4, GY + 5.2, GZ + 25), l1 = new THREE.Vector3(GX + 2.5, GY + 3.4, GZ);
   return { sc: J, update(p, t, dt) {
     const drift = smooth(clamp(p / .3)), B = balloon.B;
     B.position.lerpVectors(bStart, bEnd, drift); B.position.y += Math.sin(drift * Math.PI) * 4 + Math.sin(t * .7) * .12; B.rotation.y = Math.sin(t * .2) * .06;
+    { const away = smooth(clamp((p - .4) / .35)); B.position.x += away * 16; B.position.y += away * 12; B.position.z -= away * 6; }
     balloon.envMat.emissiveIntensity = .4 + .1 * Math.sin(t * 3); balloon.flame.scale.set(1.15, 1.6 * (1 + .1 * Math.sin(t * 17)), 1.15);
     // camera: behind and beside the balloon on the way over, then settles facing the gate
     const settle = smooth(clamp(p / .34));
@@ -824,6 +879,8 @@ const city = (() => {
   }
   blocks.count = bi; spires.count = si; wins.count = wi; mirror.count = wi;
   blocks.receiveShadow = true; J.add(blocks, spires, wins, mirror);
+  const quay = new THREE.Mesh(new THREE.BoxGeometry(250, 1.1, 160), stoneAt(60, 3)); quay.position.set(36, -.5, -273 - 80); quay.receiveShadow = true; J.add(quay);
+  const quayEdge = new THREE.Mesh(new THREE.BoxGeometry(250, .35, .9), traceryMat); quayEdge.position.set(36, .2, -273.2); J.add(quayEdge);
   // eight landmark towers, one per piece of evidence (left to right in time); ivy climbs them; a lantern crown shows what the replay may use
   const EVT = [0, 0, 24, 61, 88, 120, 136, 172], DEC = 120, marks = [];
   const crownGeo = new THREE.SphereGeometry(1.1, 20, 14), beamGeo = new THREE.CylinderGeometry(.25, .9, 46, 16, 1, true).translate(0, 30, 0);
