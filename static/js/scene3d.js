@@ -158,11 +158,11 @@ const moonMat = new THREE.ShaderMaterial({
     }`,
 });
 const moon = new THREE.Mesh(new THREE.SphereGeometry(2.5, 128, 96), moonMat);
-moon.position.set(5.4, 9.6, -40); moon.rotation.y = -.6; scene.add(moon);  // seen through the right lancet, clear of the tracery
+moon.position.set(4.8, 8.7, -40); moon.rotation.y = -.6; scene.add(moon);  // seen through the right lancet, clear of the tracery
 // a gentle, natural halo and thin cloud drifting across the moon's face
 const haloTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d"); const g = x.createRadialGradient(128, 128, 40, 128, 128, 128);
   g.addColorStop(0, "rgba(220,232,226,.10)"); g.addColorStop(.35, "rgba(170,195,185,.035)"); g.addColorStop(1, "rgba(120,150,140,0)"); x.fillStyle = g; x.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
-const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: false })); moonHalo.scale.set(13, 13, 1); moonHalo.position.set(5.4, 9.6, -41); scene.add(moonHalo);
+const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: false })); moonHalo.scale.set(13, 13, 1); moonHalo.position.set(4.8, 8.7, -41); scene.add(moonHalo);
 
 // lights: cool moonlight from behind the window, faint warm fill, sage sky
 scene.add(new THREE.HemisphereLight(0x7f9f92, 0x101c17, 0.56));  // a very faint cool fill: brick, mortar and ivy read in the mid-tones
