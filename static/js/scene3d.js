@@ -483,7 +483,7 @@ const cart = (() => {
   const from = [[-6, 4.5, -3], [6.5, 5, -2], [0, 6, -6]], to = [[-.7, 1.9, 0], [.7, 2.1, .2], [0, 2.6, -.2]];
   items.forEach((o) => sc.add(o));
   const moonC = new THREE.Mesh(new THREE.SphereGeometry(2.2, 64, 48), moonMat); moonC.position.set(-9, 17, -40); sc.add(moonC);
-  return { sc, update(p, t) {
+  return { sc, hg, hm, pg, sucMat: suc.material, update(p, t) {
     const e = smooth(p);
     camera.position.set(Math.sin(t * .05) * .3 + px * .4, 2.9 - e * .5 - py * .2, 9.5 - e * 3.5); look.set(0, 1.9, 0); camera.lookAt(look);
     items.forEach((o, i) => { const a = clamp((p - .1 - i * .1) / .35), q = smooth(a);
@@ -655,7 +655,8 @@ const journey = (() => {
   const PN = 520, pines = new THREE.InstancedMesh(pineG, new THREE.MeshStandardMaterial({ color: 0x0d1c17, roughness: .95 }), PN), d = new THREE.Object3D();
   for (let i = 0; i < PN; i++) { const side = i % 2 ? 1 : -1, row = (i >> 1) % 4;
     d.position.set(side * (22 + row * 5 + rng() * 6), -.3, -45 - ((i >> 3) / (PN / 8)) * 190 + rng() * 3);
-    d.scale.set(1 + rng(), 1.6 + rng() * 2.6, 1 + rng()); d.updateMatrix(); pines.setMatrixAt(i, d.matrix); }
+    d.scale.set(1 + rng(), 1.6 + rng() * 2.6, 1 + rng()); if (d.position.x > 20 && d.position.x < 58 && d.position.z < -80 && d.position.z > -165) d.scale.setScalar(0);
+    d.updateMatrix(); pines.setMatrixAt(i, d.matrix); }
   J.add(pines);
   const wn = (() => { const N = 256, n = fbm(N, 8, 4); return normalFrom(N, n, 3.2); })(); wn.repeat.set(24, 30);
   const water = new THREE.Mesh(new THREE.PlaneGeometry(220, 300), new THREE.MeshPhysicalMaterial({ color: 0x0a1814, roughness: .16, normalMap: wn, normalScale: new THREE.Vector2(.35, .35), clearcoat: .6, clearcoatRoughness: .2 }));
@@ -756,7 +757,7 @@ const journey = (() => {
   };
   const tmpP = new THREE.Vector3(), tmpL = new THREE.Vector3();
   let caught = false;
-  return { sc: J, sun, update(p, t, dt) {
+  const api = { sc: J, sun, anchors, light, update(p, t, dt) {
     camAt(p, tmpP, tmpL);
     camera.position.set(tmpP.x + px * .35, tmpP.y - py * .2 + Math.sin(t * 1.7) * .015, tmpP.z); look.copy(tmpL); camera.lookAt(look);
     // the door swings open as you reach it
@@ -783,13 +784,141 @@ const journey = (() => {
       F.g.rotation.z = Math.sin(t * .8 + F.ph) * .12; F.core.scale.setScalar(.9 + .15 * Math.sin(t * 9 + F.ph) * Math.sin(t * 5.3 + i)); });
     glowArches.forEach((g, i) => { const dz = (10 - i * GAP) - camera.position.z; g.material.opacity = dz < 0 ? clamp(.85 - Math.abs(dz + 9) * .07) * (.85 + .15 * Math.sin(t * 1.3 + i)) : 0; });
     // the light pool follows the camera: the four nearest light sources get the four lights
+    light(t, smooth(clamp((p - .3) / .14)));
+  }, light };
+  function light(t, out) {
+    if (camera.far !== 700) { camera.far = 700; camera.updateProjectionMatrix(); }
     const cp = camera.position;
     anchors.sort((a, b) => a.pos.distanceToSquared(cp) - b.pos.distanceToSquared(cp));
-    pool.forEach((l, i) => { const A = anchors[i]; if (!A || (A.group && !A.group.visible)) { l.intensity = 0; return; }
+    pool.forEach((l, i) => { const A = anchors[i]; if (!A || ((A.group && !A.group.visible) || (A.item && !A.item.visible))) { l.intensity = 0; return; }
       l.position.copy(A.pos); l.color.setHex(A.color); l.intensity = A.intensity * (A.flicker ? .85 + .15 * Math.sin(t * 13 + i * 3) * Math.sin(t * 7.3 + i) : 1); });
     anchors.forEach((A) => { if (A.flicker && A.mesh) A.mesh.scale.set(1, .9 + .2 * Math.abs(Math.sin(t * 11 + A.pos.z)), 1); });
-    const out = smooth(clamp((p - .3) / .14)); sun.intensity = .9 + .5 * out; J.environmentIntensity = .32 + .38 * out;
+    sun.intensity = .9 + .5 * out; J.environmentIntensity = .32 + .38 * out;
     sun.position.set(cp.x - 8 + 16 * out, 14 + 18 * out, cp.z + 10); sun.target.position.set(cp.x, 0, cp.z - 22);   // moonlight from above and behind: it rakes the brick, never grazes the wall from behind
+  }
+  return api;
+})();
+
+// ------------------------------------------------------------------ the journey (stage B): a hot-air balloon in a small garden beside the ivy wall,
+// loaded with the cart; then it drifts to a gothic city gate on a cliff where the payment is checked before capture
+const stoneRock = new THREE.MeshPhysicalMaterial({ map: stone.albedo, normalMap: stone.normal, roughnessMap: stone.rough, roughness: .9, color: 0x6f7a74 });
+["map", "normalMap", "roughnessMap"].forEach((k) => { stoneRock[k] = stone[k === "map" ? "albedo" : k === "normalMap" ? "normal" : "rough"].clone(); stoneRock[k].repeat.set(6, 4); stoneRock[k].needsUpdate = true; });
+const balloon = (() => {
+  const J = journey.sc, A = journey.anchors, G = new THREE.Vector3(36, 0, -104);
+  // the garden: a mossy island of soil, giant hosta and succulent rosettes
+  const isl = new THREE.Mesh(new THREE.CylinderGeometry(10, 11, 1, 40), soil); isl.position.set(G.x, -.42, G.z); isl.receiveShadow = true; J.add(isl);
+  const d = new THREE.Object3D(), c = new THREE.Color();
+  const HN = 46, hosta = new THREE.InstancedMesh(cart.hg, cart.hm, HN); hosta.castShadow = hosta.receiveShadow = true;
+  for (let i = 0; i < HN; i++) { const a = (i / HN) * Math.PI * 2 + rng() * .4, r = 3.4 + rng() * 5.4;
+    d.position.set(G.x + Math.cos(a) * r, .05 + rng() * .3, G.z + Math.sin(a) * r); d.lookAt(G.x, 2.4 + rng() * 2, G.z); d.rotateX(-.9 - rng() * .5); d.rotateZ((rng() - .5) * .8);
+    d.scale.setScalar(1.2 + rng() * 1.8); d.updateMatrix(); hosta.setMatrixAt(i, d.matrix); c.setHex(hues[(rng() * 5) | 0]).offsetHSL(0, -.05, (rng() - .5) * .05); hosta.setColorAt(i, c); }
+  J.add(hosta);
+  const ros = [[-3, 2.6], [2.6, 3], [-3.8, -1.4], [3.6, -1.2], [0, 4.2], [-1.8, -3.4]], suc = new THREE.InstancedMesh(cart.pg, cart.sucMat, ros.length * 34); suc.castShadow = true; let k = 0;
+  ros.forEach(([rx, rz]) => { const s0 = .8 + rng() * .5; for (let j = 0; j < 34; j++) { const ring = Math.sqrt(j / 34);
+    d.position.set(G.x + rx, .1, G.z + rz); d.rotation.set(0, j * 2.39996, 0); d.rotateX(-(.15 + ring * 1.15)); d.scale.setScalar(s0 * (.45 + ring * .7)); d.updateMatrix(); suc.setMatrixAt(k, d.matrix);
+    c.setHex(0x3f6b5a).offsetHSL((rng() - .5) * .02, -.1, ring * .08 - .04); suc.setColorAt(k++, c); } });
+  J.add(suc);
+  // the balloon: a striped silk envelope (lathe), ropes, a wicker basket, a burner whose flame is the budget meter
+  const B = new THREE.Group(); B.position.copy(G); J.add(B);
+  const gores = (() => { const cv = document.createElement("canvas"); cv.width = 1024; cv.height = 512; const x = cv.getContext("2d");
+    for (let i = 0; i < 16; i++) { x.fillStyle = i % 2 ? "#1d5547" : "#2c7865"; x.fillRect(i * 64, 0, 64, 512);
+      const g = x.createLinearGradient(i * 64, 0, i * 64 + 64, 0); g.addColorStop(0, "rgba(0,0,0,.35)"); g.addColorStop(.5, "rgba(255,255,255,.06)"); g.addColorStop(1, "rgba(0,0,0,.35)"); x.fillStyle = g; x.fillRect(i * 64, 0, 64, 512); }
+    x.fillStyle = "#c9a24e"; x.fillRect(0, 300, 1024, 10); x.fillRect(0, 330, 1024, 4); x.fillStyle = "#123a31"; x.fillRect(0, 440, 1024, 72);
+    const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; })();
+  const prof = []; for (let i = 0; i <= 40; i++) { const u = i / 40, y = u * 7.6; const r = u < .2 ? .9 + u * 6 : 3.3 * Math.sin(Math.min(1, (u - .02) / .98) * Math.PI * .92) * (u > .8 ? 1 - (u - .8) * .9 : 1) + .05; prof.push(new THREE.Vector2(Math.max(.05, r), y)); }
+  prof[prof.length - 1].x = .05;
+  const envMat = new THREE.MeshPhysicalMaterial({ map: gores, roughness: .55, sheen: .7, sheenRoughness: .5, sheenColor: new THREE.Color(0x8fd8c0), emissive: 0xff9a50, emissiveMap: gores, emissiveIntensity: 0, side: THREE.DoubleSide });
+  const env = new THREE.Mesh(new THREE.LatheGeometry(prof, 48), envMat); env.position.y = 4.6; env.castShadow = true; B.add(env);
+  const wick = new THREE.MeshStandardMaterial({ map: floorSet.albedo, color: 0x8a6440, roughness: .9 });
+  const basket = new THREE.Mesh(new THREE.CylinderGeometry(.95, .8, 1, 20, 1, true), wick); basket.position.y = .9; basket.material.side = THREE.DoubleSide; basket.castShadow = true; B.add(basket);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(.95, .06, 8, 32), wick); rim.rotation.x = Math.PI / 2; rim.position.y = 1.4; B.add(rim);
+  const bottom = new THREE.Mesh(new THREE.CircleGeometry(.8, 20), wick); bottom.rotation.x = -Math.PI / 2; bottom.position.y = .41; B.add(bottom);
+  const ropePts = []; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ropePts.push(Math.cos(a) * .9, 1.4, Math.sin(a) * .9, Math.cos(a) * 1.15, 5.2, Math.sin(a) * 1.15); }
+  const ropes = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(ropePts, 3)), new THREE.LineBasicMaterial({ color: 0x3a3226 })); B.add(ropes);
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(.22, .9, 14), glowMat(0xffa050, 2.8)); flame.position.y = 2.6; B.add(flame);
+  const flameCore = new THREE.Mesh(new THREE.ConeGeometry(.1, .5, 10), glowMat(0xbfe8ff, 2.2)); flameCore.position.y = 2.4; B.add(flameCore);
+  const burner = new THREE.Mesh(new THREE.CylinderGeometry(.22, .26, .2, 14), iron); burner.position.y = 2.05; B.add(burner);
+  const flamePos = new THREE.Vector3(); A.push({ pos: flamePos, color: 0xffa050, intensity: 3.5, flicker: true });
+  // the cart: three parcels float up out of the garden into the basket; the gift card is turned away and falls back
+  const box = (w, h, dd, col, ribbon) => { const g = new THREE.Group(); const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, dd), new THREE.MeshPhysicalMaterial({ color: col, roughness: .7, clearcoat: .1 })); m.castShadow = true; g.add(m);
+    if (ribbon) { [[w + .02, .05, dd + .02], [.05, h + .02, dd + .02]].forEach((s) => g.add(new THREE.Mesh(new THREE.BoxGeometry(...s), new THREE.MeshStandardMaterial({ color: 0xd9b45a, metalness: .6, roughness: .4, emissive: 0x6a4a10 })))); } return g; };
+  const items = [box(.42, .36, .36, 0x9a7b55, false), box(.8, .14, .32, 0x1e2422, false), box(.38, .38, .38, 0xd0675c, true)];
+  const halos = [0x9fe0c8, 0x9fe0c8, 0xe8766a].map((col) => { const h = new THREE.Mesh(new THREE.SphereGeometry(.5, 16, 12), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: .0, depthWrite: false, blending: THREE.AdditiveBlending })); return h; });
+  const from = [[-4, .4, 3], [4.2, .5, 2.4], [.5, .4, 4.6]], into = [[-.3, 1.25, .1], [.25, 1.2, -.2], [0, 1.5, .25]];
+  items.forEach((o, i) => { o.add(halos[i]); J.add(o); });
+  const giftPos = new THREE.Vector3(); A.push({ pos: giftPos, color: 0xe8766a, intensity: 1.6, item: items[2] });
+  const tmpP = new THREE.Vector3(), tmpL = new THREE.Vector3(), endP = new THREE.Vector3(.6, 4.4, -100.2), endL = new THREE.Vector3(.6, 4.6, -113.2);
+  const state = { rise: 0 };
+  return { sc: J, B, flame, envMat, state, update(p, t, dt) {
+    // camera: from the ivy wall, a slow pan right to the garden; then it rises with the balloon
+    const pan = smooth(clamp(p / .2)), rise = smooth(clamp((p - .76) / .24)); state.rise = rise;
+    B.position.set(G.x, rise * 14, G.z - rise * 6); B.rotation.y = Math.sin(t * .2) * .06;
+    tmpP.set(G.x - 9, 3.4 + rise * 13, G.z + 13 - rise * 4); tmpL.set(G.x - 1.5, 4.6 + rise * 13.5, G.z - rise * 6);
+    camera.position.lerpVectors(endP, tmpP, pan); camera.position.x += px * .4; camera.position.y += -py * .2 + Math.sin(t * .6) * .03;
+    look.lerpVectors(endL, tmpL, pan); camera.lookAt(look);
+    // parcels: float up into the basket one by one; at .62 the gift card is turned away and falls into the hosta
+    items.forEach((o, i) => { const q = smooth(clamp((p - .15 - i * .1) / .25));
+      o.position.set(G.x + from[i][0] + (into[i][0] - from[i][0]) * q, from[i][1] + (into[i][1] - from[i][1]) * q + Math.sin(q * Math.PI) * 2.2 + B.position.y * q, G.z + from[i][2] + (into[i][2] - from[i][2]) * q - rise * 6 * q);
+      o.rotation.y = t * .4 * (1 - q) + i; halos[i].material.opacity = (q > 0 && q < 1 ? .18 : .05) + (i === 2 ? .1 : 0);
+      if (i === 2) { const out = smooth(clamp((p - .62) / .12)); o.position.x += out * 2.6; o.position.y = o.position.y * (1 - out) + (.4 + Math.sin(out * Math.PI) * 1.5) * out; o.position.z += out * 1.5;
+        o.rotation.z = out * 2.2; giftPos.copy(o.position).y += .6; } });
+    // the budget meter is the burner: the flame grows as spend + reserved climbs to ₹28,000 of ₹35,000
+    const meter = .44 + .56 * smooth(clamp((p - .5) / .35)), fl = meter * (1 + .12 * Math.sin(t * 17) * Math.sin(t * 7.1));
+    flame.scale.set(.7 + fl * .5, fl * 1.5, .7 + fl * .5); flameCore.scale.setScalar(.6 + fl * .6); envMat.emissiveIntensity = .05 + meter * .35 + rise * .15;
+    flame.getWorldPosition(flamePos); flamePos.y += .6;
+    journey.light(t, 1);
+  } };
+})();
+
+const gate = (() => {
+  const J = journey.sc, A = journey.anchors, GX = 36, GY = 20, GZ = -170;
+  // the cliff: a heap of deformed rock rising out of the lake, the gatehouse on its lip
+  const rockG = new THREE.IcosahedronGeometry(1, 4); { const pp = rockG.attributes.position; for (let i = 0; i < pp.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(pp, i);
+    const n = 1 + .18 * Math.sin(v.x * 5.1 + v.y * 2.3) * Math.sin(v.z * 4.3 + 1) + .08 * Math.sin(v.y * 13 + v.x * 7); v.multiplyScalar(n); pp.setXYZ(i, v.x, v.y, v.z); } rockG.computeVertexNormals(); }
+  [[GX, -5, GZ - 4, 24, 21, 13], [GX - 19, -6, GZ - 4, 15, 20, 11], [GX + 20, -6, GZ - 5, 16, 21, 11], [GX - 3, -2, GZ + 7, 12, 8, 7]].forEach(([x, y, z, sx, sy, sz]) => {
+    const r = new THREE.Mesh(rockG, stoneRock); r.position.set(x, y - 2, z); r.scale.set(sx, sy, sz); r.castShadow = r.receiveShadow = true; J.add(r); });
+  const ledge = new THREE.Mesh(new THREE.BoxGeometry(18, 1.2, 10), traceryMat); ledge.position.set(GX, GY - .6, GZ + 1); ledge.receiveShadow = true; J.add(ledge);
+  // the gatehouse: a wall with a tall pointed arch, two towers with steep roofs, a viridian glow on the arch, an iron portcullis
+  const GW = 2.4, GS = 2.2, gh = new THREE.Group(); gh.position.set(GX, GY, GZ); J.add(gh);
+  const wS = new THREE.Shape(); wS.moveTo(-8, 0); wS.lineTo(8, 0); wS.lineTo(8, 14); wS.lineTo(-8, 14); wS.lineTo(-8, 0); wS.holes.push(archPath(GW, GS, new THREE.Path()));
+  const gw = new THREE.Mesh(new THREE.ExtrudeGeometry(wS, { depth: 1.6, bevelEnabled: false, curveSegments: 40 }), traceryMat); gw.position.z = -1.6; gw.castShadow = gw.receiveShadow = true; gh.add(gw);
+  for (let i = -7; i <= 7; i += 2) { const m = new THREE.Mesh(new THREE.BoxGeometry(1, .9, 1.7), traceryMat); m.position.set(i, 14.45, -.8); gh.add(m); }
+  [-1, 1].forEach((sd) => { const tw = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 2.1, 18, 20), traceryMat); tw.position.set(sd * 8.6, 9, -.8); tw.castShadow = true; gh.add(tw);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(2.4, 6, 20), new THREE.MeshPhysicalMaterial({ color: 0x1b2723, roughness: .6, clearcoat: .3 })); roof.position.set(sd * 8.6, 21, -.8); roof.castShadow = true; gh.add(roof);
+    const win = new THREE.Mesh(new THREE.PlaneGeometry(.5, 1.1), glowMat(0xffc37a, 1.4)); win.position.set(sd * 8.6, 12, 1.15); gh.add(win);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(.13, .38, 10), glowMat(0xffa860, 2.6)); fl.position.set(sd * (GW + 1.1), 3.4, .25); gh.add(fl);
+    A.push({ pos: new THREE.Vector3(GX + sd * (GW + 1), GY + 3.6, GZ + .8), color: 0xffa860, intensity: 4, flicker: true, mesh: fl }); });
+  const glowArch = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPath(GW - .02, GS, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y, .05))), 80, .04, 6, false),
+    new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: .8 })); gh.add(glowArch);
+  const port = new THREE.Group();
+  for (let i = -4; i <= 4; i++) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(.055, .055, 6.6, 10), iron); bar.position.set(i * .52, 3.3, 0); bar.castShadow = true; port.add(bar);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.09, .3, 10), iron); sp.position.set(i * .52, -.13, 0); sp.rotation.x = Math.PI; port.add(sp); }
+  for (let j = 0; j < 6; j++) { const h = new THREE.Mesh(new THREE.BoxGeometry(4.6, .09, .1), iron); h.position.y = .45 + j * 1.15; port.add(h); }
+  port.position.z = -.6; gh.add(port);
+  // a lit path of stone steps from the ledge's lip into the arch; the two payments are lights that leave the basket
+  const good = orb(0x9fe0c8, 2.4, .2, 0), bad = orb(0xe8766a, 2.2, .2, 0); J.add(good, bad);
+  A.push({ pos: good.position, color: 0x9fe0c8, intensity: 2.6 }, { pos: bad.position, color: 0xe8766a, intensity: 2.6 });
+  const tmp = new THREE.Vector3(), bStart = new THREE.Vector3(36, 14, -110), bEnd = new THREE.Vector3(GX + 7.5, GY + 1.5, GZ + 6.5);
+  const c0 = new THREE.Vector3(27, 16.4, -95), l0 = new THREE.Vector3(34.5, 18.1, -110), c1 = new THREE.Vector3(GX - 3, GY + 3.2, GZ + 19), l1 = new THREE.Vector3(GX + 1.5, GY + 5.6, GZ);
+  return { sc: J, update(p, t, dt) {
+    const drift = smooth(clamp(p / .3)), B = balloon.B;
+    B.position.lerpVectors(bStart, bEnd, drift); B.position.y += Math.sin(drift * Math.PI) * 4 + Math.sin(t * .7) * .12; B.rotation.y = Math.sin(t * .2) * .06;
+    balloon.envMat.emissiveIntensity = .4 + .1 * Math.sin(t * 3); balloon.flame.scale.set(1.15, 1.6 * (1 + .1 * Math.sin(t * 17)), 1.15);
+    // camera: behind and beside the balloon on the way over, then settles facing the gate
+    const settle = smooth(clamp(p / .34));
+    camera.position.lerpVectors(c0, c1, settle); camera.position.y += Math.sin(settle * Math.PI) * 3; camera.position.x += px * .4; camera.position.y -= py * .2;
+    look.lerpVectors(l0, l1, settle); camera.lookAt(look);
+    // the approved payment rides a light through the arch; the risky one stops at the portcullis, which slams at .72
+    const basket = tmp.copy(B.position).setY(B.position.y + 1.6);
+    const gq = smooth(clamp((p - .1) / .7)), bq = clamp((p - .3) / .42);
+    const path = (q, out) => { if (q < .5) out.lerpVectors(basket, new THREE.Vector3(GX, GY + 1.3, GZ + 1.5), smooth(q * 2)); else out.set(GX, GY + 1.3, GZ + 1.5 - (q - .5) * 2 * 16); out.y += Math.sin(t * 3) * .05; };
+    path(gq, good.position); path(Math.min(.5, bq * .5 + .001), bad.position);
+    good.visible = p > .1; bad.visible = p > .3;
+    const drop = smooth(clamp((p - .72) / .05)); port.position.y = (1 - drop) * 7.1;
+    const stopped = bq >= 1 && drop >= 1;
+    bad.children[0].scale.setScalar(stopped ? 1 + Math.sin(t * 6) * .14 : 1); if (stopped) bad.position.z += Math.sin(t * 9) * .02;
+    glowArch.material.color.setHex(stopped ? 0xe8766a : 0x7fd1b9); glowArch.material.opacity = .6 + .25 * Math.sin(t * 1.4) + (stopped ? .2 : 0);
+    journey.light(t, 1);
   } };
 })();
 
@@ -803,8 +932,8 @@ addEventListener("resize", resize); resize();
 const storyEl = document.getElementById("story");
 const chapters = [
   { id: "journey", el: storyEl, sc: journey.sc, update: journey.update },
-  { id: "cart", el: document.getElementById("mandate"), sc: cart.sc, update: cart.update },
-  { id: "corridor", el: document.getElementById("pipeline"), sc: corridor.sc, update: corridor.update },
+  { id: "balloon", el: document.getElementById("mandate"), sc: balloon.sc, update: balloon.update },
+  { id: "gate", el: document.getElementById("pipeline"), sc: gate.sc, update: gate.update },
   { id: "lake", el: document.getElementById("redteam"), sc: lake.sc, update: lake.update },
   { id: "causeway", el: document.getElementById("replay"), sc: causeway.sc, update: causeway.update },
 ];
@@ -861,6 +990,7 @@ function loop() {
   if (atmosIn !== activeScene) { atmos.forEach((o) => activeScene.add(o)); atmosIn = activeScene; }
   renderPass.mainScene = activeScene; raysPass.enabled = mode === "hero" && level > 0;
   if (mode === "hero") {
+    if (camera.far !== 200) { camera.far = 200; camera.updateProjectionMatrix(); }
     const p = progress, ease = p * p * (3 - 2 * p);
     camera.position.set(px * .6 * (1 - ease) - ease * W * .5, 4.9 + (-py) * .3 + ease * .2, 15.5 - ease * 21);  // through the left lancet
     look.set(px * .3 - ease * W * .5, 6.4 - ease * .6, -6 - ease * 10); camera.lookAt(look);
