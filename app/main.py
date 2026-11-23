@@ -321,6 +321,9 @@ class DrillIn(BaseModel):
 
 
 LAST_DRILL: dict = {}
+if getattr(twin, "prebuilt_drill", None):  # the seeded drill was run at build time (scripts/prebuild_twin.py)
+    LAST_DRILL.update(twin.prebuilt_drill)
+    team.last_attack_orders = [o for r in LAST_DRILL.get("probes", []) + LAST_DRILL.get("adapted", []) for o in r["orders"]]
 
 
 @app.post("/api/drill", dependencies=rate("drill", 6))
@@ -351,6 +354,7 @@ def drill_latest():
         "before_policy": d.get("before_policy"),
         "after_policy": d.get("after_policy"),
         "summary": d.get("summary", {}),
+        "source": d.get("source"),
     }
 
 

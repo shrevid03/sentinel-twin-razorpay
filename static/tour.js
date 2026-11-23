@@ -22,7 +22,7 @@
       after: "Spending limit checked in code (₹2,699 within ₹12,500 per order), risk approved, payment authorized, checked again before capture, then captured exactly once. \"Why? (receipt)\" shows every step." },
     { title: "A clean-looking account that belongs to a ring", tab: "drill", focus: "#scn-card", act: "Run it",
       text: "A new, KYC-verified account checks out a ₹9,999 keyboard. Rules see nothing wrong. Press Run it: the twin scores it three ways.",
-      run: async () => { $("#btn-scn").click(); await wait(() => $("#scn-out .scn-grid")); },
+      run: async () => { $("#btn-scn").click(); await wait(() => $("#scn-out .scn-grid"), 180000); },
       after: "Rules alone approve it (0.09). The GAT with rules still approves (0.08; the GAT alone scores 0.02): the account looks clean by itself. The combined engine adds the known-fraud-neighbour signal (its phone number is shared with three known-fraud accounts) and sends it to review (0.63). A second ring account that slips past checkout is held again before capture (0.61): no money captured." },
     { title: "The evidence, and a person decides", tab: "investigator", focus: "#ev-card", act: "Open the riskiest case",
       run: async () => { $("#btn-ev-top").click(); await wait(() => $("#ev-out h4"), 20000); },
@@ -32,12 +32,16 @@
       text: "Each decision is stored with the evidence it was allowed to see. Press Replay: the twin rebuilds the graph as it was at decision time and re-runs the stored model.",
       run: async () => { const b = $("#scn-out [data-replay]"); b?.click(); await wait(() => { const o = $("#scn-out .replay-out"); return o && o.textContent.trim().length > 10; }, 20000); },
       after: "Same score, same decision. Evidence that arrived later is listed and ignored." },
-    { title: "Optional: attack, harden, verify", tab: "drill", focus: "#tab-drill .card", act: "Run the drill (about 40 s)", optional: true,
+    { title: "Optional: attack, harden, verify", tab: "drill", focus: "#tab-drill .card", act: "Show the result", optional: true,
       text: "The red team attacks a frozen copy of the twin, the simulator searches 216 policies (pricing false positives), and the same attacks are replayed under the winner.",
-      run: async () => { const b = $("#btn-drill"); b?.click(); await wait(() => b?.disabled, 3000).catch(() => {}); await wait(() => !b?.disabled, 150000);
-        try { const d = await (await fetch("/api/drill/latest")).json(); const s = d.summary || {};
-          STEPS[4].after = `Attack ₹ intercepted: ${pctOf(d, s.breach_evaded_before_inr)} before, ${pctOf(d, s.breach_evaded_after_inr)} after hardening, on the same seeded attacks. That's the tour: the sidebar has the rest.`; } catch {} },
-      after: "Done. That's the tour: the sidebar has the rest." },
+      run: async () => {
+        let d = null; try { d = await (await fetch("/api/drill/latest")).json(); } catch {}
+        if (!d || !d.summary) { const b = $("#btn-drill"); b?.click(); await wait(() => b?.disabled, 3000).catch(() => {}); await wait(() => !b?.disabled, 600000);
+          try { d = await (await fetch("/api/drill/latest")).json(); } catch {} }
+        const s = (d && d.summary) || {};
+        STEPS[4].after = `Attack ₹ intercepted: ${pctOf(d, s.breach_evaded_before_inr)} before, ${pctOf(d, s.breach_evaded_after_inr)} after hardening, on the same seeded attacks.` +
+          (d && d.source ? " This drill was run when the server was built, on this same seeded twin; Run defense drill repeats it (a few minutes on the free server)." : "") + " That's the tour: the sidebar has the rest."; },
+      after: "That's the tour: the sidebar has the rest." },
   ];
   let i = 0, box, focused = null, busy = false;
   const clearFocus = () => { focused?.classList.remove("tour-focus"); focused = null; };
@@ -66,7 +70,7 @@
       if (t === "act" && s.run) {
         busy = true; b.disabled = true; b.innerHTML = `<span class="spin"></span>Working…`;
         try { await s.run(); render(s.after); setTimeout(() => focus(s.focus), 80); }
-        catch { render("That took longer than usual. The result will appear in the highlighted panel; press Next when you're ready."); }
+        catch { render("Still working (the free server is slow). The result will appear in the highlighted panel; press Next when you're ready."); }
         finally { busy = false; }
       }
     });

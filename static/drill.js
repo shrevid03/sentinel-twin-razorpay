@@ -160,7 +160,7 @@ async function loadHero() {
   const s = d.summary || {};
   window.renderGauge?.(d); window.renderFlow?.(d);
   const step = (n, title, v) => `<div class="step"><b><span class="n">${n}</span>${title}</b><span class="v">${v}</span></div>`;
-  $("#loop-card").innerHTML = `<div class="cardhead"><h3>Latest defense drill</h3><button class="ghost" id="loop-open">Open drill</button></div>
+  $("#loop-card").innerHTML = `<div class="cardhead"><h3>Latest defense drill${d.source ? ` <small class="muted">run when the server was built, on this seeded twin</small>` : ""}</h3><button class="ghost" id="loop-open">Open drill</button></div>
     <div class="loop">
       ${step(1, "Attack", `${d.attacks} synthetic attacks, ${money(d.attempted_inr)} attempted; ${money(s.breach_evaded_before_inr)} got through`)}
       ${step(2, "Analyze", esc(d.search ? d.search.charAt(0).toUpperCase() + d.search.slice(1) : "Policies scored on fraud stopped minus false-positive cost"))}

@@ -17,6 +17,12 @@ seed, epochs = int(os.getenv("TWIN_SEED", "3")), int(os.getenv("GAT_EPOCHS", "12
 t = Twin(seed=seed)
 t.train(epochs=epochs)
 t.prebuilt_for = (seed, epochs)
+# the seeded defense drill too (deterministic; it runs on its own frozen copy of the twin), so the dashboard and the
+# guided tour can show its result at once on a slow free server, labelled as run at build time
+from app.drill import defense_drill  # noqa: E402
+res = defense_drill(t, seed=7)
+res["source"] = "run while the server was built, on this same seeded twin (seed 7); press Run defense drill to repeat it"
+t.prebuilt_drill = res
 t.lock = None  # locks don't pickle; the server gives the loaded twin a fresh one
 out.parent.mkdir(parents=True, exist_ok=True)
 with open(out, "wb") as f:
