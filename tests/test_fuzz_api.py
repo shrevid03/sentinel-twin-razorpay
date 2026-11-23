@@ -38,7 +38,7 @@ def test_no_route_returns_500_on_bad_input(client):
         paths = [path] if "{" not in path else [path.split("{")[0] + b + path.split("}", 1)[1] for b in BAD_IDS]
         for p in paths:
             heavy = any(h in p for h in ("drill", "compare", "model-redteam", "redteam", "replay", "scenario",
-                                         "investigate", "chat"))
+                                         "investigate", "chat", "tour/checkout"))  # tour/checkout makes a real (simulated) checkout
             # heavy endpoints accept no body fields that matter, so one junk body each is enough (they take seconds)
             bodies = ([BAD_BODIES[-1]] if heavy else BAD_BODIES) if method == "POST" else [None]
             for body in bodies:

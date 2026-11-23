@@ -34,6 +34,12 @@ def test_ring_scores_match_the_reproducible_scenario():
     r = new_account_joins_ring(t)
     assert round(r["rules_only"]["score"], 2) == 0.09 and r["rules_only"]["decision"] == "approve"
     assert round(r["graph"]["risk"], 2) == 0.63 and r["graph"]["decision"] == "review"
+    # the GAT does not catch this case on its own: GAT + rules still approves; the known-fraud-neighbour signal does it
+    assert round(r["gat_rules"]["risk"], 2) == 0.08 and r["gat_rules"]["decision"] == "approve"
+    assert round(r["gat_rules"]["gat_risk"], 2) == 0.02
+    assert "the GAT with rules still approves (0.08)" in LANDING and "known-fraud-neighbour signal" in LANDING
+    readme = (ROOT / "README.md").read_text()
+    assert "| GAT + rules | 0.08 | **approve** | the GAT alone scores the account 0.02" in readme
     assert round(r["pre_capture"]["score"], 2) == 0.61 and r["pre_capture"]["capture_status"] == "not captured"
     for s in ("0.09", "0.63", "0.61"):
         assert s in LANDING

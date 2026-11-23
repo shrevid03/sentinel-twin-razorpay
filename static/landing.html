@@ -24,7 +24,7 @@ try { if (localStorage.getItem("st-lite") === "1" || sessionStorage.getItem("st-
 
 <header class="top">
   <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z" fill="#40826D"/><path d="M11 12l5 7 5-8" stroke="#E6F2EC" stroke-width="1.4" fill="none"/><g fill="#E6F2EC"><circle cx="11" cy="12" r="2.2"/><circle cx="21" cy="11" r="2.2"/><circle cx="16" cy="19" r="2.6"/></g></svg><span class="spaced">Sentinel Twin</span></a>
-  <div class="right"><button class="sound-btn" data-sound-toggle type="button"></button><button class="sound-btn" data-sound-toggle="ambient" type="button"></button><span class="pill-tag warn"><i></i>Demo mode · Razorpay test-mode ready</span><button class="lite-btn" id="liteBtn" type="button" aria-pressed="false" title="Turn the 3D scenery off for slower laptops">Lite mode</button><a class="skip" href="/app?tour=1">Skip to the guided demo →</a><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
+  <div class="right"><button class="sound-btn" data-sound-toggle type="button"></button><button class="sound-btn" data-sound-toggle="ambient" type="button"></button><span class="pill-tag warn" id="modePill"><i></i>Demo gateway · simulated payments</span><button class="lite-btn" id="liteBtn" type="button" aria-pressed="false" title="Turn the 3D scenery off for slower laptops">Lite mode</button><a class="skip" href="/app?tour=1">Skip to the guided demo →</a><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
 </header>
 
 <!-- 1. HERO: a gothic window onto a moonlit, smoky sky; the camera pushes through it -->
@@ -86,7 +86,7 @@ try { if (localStorage.getItem("st-lite") === "1" || sessionStorage.getItem("st-
       <div class="step"><p class="eyebrow tilde">~ ii · the ivy creeps ~</p><h2>Follow the vines.</h2>
         <p>At signup it verified a phone number by OTP. <b>Three accounts already known as fraud use the same number.</b> That link existed before checkout, so the decision may use it.</p></div>
       <div class="step"><p class="eyebrow tilde">~ iii · the ring blooms ~</p><h2>Not a customer. A whole ring.</h2>
-        <p>The graph attention network sees the ring and the shipped engine scores the order <b>0.63: held for review</b>. No Razorpay order is created until a person decides.</p></div>
+        <p>The account looks clean by itself: the GAT with rules still approves (0.08). The combined engine adds the <b>known-fraud-neighbour signal</b> and scores the order <b>0.63: held for review</b>. No Razorpay order is created until a person decides.</p></div>
     </div>
     <div class="visual"><div class="panel stonewall" id="ring">
       <h4>The twin's graph around this order</h4>
@@ -121,7 +121,7 @@ try { if (localStorage.getItem("st-lite") === "1" || sessionStorage.getItem("st-
   <div class="wrap grid">
     <div class="steps">
       <div class="step"><p class="eyebrow tilde">~ iv · a list and a curfew ~</p><h2>An agent with a shopping list, and a curfew.</h2>
-        <p>You approve a limit once, like UPI Reserve Pay: <b>₹12,500 per order, ₹35,000 a month</b>. The agent searches, builds a cart and asks to pay, in chat or voice, in ten Indian languages.</p></div>
+        <p>You approve a limit once, Reserve Pay-style: <b>₹12,500 per order, ₹35,000 a month</b>. The agent searches, builds a cart and asks to pay, in chat or voice, in ten Indian languages.</p></div>
       <div class="step"><p class="eyebrow tilde">~ v · no sweet-talking ~</p><h2>Limits live in code, not in the prompt.</h2>
         <p>Blocked categories, per-order limits and the monthly budget are checked by the server. <b>The budget is reserved atomically</b> before a checkout opens, so two parallel carts can never overspend.</p></div>
     </div>
@@ -268,7 +268,7 @@ try { if (localStorage.getItem("st-lite") === "1" || sessionStorage.getItem("st-
   <p class="tilde">~ the door is open ~</p>
   <h2 class="spaced">Before money moves</h2>
   <a class="btn big magnetic" id="launch2" href="/app">Open the live twin →</a>
-  <p class="fine">Runs in a clearly labelled demo mode without keys, and on Razorpay test mode with them. Test-mode money is never real money.</p>
+  <p class="fine">Runs on a clearly labelled demo gateway (simulated payments) without keys, and on Razorpay test mode with them. Test-mode money is never real money.</p>
 </section>
 <footer>Sentinel Twin · a risk layer for agent-led payments, built on Razorpay test mode · Gemini · NumPy GAT · MIT · all artwork is procedural</footer>
 
@@ -281,6 +281,8 @@ if (document.documentElement.classList.contains("motion") && !document.documentE
 <script src="/static/js/sound.js?v=1"></script>
 <script src="/static/smoke.js?v=4"></script>
 <script src="/static/landing.js?v=8"></script>
+<script>/* the payment-mode pill says what the server really runs: simulated without keys, Razorpay test mode only when connected */
+fetch("/api/config").then((r) => r.json()).then((c) => { const p = document.getElementById("modePill"); if (p && c.pay_mode === "test") { p.innerHTML = "<i></i>Razorpay test mode connected"; p.classList.remove("warn"); } }).catch(() => {});</script>
 <script>/* the Lite mode button: remembers the choice and reloads */
 (() => { const b = document.getElementById("liteBtn"), on = document.documentElement.classList.contains("lite"); if (!b) return;
   b.setAttribute("aria-pressed", String(on)); b.textContent = on ? "Lite mode: on" : "Lite mode";

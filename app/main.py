@@ -354,6 +354,15 @@ def drill_latest():
     }
 
 
+@app.post("/api/tour/checkout", dependencies=rate("tour", 10))
+def tour_checkout():
+    """The guided tour's fixed purchase, with no language model in the loop: the agent's normal checkout path
+    (mandate checked in code, risk gate, order with manual capture) for one ₹2,699 coffee set."""
+    out = team.guarded_checkout([{"sku": "SKU-COF-02", "qty": 1}], "guided tour")
+    return {"result": out, "checkout": team.checkouts.get(out.get("pay_order_id")) if out.get("pay_order_id") else None,
+            "receipt_id": out.get("receipt_id")}
+
+
 @app.post("/api/scenario/new-account", dependencies=rate("heavy", 8))
 def scenario_new_account():
     """A clean new account shares a UPI ID with a known ring, then the agent checks out (on a fork; nothing live)."""

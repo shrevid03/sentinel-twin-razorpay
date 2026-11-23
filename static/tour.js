@@ -1,4 +1,4 @@
-/* "Try it in about 90 seconds": a calm guided path for reviewers. Each step does one real thing by pressing the app's own
+/* "Try it in about a minute": a calm guided path for reviewers. Each step does one real thing by pressing the app's own
    buttons (the same requests a person would make), highlights where the answer appears, and explains it in a line.
    Shown once on the first visit (or with ?tour=1); the "Guided tour" button reopens it. */
 (() => {
@@ -8,14 +8,22 @@
   const go = (tab) => (window.showTab || (() => {}))(tab);
   const pctOf = (d, ev) => (d && d.attempted_inr ? (100 * (1 - ev / d.attempted_inr)).toFixed(1) + "%" : "–");
   const STEPS = [
-    { title: "The shopping agent buys something", tab: "concierge", focus: "#tab-concierge .chat, #tab-concierge .card", act: "Ask it",
-      text: "Ask the agent for a gift. It picks a product inside your spending limits and opens a checkout. Without Razorpay keys the checkout is simulated (demo gateway, no real money).",
-      run: async () => { const c = [...document.querySelectorAll("#chips button")][0]; c?.click(); await wait(() => $("#pay-slot .paybox"), 40000); },
-      after: "Mandate checked in code, risk checked, checkout ready. Press Pay to finish it, or move on: the next order is the interesting one." },
+    { title: "The shopping agent buys something", tab: "concierge", focus: "#pay-slot", act: "Buy it",
+      text: "The agent buys a ₹2,699 coffee set for you. The server checks your spending limit in code, scores the risk, creates the order and you approve a simulated payment (demo gateway: no Razorpay keys, no real money).",
+      run: async () => {
+        const r = await api("/api/tour/checkout", {});
+        if (!r.checkout) {  // e.g. the month's budget is used up: the mandate guard stops it before any order exists
+          addMsg("sys", "The mandate guard stopped this checkout before any order was created: " + esc(((r.result || {}).reasons || ["not allowed"]).join("; ")) + ".");
+          STEPS[0].after = "The spending limit is enforced in code: this order was stopped before any payment (Reset demo restores the month's budget). The next step is the interesting one."; return; }
+        addMsg("bot", "I picked a Ceramic pour-over dripper set for ₹2,699. Limit checked, risk checked: approve the simulated payment below."); await renderPay(r.checkout);
+        await wait(() => $("#pay-slot #demo-approve, #pay-slot #rzp-pay"), 15000);
+        const pay = $("#pay-slot #demo-approve"); if (pay) { pay.click(); await wait(() => $("#pay-slot .paybox.done"), 30000); }
+      },
+      after: "Spending limit checked in code (₹2,699 within ₹12,500 per order), risk approved, payment authorized, checked again before capture, then captured exactly once. \"Why? (receipt)\" shows every step." },
     { title: "A clean-looking account that belongs to a ring", tab: "drill", focus: "#scn-card", act: "Run it",
       text: "A new, KYC-verified account checks out a ₹9,999 keyboard. Rules see nothing wrong. Press Run it: the twin scores it three ways.",
       run: async () => { $("#btn-scn").click(); await wait(() => $("#scn-out .scn-grid")); },
-      after: "Rules alone approve it (0.09). The graph links its phone number to three known-fraud accounts, so the combined engine sends it to review (0.63). A second ring account that slips past checkout is held again before capture (0.61): no money captured." },
+      after: "Rules alone approve it (0.09). The GAT with rules still approves (0.08; the GAT alone scores 0.02): the account looks clean by itself. The combined engine adds the known-fraud-neighbour signal (its phone number is shared with three known-fraud accounts) and sends it to review (0.63). A second ring account that slips past checkout is held again before capture (0.61): no money captured." },
     { title: "The evidence, and a person decides", tab: "investigator", focus: "#ev-card", act: "Open the riskiest case",
       run: async () => { $("#btn-ev-top").click(); await wait(() => $("#ev-out h4"), 20000); },
       after: "Each claim cites records in the graph; the copilot only explains them. The model recommends, and a named person confirms, monitors or clears the case, with a reason.",
@@ -24,7 +32,7 @@
       text: "Each decision is stored with the evidence it was allowed to see. Press Replay: the twin rebuilds the graph as it was at decision time and re-runs the stored model.",
       run: async () => { const b = $("#scn-out [data-replay]"); b?.click(); await wait(() => { const o = $("#scn-out .replay-out"); return o && o.textContent.trim().length > 10; }, 20000); },
       after: "Same score, same decision. Evidence that arrived later is listed and ignored." },
-    { title: "Attack, harden, verify", tab: "drill", focus: "#tab-drill .card", act: "Run the drill (about 40 s)", optional: true,
+    { title: "Optional: attack, harden, verify", tab: "drill", focus: "#tab-drill .card", act: "Run the drill (about 40 s)", optional: true,
       text: "The red team attacks a frozen copy of the twin, the simulator searches 216 policies (pricing false positives), and the same attacks are replayed under the winner.",
       run: async () => { const b = $("#btn-drill"); b?.click(); await wait(() => b?.disabled, 3000).catch(() => {}); await wait(() => !b?.disabled, 150000);
         try { const d = await (await fetch("/api/drill/latest")).json(); const s = d.summary || {};

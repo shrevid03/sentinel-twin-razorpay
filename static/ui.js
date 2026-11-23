@@ -27,7 +27,7 @@
   // the compact phone header mirrors the payment-mode badge
   const pay = $("#b-pay"), mini = $("#b-pay-mini");
   if (pay && mini) {
-    const sync = () => { mini.textContent = pay.textContent.replace(/^Razorpay\s*·?\s*/i, "") ; mini.className = pay.className; };
+    const sync = () => { mini.textContent = pay.textContent.replace(/^Razorpay\s*·?\s*/i, "").replace(/ · simulated payments$/, "") ; mini.className = pay.className; };
     new MutationObserver(sync).observe(pay, { childList: true, characterData: true, subtree: true, attributes: true }); sync();
   }
 

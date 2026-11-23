@@ -417,7 +417,7 @@ async function renderPay(co) {
       <span>${CFG.pay_mode === "demo" ? "Demo order" : "Razorpay order"} ${esc(co.pay_order_id)}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</span></div>
     <div id="pp-buttons"></div></div>`;
   const charge = fmtCharge({ amount: co.amount, currency: co.currency });
-  const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ ${CFG.pay_mode === "demo" ? "Simulated payment (demo gateway)" : "Razorpay test-mode payment"} <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
+  const done = (r) => { slot.innerHTML = `<div class="paybox done">✅ ${CFG.pay_mode === "demo" ? "Simulated payment (demo gateway)" : "Razorpay test-mode payment"} <b>${esc(r.status)}</b> · ${esc(r.payment_id || "")} for ${esc(co.pay_order_id)}${charge ? ` (${esc(charge)})` : ""}${co.receipt_id ? ` · <a href="#" class="rcpt-link" data-rcpt="${esc(co.receipt_id)}">Why? (receipt)</a>` : ""}</div>`; refresh(); loadMandate(); window.loadHero?.(); };
   const fail = (e) => { const m = String(e?.message || e); if (/not captured/i.test(m)) window.STSound?.hold(); addMsg("sys", esc(/captured|charged|confirm/i.test(m) ? m : "Payment not completed: " + m)); };
   const capture = (body) => api(`/api/razorpay/orders/${encodeURIComponent(co.pay_order_id)}/capture`, body).then(done, fail);
   if (CFG.pay_mode !== "demo" && CFG.razorpay_key_id) {
@@ -603,12 +603,12 @@ const getPolicy = () => Object.fromEntries(POLICY_FIELDS.map(([k]) => [k, +$("#p
 async function runWhatIf() {
   await initPolicy();
   const r = await api("/api/whatif?include_redteam=" + $("#wi-rt").checked, getPolicy());
-  const keys = [["fraud_blocked_inr", "Fraud blocked $"], ["fraud_reviewed_inr", "Fraud sent to review $"], ["fraud_missed_inr", "Fraud missed $"], ["good_blocked_inr", "Good orders blocked $"]];
+  const keys = [["fraud_blocked_inr", "Fraud blocked ₹"], ["fraud_reviewed_inr", "Fraud sent to review ₹"], ["fraud_missed_inr", "Fraud missed ₹"], ["good_blocked_inr", "Good orders blocked ₹"]];
   const data = { labels: keys.map((k) => k[1]), datasets: [
     { label: "Current policy", data: keys.map((k) => r.current[k[0]]), backgroundColor: "#40826D" },
     { label: "Proposed policy", data: keys.map((k) => r.proposed[k[0]]), backgroundColor: "#8FD9BF" }] };
   if (wiChart) { wiChart.data = data; wiChart.update(); } else wiChart = new Chart($("#wi-chart"), { type: "bar", data,
-    options: { plugins: { legend: { labels: { color: "#E6F2EC" } } }, scales: { x: { ticks: { color: "#8FB3A6" } }, y: { ticks: { color: "#8FB3A6" }, grid: { color: "#1B3B33" } } } } });
+    options: { plugins: { legend: { labels: { color: "#E6F2EC" } }, tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ₹${Number(c.parsed.y).toLocaleString("en-IN")}` } } }, scales: { x: { ticks: { color: "#8FB3A6" } }, y: { ticks: { color: "#8FB3A6", callback: (v) => "₹" + Number(v).toLocaleString("en-IN") }, grid: { color: "#1B3B33" } } } } });
   $("#wi-kpis").innerHTML = [kpi("intercept rate now", Math.round(r.current.catch_rate * 100) + "%"), kpi("intercept rate proposed", Math.round(r.proposed.catch_rate * 100) + "%", "ok"),
     kpi("good orders to review", `${r.current.good_reviewed} → ${r.proposed.good_reviewed}`, "warn"),
     kpi("fraud ₹ stopped per 100 orders flagged", `${money(r.current.fraud_stopped_per_100_flagged_inr)} → ${money(r.proposed.fraud_stopped_per_100_flagged_inr)}`, "ok"),
@@ -659,7 +659,7 @@ $("#btn-retrain").onclick = async (e) => { e.target.disabled = true; await api("
 function refresh() { loadStats(); loadFeed(); }
 (async function boot() {
   CFG = await api("/api/config");
-  $("#b-pay").textContent = CFG.pay_mode === "test" ? "Razorpay test mode · live" : CFG.pay_mode === "live" ? "Razorpay · LIVE keys" : CFG.live_key_refused ? "Razorpay · live key refused (demo)" : "Razorpay · demo mode";
+  $("#b-pay").textContent = CFG.pay_mode === "test" ? "Razorpay test mode connected" : CFG.pay_mode === "live" ? "Razorpay · LIVE keys" : CFG.live_key_refused ? "Live key refused · demo gateway" : "Demo gateway · simulated payments";
   $("#b-pay").className = "badge " + (CFG.pay_mode === "demo" ? "off" : "on");
   const BR = { claude: "Claude", gemini: "Gemini", groq: "Groq", ollama: "Ollama (local)" };
   $("#b-brain").textContent = CFG.brain === "demo" ? "AI · demo brain" : `${BR[CFG.brain] || CFG.brain} · ${CFG.model}`;
