@@ -158,11 +158,11 @@ const moonMat = new THREE.ShaderMaterial({
     }`,
 });
 const moon = new THREE.Mesh(new THREE.SphereGeometry(2.5, 128, 96), moonMat);
-moon.position.set(4.6, 9.8, -40); moon.rotation.y = -.6; scene.add(moon);  // seen through the right lancet, clear of the tracery
+moon.position.set(5.4, 9.6, -40); moon.rotation.y = -.6; scene.add(moon);  // seen through the right lancet, clear of the tracery
 // a gentle, natural halo and thin cloud drifting across the moon's face
 const haloTex = (() => { const c = document.createElement("canvas"); c.width = c.height = 256; const x = c.getContext("2d"); const g = x.createRadialGradient(128, 128, 40, 128, 128, 128);
   g.addColorStop(0, "rgba(220,232,226,.10)"); g.addColorStop(.35, "rgba(170,195,185,.035)"); g.addColorStop(1, "rgba(120,150,140,0)"); x.fillStyle = g; x.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
-const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: false })); moonHalo.scale.set(13, 13, 1); moonHalo.position.set(4.6, 9.8, -41); scene.add(moonHalo);
+const moonHalo = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, transparent: true, depthWrite: false, fog: false })); moonHalo.scale.set(13, 13, 1); moonHalo.position.set(5.4, 9.6, -41); scene.add(moonHalo);
 
 // lights: cool moonlight from behind the window, faint warm fill, sage sky
 scene.add(new THREE.HemisphereLight(0x7f9f92, 0x101c17, 0.56));  // a very faint cool fill: brick, mortar and ivy read in the mid-tones
@@ -225,16 +225,16 @@ const glassMat = new THREE.ShaderMaterial({
     float drops(vec2 uv, float s){ uv*=s; vec2 id=floor(uv); float r=h(id); uv.y+=t*(.25+r*.5)+r*10.; id=floor(uv);
       vec2 f=fract(uv)-.5; float k=h(id+3.1); f.x+=(k-.5)*.6; float d=length(f*vec2(1.,1.6));
       float drop=smoothstep(.16,.05,d)*step(.55,k); float trail=smoothstep(.06,.0,abs(f.x))*smoothstep(.5,-.1,f.y)*step(.55,k)*.35; return drop+trail; }
-    void main(){ vec2 uv=vP*.55; float d=drops(uv,4.)+drops(uv+7.3,7.)*.6;
-      vec3 c=vec3(.75,.9,.85); gl_FragColor=vec4(c*d,.02+d*.45); }`,
+    void main(){ vec2 uv=vP*.55; float d=drops(uv,3.)*.8;
+      vec3 c=vec3(.72,.86,.8); gl_FragColor=vec4(c*d,d*.2); }`,
 });
-const glass = new THREE.Mesh(new THREE.ShapeGeometry(glassShape, 48), glassMat); glass.position.z = -.6;  // no raindrops: not added
+const glass = new THREE.Mesh(new THREE.ShapeGeometry(glassShape, 48), glassMat); glass.position.z = -.6; scene.add(glass);  // a few drops on the panes
 
 // wet stone floor: large flags, puddles (very low roughness), clearcoat; reflects the moon and lights
 const floorSet = stoneSet(512, 170, 170, .38);
 [floorSet.albedo, floorSet.normal, floorSet.rough].forEach((t) => t.repeat.set(5, 6));
 const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 70), new THREE.MeshPhysicalMaterial({
-  map: floorSet.albedo, normalMap: floorSet.normal, roughnessMap: floorSet.rough, roughness: .82, clearcoat: .14, clearcoatRoughness: .45, color: 0x66786f }));
+  map: floorSet.albedo, normalMap: floorSet.normal, normalScale: new THREE.Vector2(.45, .45), roughnessMap: floorSet.rough, roughness: .86, clearcoat: .1, clearcoatRoughness: .55, color: 0x56665e }));
 floor.rotation.x = -Math.PI / 2; floor.position.z = -5; floor.receiveShadow = true; scene.add(floor);
 // an environment for wet reflections: a tiny sky with a bright moon, prefiltered
 const pmrem = new THREE.PMREMGenerator(renderer);
@@ -299,10 +299,10 @@ const dripState = Array.from({ length: 14 }, (_, i) => ({ from: leafTips[(i * 13
 
 
 // rain streaks around the camera, lit by the moon
-const RAIN = 1800, rainGeo = new THREE.BufferGeometry(), rp = new Float32Array(RAIN * 6);
-for (let i = 0; i < RAIN; i++) { const x = (rng() - .5) * 30, y = rng() * 20, z = -4 + rng() * 22; rp.set([x, y, z, x - .015, y - .28, z], i * 6); }
+const RAIN = 1400, rainGeo = new THREE.BufferGeometry(), rp = new Float32Array(RAIN * 6);
+for (let i = 0; i < RAIN; i++) { const x = (rng() - .5) * 16, y = rng() * 18, z = -2.6 - rng() * 30; rp.set([x, y, z, x - .01, y - .32, z], i * 6); }  // outdoors only, behind the wall
 rainGeo.setAttribute("position", new THREE.BufferAttribute(rp, 3));
-const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0x9fc4b6, transparent: true, opacity: .09, depthWrite: false })); 
+const rain = new THREE.LineSegments(rainGeo, new THREE.LineBasicMaterial({ color: 0xa9c8bc, transparent: true, opacity: .13, depthWrite: false })); scene.add(rain);  // falls outside the window only 
 // fireflies (bloom makes them glow)
 const FF = 28, ffGeo = new THREE.BufferGeometry(), ffp = new Float32Array(FF * 3), ffPh = new Float32Array(FF);
 for (let i = 0; i < FF; i++) { ffp.set([(rng() - .5) * 14, .5 + rng() * 7, -2 + rng() * 12], i * 3); ffPh[i] = rng() * 6.28; }
@@ -454,7 +454,7 @@ function setLevel(l) {
   level = l;
   dpr = l === 2 ? Math.min(devicePixelRatio || 1, 1.5) : l === 1 ? 1 : .75;
   [moonLight, rMoon].forEach((L) => { L.shadow.mapSize.set(l === 2 ? 2048 : 1024, l === 2 ? 2048 : 1024); L.shadow.map?.dispose(); L.shadow.map = null; });
-  godRays.blurPass.enabled = l > 0; dew.visible = l > 0;
+  godRays.blurPass.enabled = l > 0; dew.visible = l > 0; rain.visible = l > 0;
   resize();
 }
 const clock = new THREE.Clock();
@@ -480,8 +480,8 @@ function loop() {
   renderPass.mainScene = active; raysPass.enabled = mode === "hero" && level > 0;
   if (mode === "hero") {
     const p = progress, ease = p * p * (3 - 2 * p);
-    camera.position.set(px * .6 * (1 - ease) - ease * W * .5, 4.3 + (-py) * .3 + ease * .4, 15.5 - ease * 21);  // through the left lancet
-    look.set(px * .3 - ease * W * .5, 5.2 + ease * .4, -6 - ease * 10); camera.lookAt(look);
+    camera.position.set(px * .6 * (1 - ease) - ease * W * .5, 4.9 + (-py) * .3 + ease * .2, 15.5 - ease * 21);  // through the left lancet
+    look.set(px * .3 - ease * W * .5, 6.4 - ease * .6, -6 - ease * 10); camera.lookAt(look);
     glass.visible = camera.position.z > 1.6;
     canvas.style.opacity = String(p > .5 ? Math.max(0, 1 - (p - .5) / .25) : 1);
   } else {
@@ -507,6 +507,9 @@ function loop() {
   }
   windU.value = t; skyMat.uniforms.t.value = t; glassMat.uniforms.t.value = t;
   const ox = camera.position.x;
+  if (mode === "hero") { const a = rainGeo.attributes.position.array;
+    for (let i = 0; i < a.length; i += 6) { a[i + 1] -= dt * 13; a[i + 4] -= dt * 13; if (a[i + 4] < 0) { a[i + 1] += 18; a[i + 4] += 18; } }
+    rainGeo.attributes.position.needsUpdate = true; }
   const f = ffGeo.attributes.position.array;
   for (let i = 0; i < FF; i++) { const ph = ffPh[i] += dt * .35; f[i * 3] += Math.cos(ph * 1.3) * dt * .12 + px * dt * .12; f[i * 3 + 1] += Math.sin(ph) * dt * .1; f[i * 3 + 2] += Math.sin(ph * .7) * dt * .1; }
   ffGeo.attributes.position.needsUpdate = true; fireflies.position.x = mode === "ring" ? ox : 0;
@@ -516,4 +519,4 @@ function loop() {
   composer.render(dt);
 }
 requestAnimationFrame(loop);
-window.__st3dScene = { scene, ringScene, camera, renderer, setLevel, fogBanks, composer, bloom, moon, moonClouds, godRays, raysPass, moonHalo, sky };
+window.__st3dScene = { scene, ringScene, camera, renderer, setLevel, fogBanks, composer, bloom, moon, moonClouds, godRays, raysPass, moonHalo, sky, rain };
