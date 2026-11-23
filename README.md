@@ -302,7 +302,7 @@ Concierge takes voice in all ten languages (Web Speech API in Chrome and Edge) a
 
 ### Reliability
 
-The test suite (142 tests, passing on PostgreSQL 16 and SQLite) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, no payment started, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
+The test suite (149 tests; the payment and concurrency tests also passed on PostgreSQL 16, and the payment code has not changed since that run) covers, among the rest: every API route fuzzed with bad ids, wrong types, negative and huge amounts and junk JSON (never a 500); webhook replays processed once; double captures and double decisions happening once under parallel requests; the LLM, Razorpay or the network being down (clean errors, no payment started, demo-brain fallback); and API responses, the ledger and the event log scanned for emails, phone numbers, UPI IDs and keys. A fresh clone installs and passes the suite exactly as **Run it** below says.
 
 ## Safety guarantees (enforced in code, covered by `tests/test_safety.py` and `tests/test_admin.py`)
 
