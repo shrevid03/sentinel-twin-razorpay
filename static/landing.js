@@ -249,11 +249,11 @@
   gsap.set("#ring .fraud", { opacity: .4 });
   scoreEl.textContent = "0.09"; verdict.className = "verdict approve"; verdict.textContent = "approve";
   scrubbed("#story")
-    .to("#ring .vine.lit", { strokeDashoffset: 0, stagger: .1, duration: .35, ease: "none" }, .2)
-    .to("#ring .leaves path.lit", { scale: .55, stagger: .01, duration: .2, ease: "back.out(2)" }, .3)
-    .to("#ring .fraud", { opacity: 1, stagger: .08, duration: .2 }, .45)
-    .to("#ring .bloom", { scale: 1, rotation: 20, stagger: .08, duration: .3, ease: "back.out(2.2)" }, .55)
-    .to("#ring .halo", { scale: 1, opacity: 1, duration: .3, ease: "back.out(1.6)" }, .6)
+    .to("#ring .vine.lit", { strokeDashoffset: 0, stagger: .1, duration: .35, ease: "none" }, .62)
+    .to("#ring .leaves path.lit", { scale: .55, stagger: .01, duration: .2, ease: "back.out(2)" }, .68)
+    .to("#ring .fraud", { opacity: 1, stagger: .08, duration: .2 }, .76)
+    .to("#ring .bloom", { scale: 1, rotation: 20, stagger: .08, duration: .3, ease: "back.out(2.2)" }, .8)
+    .to("#ring .halo", { scale: 1, opacity: 1, duration: .3, ease: "back.out(1.6)" }, .84)
     .to(sc, { v: .63, duration: .3, onUpdate: () => {
       scoreEl.textContent = sc.v.toFixed(2);
       const r = sc.v >= .5;
@@ -261,7 +261,7 @@
         sparkle(host, hb.left - h.left + hb.width / 2, hb.top - h.top + hb.height / 2); }
       if (!r) caught = false;
       verdict.className = "verdict " + (r ? "review" : "approve"); verdict.textContent = r ? "review · caught" : "approve";
-    } }, .6);
+    } }, .84);
 
   // 3. mandate: leaves drift by in parallax, the cart builds, the meter fills
   gsap.fromTo("#mandate .scenery", { scale: 1.12 }, { scale: 1, ease: "none", scrollTrigger: { trigger: "#mandate", start: "top bottom", end: "bottom top", scrub: true } });

@@ -313,3 +313,6 @@ html.has-3d .story .step::before { content: ""; position: absolute; inset: -40px
 html.has-3d .story .step p { color: #CFE0D7; text-shadow: 0 1px 2px rgba(0,0,0,.9); }
 html.has-3d .story .step h2 { text-shadow: 0 2px 4px rgba(0,0,0,.9), 0 0 30px rgba(0,0,0,.8); }
 html.has-3d #cartPanel, html.has-3d #pipePanel, html.has-3d #attack, html.has-3d #replayPanel { background: rgba(5,12,10,.78); border-color: rgba(157,181,168,.28); }
+
+/* the journey: the story section is a long walk (corridor, door, lake, bridge, ivy wall), so its steps get room */
+html.has-3d #story .step { min-height: 118vh; }

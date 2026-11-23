@@ -625,6 +625,174 @@ const causeway = (() => {
   } };
 })();
 
+// the fraud-ring graph (lanterns, vines, blooms) is gathered into one group so it can hang on the journey's ivy wall
+const graph = new THREE.Group();
+[...Object.values(lanterns), sigil, ...vines3.map((v) => v.mesh), rLeaves, petals, halo, sparks].forEach((o) => graph.add(o));
+
+// ------------------------------------------------------------------ the journey (stage A): one connected world the camera walks through
+// corridor -> a heavy door opens onto the moonlit lake -> a stone bridge assembles across the water -> the ivy wall
+// where the fraud-ring graph lives. One scene, one camera path; nothing cuts.
+const journey = (() => {
+  const J = new THREE.Scene(); J.background = new THREE.Color(0x040a08); J.fog = new THREE.FogExp2(0x0c1a16, .0022);
+  J.add(new THREE.HemisphereLight(0x7f9f92, 0x0c1612, .5));
+  const sun = new THREE.DirectionalLight(0xc4d8d0, 1.5); sun.position.set(20, 40, -150); sun.target.position.set(0, 0, -80);
+  sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024); Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -10, near: 1, far: 160 });
+  sun.shadow.bias = -.0005; sun.shadow.normalBias = .04; J.add(sun, sun.target); J.userData.sun = sun;
+  // a pool of four warm/cool point lights, moved to the nearest light sources every frame (constant light count: no shader recompiles)
+  const pool = [0, 1, 2, 3].map(() => { const l = new THREE.PointLight(0xffb070, 0, 9, 2); J.add(l); return l; });
+  const anchors = [];   // { pos, color, intensity, flicker }
+  // sky, moon, far pines, water (the lake look she likes)
+  const skyM = new THREE.Mesh(new THREE.SphereGeometry(400, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: "varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }",
+    fragmentShader: `varying vec3 vP; float h(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
+      void main(){ float y=normalize(vP).y; vec3 c=mix(vec3(.045,.1,.085),vec3(.006,.016,.014),smoothstep(-.05,.6,y));
+        float s=step(.9985,h(floor(normalize(vP)*420.)))*smoothstep(.05,.4,y); c+=vec3(.7,.78,.74)*s*.8; gl_FragColor=vec4(c,1.);
+        #include <colorspace_fragment>
+      }` }));
+  J.add(skyM);
+  const moonJ = new THREE.Mesh(new THREE.SphereGeometry(9, 64, 48), moonMat); moonJ.position.set(70, 95, -330); J.add(moonJ);
+  const pineG = new THREE.ConeGeometry(1, 4, 7); pineG.translate(0, 2, 0);
+  const PN = 520, pines = new THREE.InstancedMesh(pineG, new THREE.MeshStandardMaterial({ color: 0x0d1c17, roughness: .95 }), PN), d = new THREE.Object3D();
+  for (let i = 0; i < PN; i++) { const side = i % 2 ? 1 : -1, row = (i >> 1) % 4;
+    d.position.set(side * (22 + row * 5 + rng() * 6), -.3, -45 - ((i >> 3) / (PN / 8)) * 190 + rng() * 3);
+    d.scale.set(1 + rng(), 1.6 + rng() * 2.6, 1 + rng()); d.updateMatrix(); pines.setMatrixAt(i, d.matrix); }
+  J.add(pines);
+  const wn = (() => { const N = 256, n = fbm(N, 8, 4); return normalFrom(N, n, 3.2); })(); wn.repeat.set(24, 30);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(220, 300), new THREE.MeshPhysicalMaterial({ color: 0x0a1814, roughness: .16, normalMap: wn, normalScale: new THREE.Vector2(.35, .35), clearcoat: .6, clearcoatRoughness: .2 }));
+  water.rotation.x = -Math.PI / 2; water.position.set(0, 0, -192); J.add(water);
+  const envS = new THREE.Scene(); envS.background = new THREE.Color(0x061210);
+  const em = new THREE.Mesh(new THREE.SphereGeometry(20, 16, 16), new THREE.MeshBasicMaterial({ color: 0xbfd2c9 })); em.position.set(70, 95, -330); envS.add(em);
+  J.environment = pmrem.fromScene(envS, 0.02).texture; J.environmentIntensity = .7;
+
+  const stoneAt = (rx, ry) => { const m = wallMat.clone(); ["map", "normalMap", "roughnessMap"].forEach((k) => { m[k] = wallMat[k].clone(); m[k].repeat.set(rx, ry); m[k].needsUpdate = true; }); return m; };
+  const cWallMat = stoneAt(13.5, 1.2), vaultMat = stoneAt(13.5, 2), ivyWallMat = stoneAt(15, 7.5); vaultMat.side = THREE.BackSide;
+  // ---- room 1: the corridor (vaulted, torch-lit, ivy creeping), z 12 .. -40
+  const CW = 2.4, CS = 3.4, GAP = 5.2, N = 10;
+  const cFloor = new THREE.Mesh(new THREE.PlaneGeometry(CW * 2 + 1, 58), floor.material); cFloor.rotation.x = -Math.PI / 2; cFloor.position.z = -14; cFloor.receiveShadow = true; J.add(cFloor);
+  const vault = new THREE.Mesh(new THREE.CylinderGeometry(CW + .6, CW + .6, 54, 32, 1, true, 0, Math.PI), vaultMat);
+  vault.rotation.set(Math.PI / 2, 0, Math.PI / 2); vault.position.set(0, CS + 1.2, -14); vault.castShadow = true; vault.visible = false; J.add(vault);
+  const ringS = new THREE.Shape(); archPath(CW + .5, CS, ringS); ringS.lineTo(-CW - .5, 0); ringS.holes.push(archPath(CW, CS, new THREE.Path()));
+  const archGeo = new THREE.ExtrudeGeometry(ringS, { depth: .7, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 2, curveSegments: 36 });
+  const glowArches = [], gArchGeo = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(archPath(CW - .02, CS, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y, .72))), 80, .025, 6, false);
+  for (let i = 0; i < N; i++) { const a = new THREE.Mesh(archGeo, traceryMat); a.position.z = 10 - i * GAP; a.castShadow = a.receiveShadow = true; J.add(a);
+    const g = new THREE.Mesh(gArchGeo, new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: 0 })); g.position.z = 10 - i * GAP; J.add(g); glowArches.push(g);
+    [-1, 1].forEach((sd) => { const w = new THREE.Mesh(new THREE.BoxGeometry(.5, CS + 3.2, GAP - .7), rWallMat); w.position.set(sd * (CW + 1.1), (CS + 3.2) / 2, 10 - i * GAP - GAP / 2); w.receiveShadow = w.castShadow = true; J.add(w); }); }
+  // whimsy lanterns: small glass lanterns that float ahead of you, bob and sway, mostly up and to the right; two lead the way to the door
+  const floaters = [];
+  for (let i = 0; i < 9; i++) { const warm = i % 3 !== 2, col = warm ? 0xffc37a : 0x8fe0c4, g = new THREE.Group();
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(.17, 20, 14), glassL), co = new THREE.Mesh(new THREE.SphereGeometry(.075, 12, 10), glowMat(col, warm ? 2.4 : 2));
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(.06, .1, .06, 12), iron); cap.position.y = .18; g.add(sh, co, cap);
+    const home = new THREE.Vector3(.3 + rng() * 1.7, 2.6 + rng() * 1.6, 8 - i * 5.2 - rng() * 2); g.position.copy(home); J.add(g);
+    const F = { g, home, ph: rng() * 6.28, lead: i >= 7, col, core: co }; floaters.push(F);
+    anchors.push({ pos: g.position, color: col, intensity: warm ? 1.6 : 1.2, flicker: true, floater: F }); }
+  const flameMat = glowMat(0xffa860, 2.6);
+  for (let i = 0; i < 5; i++) { const sd = i % 2 ? 1 : -1, z = 6 - i * 10;
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(.06, .04, .5, 8), iron); br.position.set(sd * (CW + .4), 2.3, z); br.rotation.z = sd * .5; J.add(br);
+    const fl = new THREE.Mesh(new THREE.ConeGeometry(.1, .32, 10), flameMat); fl.position.set(sd * (CW + .25), 2.65, z); J.add(fl);
+    anchors.push({ pos: new THREE.Vector3(sd * (CW + .1), 2.7, z), color: 0xffa860, intensity: 3.2, flicker: true, mesh: fl }); }
+  [-1, 1].forEach((sd) => { const fl = new THREE.Mesh(new THREE.ConeGeometry(.12, .36, 10), flameMat); fl.position.set(sd * (CW + .2), 2.9, -38.6); J.add(fl);
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(.06, .04, .5, 8), iron); br.position.set(sd * (CW + .35), 2.55, -38.6); br.rotation.z = sd * .5; J.add(br);
+    anchors.push({ pos: new THREE.Vector3(sd * (CW - .1), 3, -38.2), color: 0xffa860, intensity: 4, flicker: true, mesh: fl }); });
+  const ivyC = new THREE.InstancedMesh(leafGeo, leafMat, 900); ivyC.castShadow = true;
+  for (let i = 0; i < 900; i++) { const sd = i % 2 ? 1 : -1, z = 10 - rng() * 50, y = Math.pow(rng(), 1.6) * (CS + .8);
+    d.position.set(sd * (CW + .48), y, z); d.lookAt(d.position.x - sd, y + .3, z); d.rotateZ((rng() - .5) * 2); d.scale.setScalar(.6 + rng() * .7); d.updateMatrix(); ivyC.setMatrixAt(i, d.matrix);
+    colr.setHex(hues[(rng() * 5) | 0]); ivyC.setColorAt(i, colr); }
+  J.add(ivyC);
+
+  // ---- the heavy door at the corridor's end, z -40
+  const DZ = -40.5, doorFrame = new THREE.Shape(); archPath(CW + .9, CS + .2, doorFrame); doorFrame.lineTo(-CW - .9, 0); doorFrame.holes.push(archPath(CW, CS + .2, new THREE.Path()));
+  const df = new THREE.Mesh(new THREE.ExtrudeGeometry(doorFrame, { depth: 1, bevelEnabled: false, curveSegments: 40 }), traceryMat); df.position.z = DZ - .5; df.castShadow = true; J.add(df);
+  const wood = new THREE.MeshPhysicalMaterial({ color: 0x2a2219, roughness: .72, clearcoat: .15, clearcoatRoughness: .5 });
+  const leafShape = (sd) => { const sh = new THREE.Shape(); const pth = archPath(CW, CS + .2, new THREE.Path()).getPoints(60).filter((v) => sd < 0 ? v.x <= .001 : v.x >= -.001);
+    sh.moveTo(0, 0); pth.forEach((v) => sh.lineTo(v.x, v.y)); sh.lineTo(0, 0); return sh; };
+  const doors = [-1, 1].map((sd) => { const pivot = new THREE.Group(); pivot.position.set(sd * CW, 0, DZ);
+    const g = new THREE.ExtrudeGeometry(leafShape(sd), { depth: .16, bevelEnabled: false, curveSegments: 30 }); g.translate(-sd * CW, 0, 0);
+    const m = new THREE.Mesh(g, wood); m.castShadow = true; pivot.add(m);
+    for (let k = 0; k < 4; k++) { const strap = new THREE.Mesh(new THREE.BoxGeometry(CW - .2, .1, .04), iron); strap.position.set(-sd * (CW / 2), .7 + k * .9, .18); pivot.add(strap); }
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(.14, .025, 8, 24), iron); ring.position.set(-sd * (CW - .35), 1.6, .22); pivot.add(ring);
+    J.add(pivot); return { pivot, sd }; });
+
+  // ---- the bridge: segments rise out of the water as you walk; lanterns on the parapets
+  const BZ0 = -42, SEG = 12, SL = 5.6, segs = [];
+  const deckG = new THREE.BoxGeometry(3.8, .5, SL - .08), parG = new THREE.BoxGeometry(.3, .55, SL - .1);
+  for (let i = 0; i < SEG; i++) {
+    const g = new THREE.Group(); g.position.set(0, .2, BZ0 - SL / 2 - i * SL);
+    const deck = new THREE.Mesh(deckG, traceryMat); deck.castShadow = deck.receiveShadow = true; g.add(deck);
+    [-1, 1].forEach((sd) => { const p = new THREE.Mesh(parG, traceryMat); p.position.set(sd * 1.75, .5, 0); p.castShadow = true; g.add(p); });
+    if (i % 2 === 0) { const post = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .8, 8), iron); post.position.set(1.75, 1.15, -SL / 2 + .3); g.add(post);
+      const lamp = new THREE.Mesh(new THREE.SphereGeometry(.13, 14, 10), glowMat(0x9fe0c8, 2)); lamp.position.set(1.75, 1.6, -SL / 2 + .3); g.add(lamp);
+      anchors.push({ pos: new THREE.Vector3(1.75, 2.5, BZ0 - SL / 2 - i * SL - SL / 2 + .3), color: 0x9fe0c8, intensity: 2.2, group: g }); }
+    const pierS = new THREE.Shape(); archPath(1.6, .2, pierS); pierS.lineTo(-1.6, 0); pierS.holes.push(archPath(1.2, .2, new THREE.Path()));
+    if (i % 2 === 1) { const pier = new THREE.Mesh(new THREE.ExtrudeGeometry(pierS, { depth: .5, bevelEnabled: false, curveSegments: 20 }), traceryMat); pier.rotation.y = Math.PI / 2; pier.position.set(-.25, -2.2, 0); pier.scale.set(1, 1.1, 1); g.add(pier); }
+    g.userData.i = i; J.add(g); segs.push(g);
+  }
+  const BEND = BZ0 - SEG * SL;   // where the bridge meets the far shore
+
+  // ---- the ivy wall on the far shore, with the fraud-ring graph growing on it
+  const WZ = BEND - 4;
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(60, 30), ivyWallMat); wall.position.set(0, 13, WZ); wall.receiveShadow = true; J.add(wall);
+  const shore = new THREE.Mesh(new THREE.PlaneGeometry(60, 10), floor.material); shore.rotation.x = -Math.PI / 2; shore.position.set(0, .02, WZ + 4.5); shore.receiveShadow = true; J.add(shore);
+  const ivyW = new THREE.InstancedMesh(leafGeo, leafMat, 1100); ivyW.castShadow = true;
+  for (let i = 0; i < 1100; i++) { const edgeX = (rng() < .5 ? -1 : 1) * (7 + rng() * 20), y = rng() * 22;
+    d.position.set(i % 4 === 0 ? (rng() - .5) * 50 : edgeX, i % 4 === 0 ? 10 + rng() * 14 : y, WZ + .08); d.lookAt(d.position.x, d.position.y + .3, WZ + 2); d.rotateZ((rng() - .5) * 2.4);
+    d.scale.setScalar(.7 + rng() * .9); d.updateMatrix(); ivyW.setMatrixAt(i, d.matrix); colr.setHex(hues[(rng() * 5) | 0]); ivyW.setColorAt(i, colr); }
+  J.add(ivyW);
+  graph.position.set(0, 1.2, WZ + .05); graph.scale.setScalar(.55); J.add(graph);   // the graph pieces move from the old ring scene to the wall
+
+  // ---- the camera path: keyframes along the walk (p = progress through the story section)
+  const K = [
+    [0.00, [0, 1.8, 13], [0, 1.8, -10]],
+    [0.26, [0, 1.8, -24], [0, 1.9, -48]],
+    [0.40, [0, 1.9, -35], [0, 2.1, -62]],
+    [0.58, [0, 2.6, -58], [0, 2.4, -100]],
+    [0.76, [0, 2.7, -88], [0, 3.6, WZ]],
+    [0.92, [.6, 4.4, WZ + 13], [.6, 4.6, WZ]],
+    [1.00, [.6, 4.4, WZ + 13], [.6, 4.6, WZ]],
+  ].map(([u, a, b]) => ({ u, a: new THREE.Vector3(...a), b: new THREE.Vector3(...b) }));
+  const camAt = (p, outPos, outLook) => {
+    let i = 0; while (i < K.length - 2 && p > K[i + 1].u) i++;
+    const A = K[i], B = K[i + 1], f = smooth(clamp((p - A.u) / (B.u - A.u)));
+    outPos.lerpVectors(A.a, B.a, f); outLook.lerpVectors(A.b, B.b, f);
+  };
+  const tmpP = new THREE.Vector3(), tmpL = new THREE.Vector3();
+  let caught = false;
+  return { sc: J, sun, update(p, t, dt) {
+    camAt(p, tmpP, tmpL);
+    camera.position.set(tmpP.x + px * .35, tmpP.y - py * .2 + Math.sin(t * 1.7) * .015, tmpP.z); look.copy(tmpL); camera.lookAt(look);
+    // the door swings open as you reach it
+    const open = smooth(clamp((p - .3) / .1)); doors.forEach(({ pivot, sd }) => { pivot.rotation.y = -sd * open * 1.65; });
+    // bridge segments rise out of the water just ahead of you
+    segs.forEach((g) => { const need = .38 + g.userData.i * .016, r = smooth(clamp((p - need) / .08)); g.position.y = .2 - (1 - r) * 4; g.rotation.x = (1 - r) * .25; g.visible = r > .01; });
+    // the fraud-ring graph on the wall: vines grow, the ring blooms (as before)
+    const grow = clamp((p - .66) / .14), bloomP = clamp((p - .8) / .15);
+    vines3.forEach((v) => { const g = v.lit ? grow : 1; v.mesh.geometry.setDrawRange(0, Math.floor(v.count * g / 6) * 6); v.grow = g; });
+    rLeafInfo.forEach((L, i) => { if (L.u <= vines3[L.vi].grow) rLeaves.setMatrixAt(i, L.m); else { dummy.scale.setScalar(0); dummy.position.set(0, -50, 0); dummy.updateMatrix(); rLeaves.setMatrixAt(i, dummy.matrix); } });
+    rLeaves.instanceMatrix.needsUpdate = true;
+    petalInfo.forEach((P, i) => { const o = clamp(bloomP * 1.3 - P.bi * .15), op = .25 + o * (P.layer ? .95 : 1.25);
+      dummy.position.copy(P.c).add(new THREE.Vector3(Math.cos(P.ang + Math.PI / 2) * .42, Math.sin(P.ang + Math.PI / 2) * .42, .15)); dummy.rotation.set(0, 0, P.ang); dummy.rotateX(-op); dummy.scale.setScalar(o * (P.layer ? .8 : 1.05)); dummy.updateMatrix(); petals.setMatrixAt(i, dummy.matrix); });
+    petals.instanceMatrix.needsUpdate = true;
+    ["f1", "f2", "f3"].forEach((k) => { lanterns[k].userData.core.scale.setScalar(.6 + bloomP * .8 + Math.sin(t * 3) * .05 * bloomP); });
+    lanterns.me.userData.core.scale.setScalar(1 + Math.sin(t * 2.2) * .06);
+    halo.material.opacity = bloomP * (.55 + .15 * Math.sin(t * 2)); halo.rotation.z = t * .05; sigil.rotation.y = t * .6; sring2.rotation.z = t * .9;
+    if (bloomP > .6 && !caught) { caught = true; burst(); } else if (bloomP < .3) caught = false;
+    if (sparkT >= 0) { sparkT += dt; for (let i = 0; i < SP; i++) { spVel[i * 3 + 1] -= 3 * dt; for (let k = 0; k < 3; k++) spPos[i * 3 + k] += spVel[i * 3 + k] * dt; }
+      spGeo.attributes.position.needsUpdate = true; sparks.material.opacity = Math.max(0, 1 - sparkT / 1.6); if (sparkT > 1.6) { sparks.visible = false; sparkT = -1; } }
+    wn.offset.set(t * .006, t * .004);
+    floaters.forEach((F, i) => { const lp = F.lead ? smooth(clamp((p - .22) / .2)) : 0;
+      F.g.position.set(F.home.x + Math.sin(t * .5 + F.ph) * .25, F.home.y + Math.sin(t * .9 + F.ph) * .14 + lp * .6, F.home.z - lp * (F.home.z + 46 + i * 1.5));
+      F.g.rotation.z = Math.sin(t * .8 + F.ph) * .12; F.core.scale.setScalar(.9 + .15 * Math.sin(t * 9 + F.ph) * Math.sin(t * 5.3 + i)); });
+    glowArches.forEach((g, i) => { const dz = (10 - i * GAP) - camera.position.z; g.material.opacity = dz < 0 ? clamp(.85 - Math.abs(dz + 9) * .07) * (.85 + .15 * Math.sin(t * 1.3 + i)) : 0; });
+    // the light pool follows the camera: the four nearest light sources get the four lights
+    const cp = camera.position;
+    anchors.sort((a, b) => a.pos.distanceToSquared(cp) - b.pos.distanceToSquared(cp));
+    pool.forEach((l, i) => { const A = anchors[i]; if (!A || (A.group && !A.group.visible)) { l.intensity = 0; return; }
+      l.position.copy(A.pos); l.color.setHex(A.color); l.intensity = A.intensity * (A.flicker ? .85 + .15 * Math.sin(t * 13 + i * 3) * Math.sin(t * 7.3 + i) : 1); });
+    anchors.forEach((A) => { if (A.flicker && A.mesh) A.mesh.scale.set(1, .9 + .2 * Math.abs(Math.sin(t * 11 + A.pos.z)), 1); });
+    const out = smooth(clamp((p - .3) / .14)); sun.intensity = .9 + .5 * out; J.environmentIntensity = .32 + .38 * out;
+    sun.position.set(cp.x - 8 + 16 * out, 14 + 18 * out, cp.z + 10); sun.target.position.set(cp.x, 0, cp.z - 22);   // moonlight from above and behind: it rakes the brick, never grazes the wall from behind
+  } };
+})();
+
 // ------------------------------------------------------------------ sizing, scroll, adaptive quality, loop
 const renderPass = composer.passes[0];
 function resize() {
@@ -634,7 +802,7 @@ function resize() {
 addEventListener("resize", resize); resize();
 const storyEl = document.getElementById("story");
 const chapters = [
-  { id: "ring", el: storyEl, sc: ringScene },
+  { id: "journey", el: storyEl, sc: journey.sc, update: journey.update },
   { id: "cart", el: document.getElementById("mandate"), sc: cart.sc, update: cart.update },
   { id: "corridor", el: document.getElementById("pipeline"), sc: corridor.sc, update: corridor.update },
   { id: "lake", el: document.getElementById("redteam"), sc: lake.sc, update: lake.update },
@@ -651,7 +819,7 @@ const onScroll = () => {
   if (!best) { best = chapters[0]; bestO = 1; }            // between the order card and the wall: stay with the lantern light
   chapters.forEach((c) => { if (c !== best && c.sc === best.sc && c.el) { const s2 = c.el.getBoundingClientRect();
     const o2 = s2.top < innerHeight * .85 && s2.bottom > innerHeight * .15 ? 1 : 0; bestO = Math.max(bestO, o2); } });
-  if (best.id === "ring" && r.bottom > 0) bestO = Math.max(bestO, clamp((progress - .62) / .15));  // the window's glow dissolves into the lantern's
+  if (best.id === "journey" && r.bottom > 0) bestO = Math.max(bestO, clamp((progress - .62) / .15));  // the window's glow dissolves into the lantern's
   mode = best.id; active = best; chapOpacity = bestO; ringP = chapters[0].p || 0;
 };
 addEventListener("scroll", onScroll, { passive: true }); onScroll();
@@ -673,6 +841,7 @@ const clock = new THREE.Clock();
 let running = true;
 document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) { clock.getDelta(); requestAnimationFrame(loop); } });
 document.documentElement.classList.add("has-3d");
+requestAnimationFrame(() => window.ScrollTrigger && window.ScrollTrigger.refresh());
 const atmos = [fireflies, ...fogBanks];
 let atmosIn = scene, caughtFired = false;
 let lastMode = "", blendT = 1; const prevPos = new THREE.Vector3(), prevQuat = new THREE.Quaternion(), lastPos = new THREE.Vector3(), lastQuat = new THREE.Quaternion();

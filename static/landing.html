@@ -10,7 +10,7 @@
 <script>/* the scroll story is for wide screens that allow motion; everything else gets the plain, fully visible page */
 if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");</script>
 <link rel="stylesheet" href="/static/theme.css?v=3">
-<link rel="stylesheet" href="/static/landing.css?v=14">
+<link rel="stylesheet" href="/static/landing.css?v=15">
 </head>
 <body>
 <div class="glows" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
@@ -273,9 +273,9 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
 <script src="/static/vendor/lenis.min.js"></script>
 <script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.min.js","postprocessing":"/static/vendor/postprocessing/index.js"}}</script>
 <script type="module">/* the 3D hero: wide screens with motion only; anything else (or any failure) keeps the 2D hero */
-if (document.documentElement.classList.contains("motion")) import("/static/js/scene3d.js?v=35").catch((e) => console.info("3D hero off:", e.message));</script>
+if (document.documentElement.classList.contains("motion")) import("/static/js/scene3d.js?v=40").catch((e) => console.info("3D hero off:", e.message));</script>
 <script src="/static/js/sound.js?v=1"></script>
 <script src="/static/smoke.js?v=4"></script>
-<script src="/static/landing.js?v=5"></script>
+<script src="/static/landing.js?v=6"></script>
 </body>
 </html>
