@@ -62,3 +62,5 @@ $("#btn-ev-top").onclick = async () => {
   if (f.length) { $("#ev-account").value = f[0].id; openEvidence(f[0].id); }
 };
 document.querySelectorAll('#tabs button[data-tab="investigator"]').forEach((b) => b.addEventListener("click", loadComplianceLedger));
+// opening the Investigator lands on the most interesting case: the riskiest active account's evidence, ready for a decision
+document.querySelectorAll('#tabs button[data-tab="investigator"]').forEach((b) => b.addEventListener("click", () => { if (!$("#ev-out").textContent.trim()) $("#btn-ev-top").click(); }));

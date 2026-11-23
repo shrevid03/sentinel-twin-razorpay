@@ -63,7 +63,8 @@ async function runDrill() {
     $("#d-kpis").innerHTML = [
       kpi(`Attack ₹ that got through<small>same seeded attacks</small>`, arrow(money(s.breach_evaded_before_inr), after(s.breach_evaded_after_inr, money)), "ok"),
       kpi(`Unseen attacks that got through<small>fresh seeds, never tuned on</small>`, arrow(money(s.fresh_evaded_before_inr), after(s.fresh_evaded_after_inr, money)), "ok"),
-      kpi(`Intercept rate<small>blocked or sent to review · replayed traffic plus attacks</small>`, arrow(pct(s.catch_rate_before), after(s.catch_rate_after, pct)), "ok"),
+      kpi(`Attack ₹ intercepted<small>the seeded attacks only · blocked or sent to review</small>`, arrow(pct(1 - s.breach_evaded_before_inr / d.attempted_inr), after(1 - s.breach_evaded_after_inr / d.attempted_inr, pct)), "ok"),
+      kpi(`All fraud ₹ intercepted<small>replayed everyday traffic plus the attacks</small>`, arrow(pct(s.catch_rate_before), after(s.catch_rate_after, pct)), "ok"),
       kpi(`Good customers sent to review<small>of ${s.legit_orders} good orders · blocked ${money(s.legit_blocked_before_inr)} → ${money(s.legit_blocked_after_inr)}</small>`,
         arrow(s.legit_reviewed_before, s.legit_reviewed_after), "warn"),
       kpi(`False-positive cost<small>${money(d.review_cost_inr)} per review plus blocked value</small>`, arrow(money(s.fp_cost_before_inr), after(s.fp_cost_after_inr, money)), "warn"),
@@ -164,7 +165,7 @@ async function loadHero() {
       ${step(1, "Attack", `${d.attacks} synthetic attacks, ${money(d.attempted_inr)} attempted; ${money(s.breach_evaded_before_inr)} got through`)}
       ${step(2, "Analyze", esc(d.search ? d.search.charAt(0).toUpperCase() + d.search.slice(1) : "Policies scored on fraud stopped minus false-positive cost"))}
       ${step(3, "Harden", d.chosen ? "New policy: " + esc(changed(d.after_policy, d.before_policy)) : "Kept today's policy: nothing beat it once false positives were priced in")}
-      ${step(4, "Verify", d.chosen ? `Same attacks replayed: ${money(s.breach_evaded_before_inr)} → ${money(s.breach_evaded_after_inr)} got through; intercept rate ${pct(s.catch_rate_before)} → ${pct(s.catch_rate_after)}` : "Nothing to replay")}
+      ${step(4, "Verify", d.chosen ? `Same attacks replayed: ${money(s.breach_evaded_before_inr)} → ${money(s.breach_evaded_after_inr)} got through; attack ₹ intercepted ${pct(1 - s.breach_evaded_before_inr / d.attempted_inr)} → ${pct(1 - s.breach_evaded_after_inr / d.attempted_inr)}` : "Nothing to replay")}
     </div>`;
   $("#loop-card").querySelector(".loop").style.marginBottom = "0";
   $("#loop-open").onclick = () => showTab("drill");

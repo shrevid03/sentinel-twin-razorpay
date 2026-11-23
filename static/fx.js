@@ -136,7 +136,8 @@
     const el = document.getElementById("gauge"); if (!el) return;
     if (!d) { el.innerHTML = `<div class="gauge-empty"><p class="muted">No drill yet. Run one to score how much attack traffic the hardened policy intercepts.</p><button id="gauge-run">Run defense drill</button></div>`;
       document.getElementById("gauge-run").onclick = () => { showTab("drill"); runDrill(); }; return; }
-    const s = d.summary || {}, v = d.chosen ? s.catch_rate_after : s.catch_rate_before, before = s.catch_rate_before;
+    const s = d.summary || {}, att = d.attempted_inr || 0, rate = (ev) => (att ? 1 - (ev || 0) / att : null);  // share of the seeded attack ₹ intercepted (the landing's 86.7% → 93.9%)
+    const before = rate(s.breach_evaded_before_inr), v = d.chosen ? rate(s.breach_evaded_after_inr) : before;
     const pctv = Math.max(0, Math.min(1, v || 0)), ang = -90 + 180 * pctv;
     el.innerHTML = `<svg class="gaugesvg" viewBox="0 0 220 130" role="img" aria-label="Defense score ${(pctv * 100).toFixed(1)} percent">
       <defs><linearGradient id="gg" x1="0" x2="1"><stop offset="0" stop-color="#FF5C5C"/><stop offset=".55" stop-color="#8FD9BF"/><stop offset="1" stop-color="#5FBF9F"/></linearGradient></defs>

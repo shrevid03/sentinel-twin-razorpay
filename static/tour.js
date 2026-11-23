@@ -1,4 +1,4 @@
-/* "Try it in 60 seconds": a calm guided path for reviewers. Each step does one real thing by pressing the app's own
+/* "Try it in about 90 seconds": a calm guided path for reviewers. Each step does one real thing by pressing the app's own
    buttons (the same requests a person would make), highlights where the answer appears, and explains it in a line.
    Shown once on the first visit (or with ?tour=1); the "Guided tour" button reopens it. */
 (() => {
@@ -6,21 +6,30 @@
   const $ = (s) => document.querySelector(s);
   const wait = (test, ms = 45000) => new Promise((ok, no) => { const t0 = Date.now(); const tick = () => { const v = test(); if (v) return ok(v); if (Date.now() - t0 > ms) return no(new Error("timeout")); setTimeout(tick, 250); }; tick(); });
   const go = (tab) => (window.showTab || (() => {}))(tab);
+  const pctOf = (d, ev) => (d && d.attempted_inr ? (100 * (1 - ev / d.attempted_inr)).toFixed(1) + "%" : "–");
   const STEPS = [
-    { title: "One suspicious order, start to finish", tab: "drill", focus: "#scn-card", act: "Run it",
-      text: "A new, KYC-verified account checks out a ₹9,999 keyboard. Everything about it looks normal. Press Run it: the twin scores it three ways.",
+    { title: "The shopping agent buys something", tab: "concierge", focus: "#tab-concierge .chat, #tab-concierge .card", act: "Ask it",
+      text: "Ask the agent for a gift. It picks a product inside your spending limits and opens a checkout. Without Razorpay keys the checkout is simulated (demo gateway, no real money).",
+      run: async () => { const c = [...document.querySelectorAll("#chips button")][0]; c?.click(); await wait(() => $("#pay-slot .paybox"), 40000); },
+      after: "Mandate checked in code, risk checked, checkout ready. Press Pay to finish it, or move on: the next order is the interesting one." },
+    { title: "A clean-looking account that belongs to a ring", tab: "drill", focus: "#scn-card", act: "Run it",
+      text: "A new, KYC-verified account checks out a ₹9,999 keyboard. Rules see nothing wrong. Press Run it: the twin scores it three ways.",
       run: async () => { $("#btn-scn").click(); await wait(() => $("#scn-out .scn-grid")); },
-      after: "Rules alone approve it. Once the graph sees the phone number it shares with a known fraud ring, it goes to review instead." },
-    { title: "Stopped before any money is captured", tab: "drill", focus: () => document.querySelectorAll("#scn-out .scn-grid")[1]?.children[1], act: null,
-      text: "A second ring account pays from a UPI ID the ring used before. Razorpay authorizes the payment, but the twin checks again before capture and holds it: not captured, and any bank hold is reversed by Razorpay." },
+      after: "Rules alone approve it (0.09). The graph links its phone number to three known-fraud accounts, so the combined engine sends it to review (0.63). A second ring account that slips past checkout is held again before capture (0.61): no money captured." },
+    { title: "The evidence, and a person decides", tab: "investigator", focus: "#ev-card", act: "Open the riskiest case",
+      run: async () => { $("#btn-ev-top").click(); await wait(() => $("#ev-out h4"), 20000); },
+      after: "Each claim cites records in the graph; the copilot only explains them. The model recommends, and a named person confirms, monitors or clears the case, with a reason.",
+      text: "The Investigator opens the riskiest case: every claim points at records in the graph, the copilot only explains them, and a named person confirms, monitors or clears it, with a reason." },
     { title: "Replay the decision", tab: "drill", focus: () => $("#scn-out [data-replay]")?.closest(".scn-col"), act: "Replay",
-      text: "Every decision is stored with the evidence it was allowed to see. Press Replay: the twin rebuilds the graph as it was at decision time and re-runs the stored model.",
+      text: "Each decision is stored with the evidence it was allowed to see. Press Replay: the twin rebuilds the graph as it was at decision time and re-runs the stored model.",
       run: async () => { const b = $("#scn-out [data-replay]"); b?.click(); await wait(() => { const o = $("#scn-out .replay-out"); return o && o.textContent.trim().length > 10; }, 20000); },
-      after: "Same score, same decision. Anything that arrived later is listed and ignored." },
-    { title: "Let a synthetic attacker try", tab: "redteam", focus: "#tab-redteam .card", act: "Launch it (about 20 s)", optional: true,
-      text: "An attacker agent probes the twin, learns what got caught and changes tactics. All traffic is synthetic. This step is optional.",
-      run: async () => { const b = $("#btn-campaign"); b?.click(); await wait(() => b?.disabled, 3000).catch(() => {}); await wait(() => !b?.disabled, 150000); },
-      after: "That's the tour. The sidebar has the rest: the concierge you can chat with, the investigator, the defense drill, the what-if simulator and the audit ledger." },
+      after: "Same score, same decision. Evidence that arrived later is listed and ignored." },
+    { title: "Attack, harden, verify", tab: "drill", focus: "#tab-drill .card", act: "Run the drill (about 40 s)", optional: true,
+      text: "The red team attacks a frozen copy of the twin, the simulator searches 216 policies (pricing false positives), and the same attacks are replayed under the winner.",
+      run: async () => { const b = $("#btn-drill"); b?.click(); await wait(() => b?.disabled, 3000).catch(() => {}); await wait(() => !b?.disabled, 150000);
+        try { const d = await (await fetch("/api/drill/latest")).json(); const s = d.summary || {};
+          STEPS[4].after = `Attack ₹ intercepted: ${pctOf(d, s.breach_evaded_before_inr)} before, ${pctOf(d, s.breach_evaded_after_inr)} after hardening, on the same seeded attacks. That's the tour: the sidebar has the rest.`; } catch {} },
+      after: "Done. That's the tour: the sidebar has the rest." },
   ];
   let i = 0, box, focused = null, busy = false;
   const clearFocus = () => { focused?.classList.remove("tour-focus"); focused = null; };

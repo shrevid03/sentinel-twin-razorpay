@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/theme.css?v=3">
 <link rel="stylesheet" href="/static/vendor/ag-grid.css">
 <link rel="stylesheet" href="/static/vendor/ag-theme-quartz.css">
-<link rel="stylesheet" href="/static/style.css?v=36">
+<link rel="stylesheet" href="/static/style.css?v=37">
 </head>
 <body>
 <div id="page-smoke" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -19,7 +19,7 @@
     <path d="M18 2.5 5 7.4v9.2C5 25 10.6 31.3 18 33.5 25.4 31.3 31 25 31 16.6V7.4Z" fill="url(#lg-sh)"/>
     <g stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"><path d="M12.5 13.5 18 20l5.5-7.5M18 20v5.5M12.5 13.5h11"/></g>
     <g fill="#8FD9BF"><circle cx="12.5" cy="13.5" r="2.4"/><circle cx="23.5" cy="12.5" r="2.4"/><circle cx="18" cy="25.5" r="2"/></g><circle cx="18" cy="20" r="2.8" fill="#12302A"/></svg><div><b>Sentinel Twin</b><small>Risk layer for agent payments</small></div></a>
-  <button id="btn-tour" class="ghost" type="button" title="A one-minute walk through the key ideas, with real clicks">✦ Guided tour · 60 s</button>
+  <button id="btn-tour" class="ghost" type="button" title="A one-minute walk through the key ideas, with real clicks">✦ Guided tour · 90 s</button>
   <nav class="tabs" id="tabs">
     <div class="navgroup">Shop</div>
     <button data-tab="concierge" title="Chat with the shopping agent; it pays with Razorpay inside your limits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg><span>Concierge</span></button>
@@ -60,7 +60,7 @@
       <span class="eyebrow">Agentic commerce, defended</span>
       <h1>Safe AI checkout for every merchant</h1>
       <p class="sub">A digital twin, a graph neural network and four AI agents that catch fraud before money moves.</p>
-      <div class="row"><button id="hero-drill">Run defense drill</button><button class="ghost" id="hero-shop">Try the shopping agent</button></div>
+      <div class="row"><button id="hero-shop">Try the shopping agent</button><button class="ghost" id="hero-drill">Run defense drill</button></div>
       <div id="hero-proof"></div>
     </div>
     <svg class="hero-art" viewBox="0 0 420 320" role="img" aria-label="Illustration: a phone showing a checkout card, protected by a shield linked to a network of nodes">
@@ -162,7 +162,7 @@
     <small class="muted">The drill above hardens the decision policy. This attacks the detector itself: rings drop 70% of their internal links and add 4 cover links each to honest accounts. Then GraphSAGE is retrained on perturbed graphs and tested on a fresh perturbation. Held-out rings, 3 seeds, on a copy of the twin.</small></div>
     <button id="btn-mrt">Attack and harden the model</button></div><div id="mrt-out"></div></div>
   <div class="card" id="scn-card"><div class="cardhead"><div><h3>New account joins a fraud ring <span class="tag synth">Synthetic scenario</span></h3>
-    <small class="muted">A 45-day-old, KYC-verified account with normal history verified a phone number at signup that a known fraud ring also uses. Then the shopping agent checks out a ₹9,999 keyboard. A second account shows the pre-capture check: it pays from a ring's UPI ID. Runs on a copy of the twin; nothing live changes.</small></div>
+    <small class="muted">A 45-day-old, KYC-verified account with normal history verified a phone number at signup that a known fraud ring also uses. Then the shopping agent checks out a ₹9,999 keyboard. A second account shows the pre-capture check: it pays from a ring's UPI ID. Runs on a copy of the twin as seeded, so the numbers are reproducible; nothing live changes.</small></div>
     <button id="btn-scn">Run scenario</button></div>
     <div id="scn-out"></div></div>
 </section>
@@ -189,7 +189,8 @@
     </div>
     <div class="side">
       <div class="card"><h3>Spending mandate <small class="muted">enforced in code, not by the model</small></h3>
-        <p class="muted small">A UPI Reserve Pay-style consent: approve a limit once, the agent spends inside it. Simulated on standard Razorpay test checkout.</p>
+        <p class="muted small">A UPI Reserve Pay-style consent: approve a limit once, the agent spends inside it. In demo mode the checkout is simulated; with Razorpay test keys it is the standard Razorpay test Checkout.</p>
+        <p class="note-line">Risk approval never overrides the buyer's spending limit: the mandate is checked first.</p>
         <div class="form">
           <label>Per-order limit ₹<input type="number" id="m-order" step="100"></label>
           <label>Monthly budget ₹<input type="number" id="m-budget" step="100"></label>
@@ -210,12 +211,13 @@
 <circle cx="50" cy="50" r="7" fill="#FF5C5C"/><circle cx="85" cy="30" r="7" fill="#FF5C5C"/><circle cx="110" cy="55" r="6" fill="#5FBF9F"/>
 <circle cx="80" cy="42" r="26" fill="#12302A" fill-opacity=".55" stroke="#40826D" stroke-width="5"/><path d="M99 61l22 22" stroke="#40826D" stroke-width="9" stroke-linecap="round"/></svg></div>
   <div class="grid2">
-    <div class="card"><div class="cardhead"><h3>Accounts ranked by GAT risk</h3>
-      <button id="btn-investigate-top">Investigate riskiest</button></div>
+    <div class="card"><div class="cardhead"><h3>Accounts ranked by GAT risk <small class="muted">highest first</small></h3>
+      <button class="ghost" id="btn-investigate-top">Run the investigator agent</button></div>
+      <p class="small muted" style="margin:-4px 0 8px"><a href="#" id="acc-low">Show low-risk accounts</a></p>
       <div id="acc-grid" class="ag-theme-quartz-dark gridbox"></div></div>
     <div class="card" id="ev-card"><div class="cardhead"><div><h3>Evidence case <span class="tag">model → evidence → copilot → human</span></h3>
       <small class="muted">The GAT triages; deterministic graph checks gather evidence with record pointers; the copilot only explains that evidence; a person decides, with a reason (RBI rules in <code>compliance_rules.yaml</code>).</small></div></div>
-      <div class="row"><input id="ev-account" placeholder="account, e.g. A-212" style="width:160px"><button id="btn-ev-open">Open evidence case</button><button class="ghost" id="btn-ev-top">Riskiest account</button></div>
+      <div class="row"><input id="ev-account" placeholder="account, e.g. A-212" style="width:160px"><button class="ghost" id="btn-ev-open">Open evidence case</button><button id="btn-ev-top">Review the riskiest case</button></div>
       <div id="ev-out"></div><p class="muted small" id="ev-ledger"></p></div>
     <div class="side">
       <div class="card"><div class="cardhead"><h3>Reviewer twin <span class="tag">shadow mode</span></h3></div>
@@ -269,6 +271,7 @@
 <rect x="98" y="52" width="10" height="28" rx="3" fill="#40826D"/><rect x="112" y="40" width="10" height="40" rx="3" fill="#8FD9BF"/><rect x="128" y="58" width="10" height="22" rx="3" fill="#40826D"/><rect x="142" y="26" width="10" height="54" rx="3" fill="#8FD9BF"/></svg></div>
   <div class="grid2">
     <div class="card"><h3>Policy under test</h3>
+      <p class="note-line">This is the merchant's risk policy. Risk approval never overrides the buyer's spending limit: the mandate (e.g. ₹12,500 per order) is checked first.</p>
       <div class="form" id="policy-form"></div>
       <label class="toggle"><input type="checkbox" id="wi-rt" checked> Include the latest red-team attack traffic</label>
       <div class="row"><button id="btn-whatif">Run simulation on the twin</button><button class="ghost" id="btn-apply">Apply to live policy</button></div>
@@ -288,7 +291,7 @@
 <rect x="22" y="68" width="30" height="8" rx="4" fill="#5FBF9F"/><circle cx="66" cy="72" r="8" fill="#12302A"/><path d="M62 72l3 3 5-6" fill="none" stroke="#5FBF9F" stroke-width="2.5"/></g></svg></div>
   <div class="card"><div class="cardhead"><h3>Orders mirrored in the twin</h3><input id="ord-filter" placeholder="Filter…"></div>
     <div id="ord-grid" class="ag-theme-quartz-dark gridbox tall"></div></div>
-  <div class="grid2">
+  <div>
     <div class="card"><h3>Razorpay checkouts created by the agent</h3><div id="co-grid" class="ag-theme-quartz-dark gridbox small"></div></div>
     <div class="card"><h3>Razorpay API calls</h3><div id="api-grid" class="ag-theme-quartz-dark gridbox small"></div></div>
   </div>
@@ -325,15 +328,15 @@
 <script src="/static/vendor/chart.umd.min.js"></script>
 <script src="/static/vendor/marked.min.js"></script>
 <script src="/static/vendor/purify.min.js"></script>
-<script src="/static/app.js?v=39"></script>
-<script src="/static/drill.js?v=37"></script>
+<script src="/static/app.js?v=48"></script>
+<script src="/static/drill.js?v=38"></script>
 <script src="/static/receipts.js?v=36"></script>
 <script src="/static/review.js?v=37"></script>
-<script src="/static/evidence.js?v=13"></script>
-<script src="/static/fx.js?v=25"></script>
+<script src="/static/evidence.js?v=14"></script>
+<script src="/static/fx.js?v=26"></script>
 <script src="/static/vendor/gsap.min.js"></script>
 <script src="/static/js/sound.js?v=1"></script>
-<script src="/static/ui.js?v=3"></script>
-<script src="/static/tour.js?v=2"></script>
+<script src="/static/ui.js?v=6"></script>
+<script src="/static/tour.js?v=4"></script>
 </body>
 </html>

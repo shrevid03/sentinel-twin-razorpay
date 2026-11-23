@@ -53,8 +53,8 @@ def _new_account(t, name, prov):
     return acc
 
 
-def new_account_joins_ring(twin, cart=None):
-    t = twin.fork(durable=True)  # its decisions are persisted (child epoch of the live event log)
+def new_account_joins_ring(twin, cart=None, base=None):
+    t = (base or twin).fork(durable=True)  # its decisions are persisted (child epoch of the live event log)
     forks = twin.__dict__.setdefault("replay_forks", {})
     n = twin.audit.next("scenario") if twin.audit is not None else len(forks) + 1
     t.decision_prefix = f"SCN{n}-"

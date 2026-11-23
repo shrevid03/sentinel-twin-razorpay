@@ -495,3 +495,7 @@ button { transition: background .18s, border-color .18s, box-shadow .2s, color .
 .tour-focus { outline: 2px solid rgba(95,191,159,.75); outline-offset: 4px; box-shadow: 0 0 0 8px rgba(95,191,159,.10), 0 0 40px rgba(95,191,159,.18) !important; border-radius: 16px; transition: outline-color .2s, box-shadow .2s; }
 #btn-tour { width: 100%; margin: 4px 0 10px; border-color: rgba(95,191,159,.45); color: var(--moon); }
 @media (prefers-reduced-motion: reduce) { .tour { transition: none; } }
+
+/* readability: secondary text a step brighter, and the review notes that sit next to limits */
+.muted { color: #A3C2B6; }
+.note-line { margin: 6px 0 10px; padding: 8px 12px; border-radius: 10px; background: rgba(245,184,75,.08); border: 1px solid rgba(245,184,75,.28); color: #F2DDB0; font-size: 13.5px; }

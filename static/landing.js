@@ -293,7 +293,7 @@
   rt.to("#waves circle", { attr: { cx: 470 }, opacity: (i) => (i % 7 === 0 ? 1 : 0), stagger: .02, duration: .25, ease: "power1.in" }, .05);
   rt.to("#ripples ellipse", { attr: { rx: 120, ry: 14 }, opacity: 0, stagger: .06, duration: .4, ease: "power2.out" }, .2);
   rt.to("#attack .f", { scaleX: 1, stagger: .15, duration: .3, ease: "power2.out" }, .35);
-  vals.forEach((v, i) => rt.to(v.cur, { v: v.to, duration: .3, onUpdate: () => { v.el.textContent = v.cur.v.toFixed(1) + "%"; } }, .35 + i * .15));
+  // the percentages are always shown at their final value (only the bars grow), so no half-counted number ever disagrees with the text
   rt.to("#attack .shield", { attr: { "stroke-width": 4.5 }, duration: .1, yoyo: true, repeat: 3 }, .3);
 
   // 6. replay: climbing the stairs scrubs the timeline (the slider still works by hand)

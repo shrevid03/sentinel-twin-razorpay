@@ -16,6 +16,7 @@
   window.showTab = showTab = (t) => {
     _show(t);
     setNav(false);
+    setTimeout(() => { try { [[accGrid, "#acc-grid"], [coGrid, "#co-grid"], [apiGrid, "#api-grid"], [rtGrid, "#rt-grid"]].forEach(([g, sel]) => { if ($(sel)?.offsetWidth > 0) g?.sizeColumnsToFit?.({ defaultMinWidth: 60 }); }); } catch (e) { /* grids not built yet */ } }, 80);  // tables fit their card once visible
     window.STSound?.tick();
     const title = $("#mobile-title"); if (title) title.textContent = LABELS[t] || "Sentinel Twin";
     if (!reduce && window.gsap) {  // cards fade and rise a little, once, on a tab switch

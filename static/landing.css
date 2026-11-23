@@ -331,3 +331,5 @@ html.has-3d #replay .step { min-height: 130vh; }
 @media (max-width: 760px) { .top .skip, .lite-btn { display: none; } }
 .lite-note { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 80; padding: 10px 16px; border-radius: 12px; background: rgba(8,22,18,.95);
   border: 1px solid var(--line-strong); color: var(--text); font-size: 14px; }
+
+#cartPanel .cart-note { margin: -4px 0 10px; color: #BFD3C8; font-size: 13px; }

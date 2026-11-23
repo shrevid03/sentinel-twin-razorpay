@@ -51,6 +51,9 @@ from .store import Store  # noqa: E402
 store = Store(_db_url())
 team = Team(twin, razorpay, store=store)
 team.reconcile()  # startup: resolve captures that were in flight when the last process stopped
+# The fraud-ring scenario runs on a copy of the twin as it was seeded and trained, so its numbers are reproducible
+# (the live twin keeps growing under simulated traffic and is retrained as it grows).
+SCENARIO_BASE = {"t": twin.fork(durable=True)}
 
 
 def require_admin(x_admin_token: str | None = Header(default=None)):
@@ -98,6 +101,12 @@ def _traffic():
                 twin.tick(auto["n"], fraud_rate=0.12)
             except Exception as e:  # keep the simulator alive
                 print("tick error", e)
+            if twin.needs_retrain():  # keep the GAT current as the twin grows (about every 1,000 live orders)
+                try:
+                    m = twin.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
+                    twin._event("model", f"GAT retrained on the grown twin ({m['graph']['nodes']} nodes): test AUC {m['test_auc']}", level="ok")
+                except Exception as e:  # noqa: BLE001 - keep the loop alive
+                    print("retrain error", type(e).__name__)
 
 
 threading.Thread(target=_traffic, daemon=True).start()
@@ -321,7 +330,7 @@ def drill_latest():
 @app.post("/api/scenario/new-account", dependencies=rate("heavy", 8))
 def scenario_new_account():
     """A clean new account shares a UPI ID with a known ring, then the agent checks out (on a fork; nothing live)."""
-    return new_account_joins_ring(twin)
+    return new_account_joins_ring(twin, base=SCENARIO_BASE["t"])
 
 
 @app.get("/api/guard")
@@ -378,6 +387,7 @@ def reset():
         razorpay.calls.clear()
         store.reset()
         twin, team = t, Team(t, razorpay, store=store, load_receipts=False)  # audit rows stay in the database
+        SCENARIO_BASE["t"] = twin.fork(durable=True)
         LAST_DRILL.clear()
         twin._event("system", "Demo reset: fresh twin, default policy, empty queues", level="info")
     return {"ok": True, "seed": int(os.getenv("TWIN_SEED", "3")), "policy": twin.policy}

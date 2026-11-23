@@ -1,3 +1,6 @@
+/* every table fits its card: columns share the width (with a sensible minimum) and long headers wrap instead of clipping */
+if (window.agGrid) { const _cg = agGrid.createGrid; agGrid.createGrid = (el, o) => _cg(el, { ...o,
+  defaultColDef: { wrapHeaderText: true, autoHeaderHeight: true, ...(o.defaultColDef || {}) } }); }
 /* Sentinel Twin front end: plain JS, no build step. */
 const $ = (s) => document.querySelector(s);
 const adminToken = () => { try { return sessionStorage.getItem("adminToken") || ""; } catch { return ""; } };
@@ -495,23 +498,25 @@ $("#m-save").onclick = async () => {
 };
 
 /* ---------------- investigator ---------------- */
-let accGrid;
+let accGrid, accShowLow = false;  // low-risk accounts are folded away so the list opens on the cases worth a look
+document.addEventListener("click", (e) => { if (e.target.id !== "acc-low") return; e.preventDefault(); accShowLow = !accShowLow; accGrid?.onFilterChanged(); loadAccounts(); });
 async function loadAccounts() {
   const rows = (await api("/api/accounts")).sort((a, b) => b.risk - a.risk);
   if (!accGrid) {
     accGrid = agGrid.createGrid($("#acc-grid"), {
       rowData: rows, pagination: true, paginationPageSize: 50,
       columnDefs: [
-        { field: "id", width: 90, pinned: "left" }, { field: "name" },
-        { field: "risk", width: 110, sort: "desc", valueFormatter: (p) => p.value.toFixed(2), cellStyle: (p) => ({ color: p.value > 0.5 ? "#FF5C5C" : "#5FBF9F", fontWeight: 600 }) },
-        { field: "status", width: 95 }, { field: "age_days", headerName: "Age (d)", width: 95 }, { field: "country", width: 90 },
-        { field: "email_domain", headerName: "Email" }, { field: "devices", width: 90 }, { field: "ips", width: 75 },
-        { field: "orders", width: 85 }, { field: "spend", valueFormatter: (p) => money(p.value), width: 100 },
-        { headerName: "", width: 120, cellRenderer: (p) => `<button class="ghost" onclick="investigate('${p.data.id}')">Investigate</button>` },
+        { field: "id", width: 74, minWidth: 74, pinned: "left" }, { field: "name", minWidth: 110 },
+        { field: "risk", width: 76, minWidth: 76, filter: false, sort: "desc", valueFormatter: (p) => p.value.toFixed(2), cellStyle: (p) => ({ color: p.value > 0.5 ? "#FF5C5C" : "#5FBF9F", fontWeight: 600 }) },
+        { field: "status", width: 78, minWidth: 78, filter: false }, { field: "age_days", headerName: "Age", headerTooltip: "Account age in days", width: 66, minWidth: 66, filter: false }, { field: "country", headerName: "Ctry", width: 64, minWidth: 64, filter: false },
+        { headerName: "", width: 84, minWidth: 84, filter: false, sortable: false, cellRenderer: (p) => `<button class="ghost" title="Run the investigator agent on ${p.data.id}" onclick="investigate('${p.data.id}')">Open</button>` },
       ],
       defaultColDef: { sortable: true, filter: true, resizable: true },
+      isExternalFilterPresent: () => !accShowLow, doesExternalFilterPass: (n) => n.data.risk >= 0.05,
     });
   } else accGrid.setGridOption("rowData", rows);
+  const low = rows.filter((r) => r.risk < 0.05).length, t = $("#acc-low");
+  if (t) t.textContent = accShowLow ? `Hide low-risk accounts (${low})` : `Show low-risk accounts (${low})`;
   renderCases();
 }
 async function investigate(id) {
@@ -617,7 +622,7 @@ $("#btn-apply").onclick = async () => { await api("/api/policy", getPolicy()); $
 let ordGrid, coGrid, apiGrid;
 async function loadLedger() {
   const [orders, cos, calls] = await Promise.all([api("/api/orders"), api("/api/checkouts"), api("/api/razorpay/calls")]);
-  const dec = (p) => ({ color: p.value === "block" ? "#FF5C5C" : p.value === "review" ? "#B06000" : "#5FBF9F", fontWeight: 600 });
+  const dec = (p) => ({ color: p.value === "block" ? "#FF5C5C" : p.value === "review" ? "#F5B84B" : "#5FBF9F", fontWeight: 600 });
   if (!ordGrid) ordGrid = agGrid.createGrid($("#ord-grid"), { rowData: orders, pagination: true, paginationPageSize: 100,
     columnDefs: [{ field: "id", width: 120, pinned: "left" }, { field: "buyer" }, { field: "account", width: 90 }, { field: "merchant_name", headerName: "Merchant" },
       { field: "amount", width: 100, valueFormatter: (p) => money(p.value) }, { field: "decision", width: 105, cellStyle: dec },
@@ -629,7 +634,7 @@ async function loadLedger() {
     data: String(c.pay_order_id).startsWith("order_DEMO") ? "Demo mode" : "Real Razorpay test mode" }));
   if (!coGrid) coGrid = agGrid.createGrid($("#co-grid"), { rowData: coRows, columnDefs: [{ field: "pay_order_id" },
     { field: "receipt_id", headerName: "Receipt", width: 130, cellRenderer: (p) => p.value ? `<a href="#" class="rcpt-link" data-rcpt="${esc(p.value)}">${esc(p.value)}</a>` : "" },
-    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#5FBF9F" : "#B06000", fontWeight: 600 }) }, { field: "total", headerName: "Total (₹)", width: 110, valueFormatter: (p) => money(p.value) }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
+    { field: "data", headerName: "Source", width: 150, cellStyle: (p) => ({ color: p.value === "Real Razorpay test mode" ? "#5FBF9F" : "#F5B84B", fontWeight: 600 }) }, { field: "total", headerName: "Total (₹)", width: 110, valueFormatter: (p) => money(p.value) }, { field: "charge", headerName: "Charged", width: 120 }, { field: "payment_id", headerName: "Payment", width: 170 }, { field: "status", width: 120 }, { field: "risk", width: 80 }, { field: "items", flex: 1 }] });
   else coGrid.setGridOption("rowData", coRows);
   if (!apiGrid) apiGrid = agGrid.createGrid($("#api-grid"), { rowData: calls, columnDefs: [{ field: "t", width: 90 }, { field: "method", width: 85 }, { field: "path", flex: 1 }, { field: "status", width: 85 }, { field: "mode", width: 95 }] });
   else apiGrid.setGridOption("rowData", calls);

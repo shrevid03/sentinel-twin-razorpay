@@ -586,6 +586,7 @@ class Twin:
     # --------------------------------------------------------------- model
     def train(self, epochs=150):
         with self.lock:
+            self.trained_on_orders = len(self.orders)  # live traffic drifts the features; see needs_retrain()
             nodes, idx, X, mask = self.build_graph()
             accs = [n for n in nodes if n.startswith("A-")]
             y = np.zeros(len(nodes), dtype=int)
@@ -674,6 +675,12 @@ class Twin:
                     o["risk"] = round(self._probs.get(o["account"], 0) * 0.95, 3)
                     o["decision"] = self.decide(o["risk"], o["amount"], False)
             return self.metrics
+
+    def needs_retrain(self, every=1000):
+        """True once enough live orders have arrived since the last training that the account features have drifted
+        (order counts, averages and velocity keep growing under simulated traffic, and a stale model then scores
+        every account near zero)."""
+        return len(self.orders) - getattr(self, "trained_on_orders", 0) >= every
 
     def refresh(self):
         with self.lock:
