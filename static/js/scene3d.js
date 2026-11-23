@@ -429,6 +429,195 @@ sparks.visible = false; ringScene.add(sparks);
 let sparkT = -1;
 function burst() { for (let i = 0; i < SP; i++) { spPos.set([3.9, 6.1, .8], i * 3); const a = rng() * 6.283, e = (rng() - .5) * 2, sp = 2 + rng() * 4; spVel.set([Math.cos(a) * sp, Math.sin(a) * sp, e * 2], i * 3); } sparkT = 0; sparks.visible = true; }
 
+// ------------------------------------------------------------------ shared helpers for the chapter scenes
+const clamp = (x) => Math.min(1, Math.max(0, x));
+const smooth = (p) => p * p * (3 - 2 * p);
+function baseScene(bg = 0x050d0a, fogD = .006) {
+  const sc = new THREE.Scene(); sc.background = new THREE.Color(bg); sc.fog = new THREE.FogExp2(0x0c1a16, fogD);
+  sc.environment = scene.environment; sc.environmentIntensity = .32;
+  sc.add(new THREE.HemisphereLight(0x7f9f92, 0x0c1612, .52));
+  const L = new THREE.DirectionalLight(0xc4d8d0, 1.5); L.position.set(-8, 14, 10); L.target.position.set(0, 0, 0);
+  L.castShadow = true; L.shadow.mapSize.set(1024, 1024); Object.assign(L.shadow.camera, { left: -14, right: 14, top: 14, bottom: -6, near: 1, far: 60 });
+  L.shadow.bias = -.0005; L.shadow.normalBias = .03; sc.add(L, L.target); sc.userData.sun = L;
+  return sc;
+}
+const glowMat = (c, k = 2) => new THREE.MeshBasicMaterial({ color: new THREE.Color(c).multiplyScalar(k) });
+function orb(c, k, r = .14, light = 2.2) {
+  const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.SphereGeometry(r, 20, 16), glowMat(c, k)));
+  if (light) { const pl = new THREE.PointLight(c, light, 6, 2); g.add(pl); } return g;
+}
+const soil = new THREE.MeshPhysicalMaterial({ map: floorSet.albedo, normalMap: floorSet.normal, normalScale: new THREE.Vector2(.5, .5), roughness: .9, color: 0x2e3a33 });
+
+// ------------------------------------------------------------------ chapter iv: the cart among giant hosta and succulent leaves
+const cart = (() => {
+  const sc = baseScene(0x040b08);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), soil); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; sc.add(ground);
+  // hosta: a broad leaf with parallel curving ribs and a gentle cup
+  const hs = new THREE.Shape(); hs.moveTo(0, 0); hs.bezierCurveTo(-.62, .5, -.55, 1.35, 0, 1.8); hs.bezierCurveTo(.55, 1.35, .62, .5, 0, 0);
+  const hg = new THREE.ShapeGeometry(hs, 24); { const p = hg.attributes.position;
+    for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); p.setZ(i, .28 * Math.sin(Math.PI * y / 1.8) - .45 * x * x + .018 * Math.sin((Math.abs(x) / (.08 + y * .18)) * 9)); } hg.computeVertexNormals(); }
+  const hm = new THREE.MeshPhysicalMaterial({ side: THREE.DoubleSide, roughness: .6, clearcoat: .22, clearcoatRoughness: .45, sheen: .45, sheenRoughness: .7, sheenColor: new THREE.Color(0x5f8f7f) });
+  const HN = 90, hosta = new THREE.InstancedMesh(hg, hm, HN); hosta.castShadow = hosta.receiveShadow = true;
+  const d = new THREE.Object3D(), c = new THREE.Color();
+  for (let i = 0; i < HN; i++) {
+    const a = (i / HN) * Math.PI * 2 + rng() * .4, r = 3.2 + rng() * 6.5;
+    d.position.set(Math.cos(a) * r, rng() * .6, Math.sin(a) * r - 1.5);
+    d.lookAt(0, 2.4 + rng() * 2, 0); d.rotateX(-.9 - rng() * .5); d.rotateZ((rng() - .5) * .8);
+    d.scale.setScalar(1.4 + rng() * 2.1); d.updateMatrix(); hosta.setMatrixAt(i, d.matrix);
+    c.setHex([0x1c4a3f, 0x22503f, 0x2b6253, 0x395c48, 0x1f4a42][(rng() * 5) | 0]).offsetHSL(0, -.05, (rng() - .5) * .05); hosta.setColorAt(i, c);
+  }
+  sc.add(hosta);
+  // succulent rosettes: plump instanced petals in a spiral
+  const ps = new THREE.Shape(); ps.moveTo(0, 0); ps.bezierCurveTo(-.16, .14, -.12, .4, 0, .5); ps.bezierCurveTo(.12, .4, .16, .14, 0, 0);
+  const pg = new THREE.ExtrudeGeometry(ps, { depth: .03, bevelEnabled: true, bevelThickness: .03, bevelSize: .03, bevelSegments: 3, curveSegments: 10 });
+  const PN = 8 * 34, suc = new THREE.InstancedMesh(pg, new THREE.MeshPhysicalMaterial({ roughness: .55, clearcoat: .3, clearcoatRoughness: .4, color: 0xffffff }), PN); suc.castShadow = true;
+  const ros = [[-2.6, 3.2], [2.8, 2.6], [-4.4, -1], [4.2, -.5], [-1.4, 4.6], [1.6, 4.4], [-3.2, -3.6], [3.4, -3.8]];
+  let k = 0;
+  ros.forEach(([rx, rz]) => { const sc0 = .7 + rng() * .5;
+    for (let j = 0; j < 34; j++) { const ang = j * 2.39996, ring = Math.sqrt(j / 34);
+      d.position.set(rx, .05, rz); d.rotation.set(0, ang, 0); d.rotateX(-(.15 + ring * 1.15)); d.scale.setScalar(sc0 * (.45 + ring * .7)); d.updateMatrix(); suc.setMatrixAt(k, d.matrix);
+      c.setHex(0x3f6b5a).offsetHSL((rng() - .5) * .02, -.1, ring * .08 - .04); suc.setColorAt(k++, c); } });
+  sc.add(suc);
+  // the cart's items arrive like fireflies: two sage lights settle; the gift card's coral light is turned away
+  const items = [orb(0x9fe0c8, 1.8), orb(0x9fe0c8, 1.8), orb(0xe8766a, 1.6)];
+  const from = [[-6, 4.5, -3], [6.5, 5, -2], [0, 6, -6]], to = [[-.7, 1.9, 0], [.7, 2.1, .2], [0, 2.6, -.2]];
+  items.forEach((o) => sc.add(o));
+  const moonC = new THREE.Mesh(new THREE.SphereGeometry(2.2, 64, 48), moonMat); moonC.position.set(-9, 17, -40); sc.add(moonC);
+  return { sc, update(p, t) {
+    const e = smooth(p);
+    camera.position.set(Math.sin(t * .05) * .3 + px * .4, 2.9 - e * .5 - py * .2, 9.5 - e * 3.5); look.set(0, 1.9, 0); camera.lookAt(look);
+    items.forEach((o, i) => { const a = clamp((p - .1 - i * .1) / .35), q = smooth(a);
+      o.position.set(from[i][0] + (to[i][0] - from[i][0]) * q + Math.sin(t * 1.3 + i) * .08, from[i][1] + (to[i][1] - from[i][1]) * q + Math.sin(t * 1.7 + i) * .06, from[i][2] + (to[i][2] - from[i][2]) * q);
+      if (i === 2) { const out = clamp((p - .62) / .15); o.position.y -= out * 2.2; o.scale.setScalar(Math.max(.01, 1 - out)); } });
+  } };
+})();
+
+// ------------------------------------------------------------------ chapter vi: a gothic corridor; the risky payment meets an iron portcullis
+const corridor = (() => {
+  const sc = baseScene(0x030907);
+  sc.userData.sun.position.set(6, 12, 8); sc.userData.sun.intensity = .9;
+  const CW = 2.3, CS = 3.3, N = 7, GAP = 5.2;
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(9, 60), floor.material); fl.rotation.x = -Math.PI / 2; fl.position.z = -18; fl.receiveShadow = true; sc.add(fl);
+  const ringS = new THREE.Shape(); archPath(CW + .5, CS, ringS); ringS.lineTo(-CW - .5, 0); ringS.holes.push(archPath(CW, CS, new THREE.Path()));
+  const archGeo = new THREE.ExtrudeGeometry(ringS, { depth: .7, bevelEnabled: true, bevelThickness: .06, bevelSize: .06, bevelSegments: 2, curveSegments: 40 });
+  const glowArches = [];
+  for (let i = 0; i < N; i++) {
+    const a = new THREE.Mesh(archGeo, traceryMat); a.position.z = -i * GAP; a.castShadow = a.receiveShadow = true; sc.add(a);
+    const path = archPath(CW - .02, CS, new THREE.Path()).getSpacedPoints(60).map((v) => new THREE.Vector3(v.x, v.y, .72));
+    const gm = new THREE.MeshBasicMaterial({ color: 0x7fd1b9, transparent: true, opacity: 0 });
+    const g = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(path), 80, .025, 6, false), gm); g.position.z = -i * GAP; sc.add(g); glowArches.push(g);
+    [-1, 1].forEach((s) => { const w = new THREE.Mesh(new THREE.BoxGeometry(.5, CS + 3.2, GAP - .7), rWallMat); w.position.set(s * (CW + 1.1), (CS + 3.2) / 2, -i * GAP - GAP / 2); w.receiveShadow = true; sc.add(w); });
+  }
+  [1, 3, 5].forEach((i) => { const l = new THREE.PointLight(0xd9a070, 1.6, 9, 2); l.position.set((i % 2 ? -1 : 1) * (CW - .3), 2.6, -i * GAP + .8); sc.add(l); });
+  // the portcullis: an iron grid with spikes, at the pre-capture gate
+  const port = new THREE.Group(), PG = 4;
+  for (let i = -4; i <= 4; i++) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, CS + 2.4, 10), iron); bar.position.set(i * .5, (CS + 2.4) / 2, 0); bar.castShadow = true; port.add(bar);
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(.08, .28, 10), iron); sp.position.set(i * .5, -.12, 0); sp.rotation.x = Math.PI; port.add(sp); }
+  for (let j = 0; j < 5; j++) { const h = new THREE.Mesh(new THREE.BoxGeometry(4.4, .08, .09), iron); h.position.y = .45 + j * 1.05; h.castShadow = true; port.add(h); }
+  port.position.z = -PG * GAP + .3; sc.add(port);
+  const rimP = new THREE.PointLight(0x9fc8b8, 3, 6, 2); rimP.position.set(0, 3, -PG * GAP + 2); sc.add(rimP);
+  const good = orb(0x9fe0c8, 2.2, .16, 2.6), bad = orb(0xe8766a, 2.0, .16, 2.4); sc.add(good, bad);
+  return { sc, update(p, t) {
+    const e = smooth(p);
+    camera.position.set(px * .3, 1.9 - py * .2, 9 - e * 17); look.set(0, 1.7, camera.position.z - 10); camera.lookAt(look);
+    const gz = 6 - clamp((p - .05) / .55) * 34;                       // the approved payment runs the whole corridor
+    good.position.set(Math.sin(t * 2) * .05, 1.4 + Math.sin(t * 3) * .05, gz);
+    const drop = clamp((p - .5) / .1); port.position.y = (1 - smooth(drop)) * (CS + 1.6);
+    const bz = Math.max(-PG * GAP + 1.0, 6 - clamp((p - .2) / .45) * 30);  // the risky one stops at the portcullis
+    const stopped = bz <= -PG * GAP + 1.0001 && drop >= 1;
+    bad.position.set(Math.sin(t * 2 + 1) * .05, 1.2 + Math.sin(t * 3 + 1) * .05 + (stopped ? Math.sin(t * 9) * .03 : 0), bz);
+    bad.children[0].scale.setScalar(stopped ? 1 + Math.sin(t * 6) * .12 : 1);
+    glowArches.forEach((g, i) => { const z = -i * GAP, dz = Math.abs(gz - z); g.material.opacity = Math.max(0, .9 - dz * .45) + (i === PG && stopped ? .3 : 0);
+      g.material.color.setHex(i === PG && stopped ? 0xe8766a : 0x7fd1b9); });
+  } };
+})();
+
+// ------------------------------------------------------------------ chapter ix: a crisp moonlit lake; attack waves break on a shield of light
+const lake = (() => {
+  const sc = baseScene(0x050d0b);
+  sc.userData.sun.intensity = 1.1;
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(120, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, depthWrite: false, fog: false,
+    vertexShader: "varying vec3 vP; void main(){ vP=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.); }",
+    fragmentShader: `varying vec3 vP; float h(vec3 p){return fract(sin(dot(p,vec3(12.9898,78.233,37.719)))*43758.5453);}
+      void main(){ float y=normalize(vP).y; vec3 c=mix(vec3(.04,.09,.08),vec3(.006,.016,.014),smoothstep(-.05,.6,y));
+        float s=step(.9985,h(floor(normalize(vP)*420.)))*smoothstep(.05,.4,y); c+=vec3(.7,.78,.74)*s*.8; gl_FragColor=vec4(c,1.);
+        #include <colorspace_fragment>
+      }` }));
+  sc.add(sky);
+  const moonL = new THREE.Mesh(new THREE.SphereGeometry(3.2, 64, 48), moonMat); moonL.position.set(14, 22, -70); sc.add(moonL);
+  // the far shore: layers of dark pines
+  const pine = new THREE.ConeGeometry(1, 4, 7); pine.translate(0, 2, 0);
+  const PN = 260, pines = new THREE.InstancedMesh(pine, new THREE.MeshStandardMaterial({ color: 0x0d1c17, roughness: .95 }), PN), d = new THREE.Object3D();
+  for (let i = 0; i < PN; i++) { const row = i % 3, x = (i / PN) * 140 - 70 + (rng() - .5) * 1.5;
+    d.position.set(x, -.3, -34 - row * 5 - rng() * 2); d.scale.set(.8 + rng() * .8, 1.2 + rng() * 2.4 - row * .2, .8 + rng() * .8); d.updateMatrix(); pines.setMatrixAt(i, d.matrix); }
+  sc.add(pines);
+  // water: a dark, slightly glossy surface with slowly moving ripples (normal map scroll) and soft reflections of the moon
+  const wn = (() => { const N = 256, n = fbm(N, 8, 4); return normalFrom(N, n, 3.2); })(); wn.repeat.set(10, 10);
+  const water = new THREE.Mesh(new THREE.PlaneGeometry(160, 120), new THREE.MeshPhysicalMaterial({ color: 0x0a1814, roughness: .16, metalness: 0, normalMap: wn, normalScale: new THREE.Vector2(.35, .35), clearcoat: .6, clearcoatRoughness: .2, envMapIntensity: 1 }));
+  water.rotation.x = -Math.PI / 2; water.position.z = -20; sc.add(water);
+  const envS = new THREE.Scene(); envS.background = new THREE.Color(0x061210);
+  const em = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 16), new THREE.MeshBasicMaterial({ color: 0xbfd2c9 })); em.position.set(14, 22, -70); envS.add(em);
+  sc.environment = pmrem.fromScene(envS, 0.02).texture; sc.environmentIntensity = .9;
+  // the shield of light on the near shore
+  const shield = new THREE.Group(); shield.position.set(4.6, 2.2, -4);
+  const sh = new THREE.Shape(); sh.moveTo(0, 2.1); sh.bezierCurveTo(1.4, 1.8, 1.6, 1.2, 1.55, .3); sh.bezierCurveTo(1.45, -1, .7, -1.8, 0, -2.3); sh.bezierCurveTo(-.7, -1.8, -1.45, -1, -1.55, .3); sh.bezierCurveTo(-1.6, 1.2, -1.4, 1.8, 0, 2.1);
+  const shieldMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0x7fd1b9).multiplyScalar(.5), transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false });
+  shield.add(new THREE.Mesh(new THREE.ShapeGeometry(sh, 40), shieldMat));
+  const edge = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sh.getSpacedPoints(80).map((v) => new THREE.Vector3(v.x, v.y, 0)), true), 160, .035, 8, true), glowMat(0x7fd1b9, 1.6));
+  shield.add(edge); shield.lookAt(-6, 2, 12); sc.add(shield);
+  const shL = new THREE.PointLight(0x7fd1b9, 4, 10, 2); shL.position.set(4.6, 2.2, -3); sc.add(shL);
+  // attack orbs skim the water; ripples spread where they touch
+  const AN = 16, attacks = [], ripples = [];
+  for (let i = 0; i < AN; i++) { const o = orb(0xe8766a, 1.7, .09, 0); o.userData = { x0: -16 - rng() * 6, z0: -10 + rng() * 9, lag: (i % 8) * .045 + (i >= 8 ? .32 : 0), h: .35 + rng() * .5 }; attacks.push(o); sc.add(o);
+    const rg = new THREE.Mesh(new THREE.RingGeometry(.9, 1, 48), new THREE.MeshBasicMaterial({ color: 0x9fb8ac, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
+    rg.rotation.x = -Math.PI / 2; rg.position.y = .02; ripples.push(rg); sc.add(rg); }
+  const wisps = [0, 1, 2, 3, 4].map((i) => { const w = orb(0xbfeedd, 1.1, .06, 0); w.position.set(-8 + i * 3.5, .6, 2 - i * 1.6); sc.add(w); return w; });
+  return { sc, update(p, t) {
+    const e = smooth(p);
+    camera.position.set(-5 + e * 4 + px * .5, 1.7 - py * .2, 11 - e * 2.5); look.set(1.5, 1.4, -6); camera.lookAt(look);
+    wn.offset.set(t * .006, t * .004);
+    attacks.forEach((o, i) => { const u = o.userData, a = clamp((p - .08 - u.lag) / .28);
+      const tx = 4.6 - 1.2, x = u.x0 + (tx - u.x0) * a, z = u.z0 + (-4 - u.z0) * a;
+      o.position.set(x, u.h + Math.sin(a * 18 + i) * .08, z); o.visible = a > 0 && a < 1; o.scale.setScalar(a >= .98 ? 2 : 1);
+      const r = ripples[i], ra = clamp((a - .2) / .8); r.position.set(x, .02, z); r.scale.setScalar(.2 + ra * 2.2); r.material.opacity = a > 0 && a < 1 ? .35 * (1 - ra) : 0; });
+    const hit = attacks.some((o) => o.visible && o.position.x > 2.6);
+    edge.material.color.copy(new THREE.Color(0x7fd1b9).multiplyScalar(hit ? 2.4 : 1.6)); shieldMat.opacity = hit ? .26 : .16 + Math.sin(t * 1.5) * .02;
+    wisps.forEach((w, i) => { w.position.y = .6 + Math.sin(t * .8 + i) * .2; w.children[0].material.color.setScalar(.9 + Math.sin(t * 1.3 + i * 2) * .3); });
+  } };
+})();
+
+// ------------------------------------------------------------------ chapter xi: a curved stone staircase up to a moonlit window; steps light as evidence
+const stair = (() => {
+  const sc = baseScene(0x040b09);
+  sc.userData.sun.position.set(4, 16, -6); sc.userData.sun.intensity = 1.3;
+  const fl = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), floor.material); fl.rotation.x = -Math.PI / 2; fl.receiveShadow = true; sc.add(fl);
+  const col = new THREE.Mesh(new THREE.CylinderGeometry(.55, .65, 9, 24), traceryMat); col.position.y = 4.5; col.castShadow = col.receiveShadow = true; sc.add(col);
+  const EVT = [0, 0, 24, 61, 88, 120, 136, 172], R = 2.6, steps = [], edges = [];
+  const stepGeo = new THREE.BoxGeometry(2.2, .28, 1.05);
+  for (let i = 0; i < 16; i++) {  // 16 steps; every second one carries a piece of evidence
+    const a = -Math.PI * .2 + i * .34, y = .14 + i * .42;
+    const s = new THREE.Mesh(stepGeo, traceryMat); s.position.set(Math.cos(a) * R, y, Math.sin(a) * R); s.rotation.y = -a; s.castShadow = s.receiveShadow = true; sc.add(s); steps.push(s);
+    if (i % 2 === 0 && edges.length < EVT.length) { const m = new THREE.MeshBasicMaterial({ color: 0x2b3f37 });
+      const strip = new THREE.Mesh(new THREE.BoxGeometry(2.0, .04, .04), m); strip.position.set(0, .16, .53); s.add(strip); edges.push({ m, t: EVT[edges.length], dec: edges.length === 5 }); }
+  }
+  const top = steps[15].position;
+  const win = new THREE.Group(); win.position.set(top.x * 1.9, top.y + 2.4, top.z * 1.9); win.lookAt(0, top.y + 2.4, 0);
+  const ws = new THREE.Shape(); archPath(1.1, 1.8, ws); ws.lineTo(-1.1, 0);
+  const wr = new THREE.Shape(); archPath(1.45, 1.8, wr); wr.lineTo(-1.45, 0); wr.holes.push(archPath(1.1, 1.8, new THREE.Path()));
+  win.add(new THREE.Mesh(new THREE.ExtrudeGeometry(wr, { depth: .4, bevelEnabled: false, curveSegments: 32 }), traceryMat));
+  const pane = new THREE.Mesh(new THREE.ShapeGeometry(ws, 32), new THREE.MeshBasicMaterial({ color: 0x18302a })); pane.position.z = -.05; win.add(pane);
+  const mw = new THREE.Mesh(new THREE.SphereGeometry(.55, 48, 32), moonMat); mw.position.set(.15, 2.1, -1.5); win.add(mw); sc.add(win);
+  const wl = new THREE.PointLight(0xbfd8cc, 3, 9, 2); wl.position.copy(win.position).multiplyScalar(.85); sc.add(wl);
+  const scrub = document.getElementById("scrub");
+  return { sc, update(p, t) {
+    const e = smooth(p), ang = -Math.PI * .5 + e * 2.4, rr = 8.5 - e * 1.5;
+    camera.position.set(Math.cos(ang) * rr + px * .3, 2.2 + e * 4.2 - py * .2, Math.sin(ang) * rr); look.set(0, 1.6 + e * 4, 0); camera.lookAt(look);
+    const T = scrub ? +scrub.value : 200;
+    edges.forEach((E) => { const known = E.t <= T;
+      E.m.color.copy(new THREE.Color(!known ? 0x2b3f37 : E.dec ? 0xf5b84b : E.t <= 120 ? 0x7fd1b9 : 0xe8766a).multiplyScalar(!known ? 1 : E.dec ? 2.2 : 1.6)); });
+  } };
+})();
+
 // ------------------------------------------------------------------ sizing, scroll, adaptive quality, loop
 const renderPass = composer.passes[0];
 function resize() {
@@ -437,23 +626,35 @@ function resize() {
 }
 addEventListener("resize", resize); resize();
 const storyEl = document.getElementById("story");
-let progress = 0, ringP = 0, mode = "hero", ringOpacity = 0;
-const clamp = (x) => Math.min(1, Math.max(0, x));
+const chapters = [
+  { id: "ring", el: storyEl, sc: ringScene },
+  { id: "cart", el: document.getElementById("mandate"), sc: cart.sc, update: cart.update },
+  { id: "corridor", el: document.getElementById("pipeline"), sc: corridor.sc, update: corridor.update },
+  { id: "lake", el: document.getElementById("redteam"), sc: lake.sc, update: lake.update },
+  { id: "stair", el: document.getElementById("replay"), sc: stair.sc, update: stair.update },
+];
+let progress = 0, ringP = 0, mode = "hero", chapOpacity = 0, active = null;
 const onScroll = () => {
   const r = hero.getBoundingClientRect(); progress = clamp(-r.top / Math.max(1, r.height - innerHeight));
-  const s = storyEl.getBoundingClientRect(); ringP = clamp(-s.top / Math.max(1, s.height - innerHeight));
-  const inHero = r.bottom > innerHeight * .2, inRing = s.top < innerHeight * .85 && s.bottom > innerHeight * .15;
-  mode = inHero ? "hero" : inRing ? "ring" : "off";
-  ringOpacity = inRing ? Math.min(clamp((innerHeight * .85 - s.top) / (innerHeight * .6)), clamp((s.bottom - innerHeight * .15) / (innerHeight * .5))) : 0;
+  if (r.bottom > innerHeight * .2) { mode = "hero"; return; }
+  let best = null, bestO = 0;
+  chapters.forEach((c) => { if (!c.el) return; const s = c.el.getBoundingClientRect();
+    const o = s.top < innerHeight * .85 && s.bottom > innerHeight * .15 ? Math.min(clamp((innerHeight * .85 - s.top) / (innerHeight * .6)), clamp((s.bottom - innerHeight * .15) / (innerHeight * .5))) : 0;
+    c.p = clamp(-s.top / Math.max(1, s.height - innerHeight)); if (o > bestO) { bestO = o; best = c; } });
+  mode = best ? best.id : "off"; active = best; chapOpacity = bestO; ringP = chapters[0].p || 0;
 };
 addEventListener("scroll", onScroll, { passive: true }); onScroll();
+// compile every chapter's shaders up front (idle time), so no backdrop hitches the first time it appears
+const precompile = () => chapters.forEach((c) => { try { renderer.compile(c.sc, camera); } catch (e) { /* compile lazily instead */ } });
+(window.requestIdleCallback || ((f) => setTimeout(f, 600)))(precompile);
 let px = 0, py = 0; addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - .5; py = e.clientY / innerHeight - .5; }, { passive: true });
 const look = new THREE.Vector3();
 let level = 2, frames = 0, acc = 0, settledAt = 0, fast = 0;  // 2 = full, 1 = reduced, 0 = minimal
+const shadowLights = () => [moonLight, rMoon, ...chapters.slice(1).map((c) => c.sc.userData.sun)];
 function setLevel(l) {
   level = l;
   dpr = l === 2 ? Math.min(devicePixelRatio || 1, 1.5) : l === 1 ? 1 : .75;
-  [moonLight, rMoon].forEach((L) => { L.shadow.mapSize.set(l === 2 ? 2048 : 1024, l === 2 ? 2048 : 1024); L.shadow.map?.dispose(); L.shadow.map = null; });
+  shadowLights().forEach((L) => { const s = l === 2 ? (L === moonLight || L === rMoon ? 2048 : 1024) : 1024; L.shadow.mapSize.set(s, s); L.shadow.map?.dispose(); L.shadow.map = null; });
   godRays.blurPass.enabled = l > 0; dew.visible = l > 0; rain.visible = l > 0;
   resize();
 }
@@ -475,21 +676,21 @@ function loop() {
     else if (ft < 17.5 && level < 2 && t - settledAt > 4 && ++fast >= 2) { setLevel(level + 1); settledAt = t; fast = 0; }  // recover when the machine is quiet again
     else if (ft >= 17.5) fast = 0;
     window.__st3d = { level, frameMs: +ft.toFixed(1), dpr, mode }; }
-  const active = mode === "ring" ? ringScene : scene;
-  if (atmosIn !== active) { atmos.forEach((o) => active.add(o)); atmosIn = active; }
-  renderPass.mainScene = active; raysPass.enabled = mode === "hero" && level > 0;
+  const activeScene = mode === "hero" ? scene : active.sc;
+  if (atmosIn !== activeScene) { atmos.forEach((o) => activeScene.add(o)); atmosIn = activeScene; }
+  renderPass.mainScene = activeScene; raysPass.enabled = mode === "hero" && level > 0;
   if (mode === "hero") {
     const p = progress, ease = p * p * (3 - 2 * p);
     camera.position.set(px * .6 * (1 - ease) - ease * W * .5, 4.9 + (-py) * .3 + ease * .2, 15.5 - ease * 21);  // through the left lancet
     look.set(px * .3 - ease * W * .5, 6.4 - ease * .6, -6 - ease * 10); camera.lookAt(look);
     glass.visible = camera.position.z > 1.6;
     canvas.style.opacity = String(p > .5 ? Math.max(0, 1 - (p - .5) / .25) : 1);
-  } else {
+  } else if (mode === "ring") {
     // the camera dollies along the vines toward the ring; vines grow, the ring blooms
     const p = ringP, e = p * p * (3 - 2 * p);
     camera.position.set(-8 + e * 11.5 + px * .5, 6.3 + Math.sin(t * .3) * .08 - py * .3, 14 - e * 1.2);
     look.set(-5 + e * 8.8, 6.2, 0); camera.lookAt(look);
-    canvas.style.opacity = String(ringOpacity);
+    canvas.style.opacity = String(chapOpacity);
     const grow = clamp((p - .18) / .35), bloomP = clamp((p - .5) / .25);
     vines3.forEach((v) => { const g = v.lit ? grow : 1; v.mesh.geometry.setDrawRange(0, Math.floor(v.count * g / 6) * 6); v.grow = g; });
     rLeafInfo.forEach((L, i) => { const g = vines3[L.vi].grow; if (L.u <= g) rLeaves.setMatrixAt(i, L.m); else { dummy.scale.setScalar(0); dummy.position.set(0, -50, 0); dummy.updateMatrix(); rLeaves.setMatrixAt(i, dummy.matrix); } });
@@ -504,6 +705,9 @@ function loop() {
     if (sparkT >= 0) { sparkT += dt; for (let i = 0; i < SP; i++) { spVel[i * 3 + 1] -= 3 * dt; for (let k = 0; k < 3; k++) spPos[i * 3 + k] += spVel[i * 3 + k] * dt; }
       spGeo.attributes.position.needsUpdate = true; sparks.material.opacity = Math.max(0, 1 - sparkT / 1.6); if (sparkT > 1.6) { sparks.visible = false; sparkT = -1; } }
     lanterns.me.userData.core.scale.setScalar(1 + Math.sin(t * 2.2) * .06);
+  } else {
+    canvas.style.opacity = String(chapOpacity);
+    active.update(active.p || 0, t, dt);
   }
   windU.value = t; skyMat.uniforms.t.value = t; glassMat.uniforms.t.value = t;
   const ox = camera.position.x;
@@ -512,11 +716,9 @@ function loop() {
     rainGeo.attributes.position.needsUpdate = true; }
   const f = ffGeo.attributes.position.array;
   for (let i = 0; i < FF; i++) { const ph = ffPh[i] += dt * .35; f[i * 3] += Math.cos(ph * 1.3) * dt * .12 + px * dt * .12; f[i * 3 + 1] += Math.sin(ph) * dt * .1; f[i * 3 + 2] += Math.sin(ph * .7) * dt * .1; }
-  ffGeo.attributes.position.needsUpdate = true; fireflies.position.x = mode === "ring" ? ox : 0;
+  ffGeo.attributes.position.needsUpdate = true; fireflies.position.copy(mode === "hero" ? new THREE.Vector3() : new THREE.Vector3(ox, camera.position.y - 4, camera.position.z - 8));
   fireflies.material.opacity = .4 + .15 * Math.sin(t * 1.2);
-  moonClouds.forEach((m) => { m.material.uniforms.t.value = t; m.position.x += m.userData.v * dt; if (m.position.x > 9) m.position.x = -9; });
-  fogBanks.forEach((m) => { m.material.uniforms.t.value = t; m.position.x += m.userData.v * dt; if (Math.abs(m.position.x) > 8) m.userData.v *= -1; m.quaternion.copy(camera.quaternion); });
   composer.render(dt);
 }
 requestAnimationFrame(loop);
-window.__st3dScene = { scene, ringScene, camera, renderer, setLevel, fogBanks, composer, bloom, moon, moonClouds, godRays, raysPass, moonHalo, sky, rain };
+window.__st3dScene = { scene, ringScene, camera, renderer, setLevel, fogBanks, composer, bloom, moon, moonClouds, godRays, raysPass, moonHalo, sky, rain, chapters };
