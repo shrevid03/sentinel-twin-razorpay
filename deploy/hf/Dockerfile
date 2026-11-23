@@ -10,7 +10,7 @@ RUN pip install -r requirements.txt
 COPY --chown=user . .
 RUN mkdir -p /home/user/app/data && chown user:user /home/user/app /home/user/app/data
 USER user
-ENV HOME=/home/user PORT=7860 GAT_EPOCHS=80 TWIN_SEED=3 AUTO_TRAFFIC=1
+ENV HOME=/home/user PORT=7860 GAT_EPOCHS=120 TWIN_SEED=3 AUTO_TRAFFIC=1
 EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=5s --start-period=120s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/healthz', timeout=4)"
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

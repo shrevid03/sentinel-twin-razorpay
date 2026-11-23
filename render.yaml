@@ -15,14 +15,15 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.7
+      # 120 epochs = the seeded model the landing page's numbers come from (0.09 / 0.63 / 0.61)
       - key: GAT_EPOCHS
-        value: "80"
+        value: "120"
       - key: TWIN_SEED
         value: "3"
       - key: AUTO_TRAFFIC
         value: "1"
       # Cap simulated live orders per process: keeps memory near 400 MB on the free plan's 512 MB
-      # (measured: fresh start about 215 MB; 3,000 extra orders plus a retrain peaks about 366 MB).
+      # (measured: startup training peaks about 350 MB; scenario runs add nothing; 3,000 extra orders plus a retrain about 366 MB).
       - key: AUTO_TRAFFIC_MAX
         value: "3000"
       # Optional. Left empty, reviewers can press every button (reset, apply a policy, confirm a fraud case).

@@ -711,9 +711,11 @@ class Twin:
             if hasattr(self.model, "attn1"):
                 self.model.forward(X, mask)
                 a1 = np.mean([a[i] for a in self.model.attn1], axis=0)
-                a2 = self.model.attn2[i]
+                a2 = self.model.attn2[i].copy()
                 att = 0.5 * a1 + 0.5 * a2
-                per_head = [a[i] for a in self.model.attn1]
+                per_head = [a[i].copy() for a in self.model.attn1]
+                if hasattr(self.model, "drop_cache"):
+                    self.model.drop_cache()  # only this node's rows are needed; copies of the model stay small
             else:  # GraphSAGE weighs neighbours equally (mean aggregator): rank them by their own risk instead
                 deg = max(int(mask[i].sum()) - 1, 1)
                 att = np.array([(1.0 / deg) * (0.5 + self._probs.get(n, 0)) if mask[i, j] and j != i else 0.0

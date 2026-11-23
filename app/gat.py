@@ -188,10 +188,21 @@ class GAT:
                     "loss": round(float(loss), 4),
                     "val_auc": round(auc(y[val_idx], P[val_idx, 1]), 4),
                 })
+        self.drop_cache()
         return self.history
 
+    def drop_cache(self):
+        """Forget the per-node attention matrices kept for backprop. They are only needed while training, and every
+        copy of the model (model versions, scenario forks) would otherwise carry several N×N arrays per head."""
+        for h in self.heads1 + [self.head2]:
+            h.cache = None
+        self._pre = None
+        self.attn1, self.attn2 = [], None   # attention maps are read right after a forward pass (Twin.explain)
+
     def predict_proba(self, X, mask):
-        return self.softmax(self.forward(X, self.filter_mask(X, mask)))[:, 1]
+        out = self.softmax(self.forward(X, self.filter_mask(X, mask)))[:, 1]
+        self.drop_cache()
+        return out
 
 
 def auc(y_true, score):

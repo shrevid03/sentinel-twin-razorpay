@@ -11,6 +11,8 @@ Razorpay client: no live state changes and no real order.
 """
 from __future__ import annotations
 
+import os
+
 from . import catalog
 from .agents import CaptureRefused, Team
 from .razorpay import Razorpay, payer_links
@@ -59,7 +61,7 @@ def new_account_joins_ring(twin, cart=None, base=None):
     n = twin.audit.next("scenario") if twin.audit is not None else len(forks) + 1
     t.decision_prefix = f"SCN{n}-"
     forks[t.decision_prefix] = t  # so "Replay decision" can find these decisions later
-    while len(forks) > 5:
+    while len(forks) > int(os.getenv("SCENARIO_FORKS", "5")):  # each kept copy costs memory; small servers keep fewer
         forks.pop(next(iter(forks)))
     pick = _ring_contact(t)
     if pick is None:
