@@ -447,3 +447,33 @@ a.rcpt-link { color: var(--glow); font-weight: 600; }
 .arrive-flash.go { animation: arrive 1.4s ease-out forwards; }
 @keyframes arrive { 0% { opacity: 1; } 100% { opacity: 0; } }
 #d-attacks, #d-cands, #d-verify, #d-engines, #d-byattack, #mrt-out, #scn-out, .rc-sec { overflow-x: auto; }
+
+
+/* ---------- consistency pass with the landing journey: calm, the same language, nothing flashy ---------- */
+/* tab headers: a small tilde caption, then a sentence-case Cormorant title (as the landing's chapters) */
+.tabhero .eyebrow.tilde { display: block; margin: 0 0 4px; font: italic 500 15px/1.2 var(--font-display); letter-spacing: .02em; text-transform: none; color: var(--sage-hi); }
+.tabhero .eyebrow.tilde::before, .tabhero .eyebrow.tilde::after { content: none; }
+.tabhero h2 { text-transform: none; letter-spacing: -.01em; font: 600 clamp(28px, 2.9vw, 40px)/1.05 var(--font-display); color: var(--moon); }
+.tabhero p:not(.eyebrow) { font: italic 500 18px/1.4 var(--font-display); color: #BFD3C8; }
+.tab.active .tabhero svg { animation: none; opacity: .85; }
+.tabhero, .hero { background-image: radial-gradient(120% 160% at 0% 0%, rgba(64,130,109,.30), rgba(11,31,26,.86) 60%); border: 1px solid var(--line); }
+/* the backdrop: one steady viridian (no per-tab colour shifts), faint gothic arches at the edges, a lantern glow, a few fireflies */
+#page-smoke i { transition: none; }
+body[data-tab] { --s1: #40826D; --s2: #5FBF9F; --s3: #1F4D40; }
+#page-gothic { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+#page-gothic .arch { position: absolute; bottom: -4vh; width: 26vw; height: 92vh; opacity: .07;
+  background: no-repeat center bottom / 100% 100% url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 260 900' preserveAspectRatio='none'%3E%3Cg fill='none' stroke='%239DB5A8' stroke-width='3'%3E%3Cpath d='M20 900V330Q20 120 130 20Q240 120 240 330V900'/%3E%3Cpath d='M50 900V345Q50 170 130 75Q210 170 210 345V900'/%3E%3Cpath d='M130 75V900M50 520H210'/%3E%3Ccircle cx='130' cy='250' r='38'/%3E%3C/g%3E%3C/svg%3E"); }
+#page-gothic .arch.l { left: -9vw; } #page-gothic .arch.r { right: -9vw; }
+#page-gothic .lamp { position: absolute; right: 4vw; bottom: -12vh; width: 40vw; height: 40vw; border-radius: 50%; background: radial-gradient(circle, rgba(245,184,75,.07), transparent 65%); }
+#page-gothic .ff { position: absolute; width: 4px; height: 4px; border-radius: 50%; background: #E9D48A; box-shadow: 0 0 10px 2px rgba(233,212,138,.45); opacity: .35; animation: ffdrift 26s ease-in-out infinite; }
+#page-gothic .ff:nth-child(4) { left: 8%; top: 70%; } #page-gothic .ff:nth-child(5) { left: 92%; top: 30%; animation-delay: -6s; } #page-gothic .ff:nth-child(6) { left: 15%; top: 22%; animation-delay: -12s; }
+#page-gothic .ff:nth-child(7) { left: 85%; top: 78%; animation-delay: -18s; } #page-gothic .ff:nth-child(8) { left: 50%; top: 92%; animation-delay: -9s; }
+@keyframes ffdrift { 0%, 100% { transform: translate(0, 0); opacity: .15; } 50% { transform: translate(24px, -30px); opacity: .45; } }
+/* motion: short, consistent, no springs */
+.tab.active { animation: pagein .26s var(--ease); }
+@keyframes pagein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+button { transition: background .18s, border-color .18s, box-shadow .2s, color .18s, transform .18s var(--ease); }
+.card { transition: border-color .2s; }
+.tabs button:hover { transform: none; }
+@media (prefers-reduced-motion: reduce) { #page-gothic .ff { animation: none; } .tab.active { animation: none; } }
+.tabhero p:not(.eyebrow)::before, .tabhero p:not(.eyebrow)::after { content: none; }

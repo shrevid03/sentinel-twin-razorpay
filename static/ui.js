@@ -18,9 +18,9 @@
     setNav(false);
     window.STSound?.tick();
     const title = $("#mobile-title"); if (title) title.textContent = LABELS[t] || "Sentinel Twin";
-    if (!reduce && window.gsap) {  // cards rise in, a few at a time (they are visible again within half a second)
+    if (!reduce && window.gsap) {  // cards fade and rise a little, once, on a tab switch
       const cards = [...document.querySelectorAll(`#tab-${t} > .card, #tab-${t} > .grid2 > * , #tab-${t} > .pulse-row > .card, #tab-${t} > .kpis`)].slice(0, 10);
-      gsap.fromTo(cards, { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: .5, stagger: .05, ease: "power3.out", clearProps: "transform,opacity" });
+      gsap.fromTo(cards, { y: 8, opacity: 0 }, { y: 0, opacity: 1, duration: .28, stagger: .03, ease: "power2.out", clearProps: "transform,opacity" });
     }
   };
   // the compact phone header mirrors the payment-mode badge
