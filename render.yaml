@@ -9,7 +9,8 @@ services:
     runtime: python
     plan: free
     region: singapore
-    buildCommand: pip install -r requirements.txt
+    # train the seeded twin once at build time; the server loads it in seconds (free instances are slow to train)
+    buildCommand: pip install -r requirements.txt && python scripts/prebuild_twin.py data/twin.pkl
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /healthz
     envVars:
@@ -20,6 +21,8 @@ services:
         value: "120"
       - key: TWIN_SEED
         value: "3"
+      - key: TWIN_PREBUILT
+        value: data/twin.pkl
       - key: AUTO_TRAFFIC
         value: "1"
       # Cap simulated live orders per process: keeps memory near 400 MB on the free plan's 512 MB

@@ -32,9 +32,28 @@ from .twin import Twin, _public  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent.parent / "static"
 
-twin = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
+def _seeded_twin():
+    """The seeded, trained twin. If a prebuilt copy exists (TWIN_PREBUILT, written at build time by
+    scripts/prebuild_twin.py with the same seed and epochs) it is loaded in seconds instead of retrained."""
+    pre = os.getenv("TWIN_PREBUILT", "").strip()
+    if pre and Path(pre).exists():
+        try:
+            import pickle
+            with open(pre, "rb") as f:
+                t = pickle.load(f)
+            if getattr(t, "prebuilt_for", None) == (int(os.getenv("TWIN_SEED", "3")), int(os.getenv("GAT_EPOCHS", "120"))):
+                import threading as _th
+                t.lock = _th.RLock()
+                return t
+        except Exception as e:  # noqa: BLE001 - a stale or broken file: train as usual
+            print("prebuilt twin not used:", type(e).__name__)
+    t = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
+    t.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
+    return t
+
+
+twin = _seeded_twin()
 twin.on_event = integrations.publish
-twin.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
 twin.seed_orders = len(twin.orders)
 razorpay = Razorpay()
 def _db_url():
@@ -52,6 +71,11 @@ from .store import Store  # noqa: E402
 store = Store(_db_url())
 team = Team(twin, razorpay, store=store)
 team.reconcile()  # startup: resolve captures that were in flight when the last process stopped
+if getattr(twin, "prebuilt_for", None) and twin.audit is not None:  # a loaded model is stored like a trained one
+    try:
+        twin.audit.save_model(twin.model_version, twin.model_versions[twin.model_version])
+    except Exception as e:  # noqa: BLE001 - replay then reports the model as missing rather than crashing
+        print("model artifact not stored:", type(e).__name__)
 # The fraud-ring scenario runs on a copy of the twin as it was seeded and trained, so its numbers are reproducible
 # (the live twin keeps growing under simulated traffic and is retrained as it grows).
 SCENARIO_BASE = {"t": twin.fork(durable=True)}
@@ -384,9 +408,8 @@ def reset():
     checkouts, receipts, proposed actions, audit trail, cases and red-team runs."""
     global twin, team
     with _reset_lock:
-        t = Twin(seed=int(os.getenv("TWIN_SEED", "3")))
+        t = _seeded_twin()  # the prebuilt copy when there is one (seconds, not minutes, on a small server)
         t.on_event = integrations.publish
-        t.train(epochs=int(os.getenv("GAT_EPOCHS", "120")))
         t.seed_orders = len(t.orders)
         razorpay.calls.clear()
         store.reset()
