@@ -1,3 +1,4 @@
+# OPTIONAL: Hugging Face Docker Spaces are now a paid option; the free deploy is Render (render.yaml at the repo root).
 # Sentinel Twin on a Hugging Face Space (Docker SDK). Demo mode: no keys needed; payments run on the
 # labelled mock gateway, SQLite lives inside the container and resets when the Space restarts.
 FROM python:3.12-slim

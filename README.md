@@ -2,6 +2,8 @@
 
 **An AI commerce system that detects a potential attack, explains the risk, tests its defenses against evolving threats, and stops unsafe transactions before real money moves, on Razorpay.**
 
+**Live demo:** https://sentinel-twin-razorpay.onrender.com · the guided tour opens on your first visit. It runs on a free server: the first load may take up to a minute if it was idle.
+
 An AI shopping agent pays through Razorpay Checkout (UPI, cards, netbanking). A digital twin of the merchant's business checks every order with a graph attention network. An adaptive red team attacks a safe copy of the twin to find weaknesses, and a what-if simulator measures each fix, including its cost to good customers, before it goes live. By chat or voice, in 10 Indian languages.
 
 **Where it fits.** Razorpay's [Agentic Payments](https://razorpay.com/m/agentic-payments) page lists *Advanced Risk & Compliance*: "real-time fraud detection, authentication, and compliance built for AI-led transactions". Sentinel Twin is a working risk layer for agent-led payments: every order an agent proposes is checked against the buyer's consent and a graph risk model before a Razorpay order exists.
