@@ -9,3 +9,6 @@ data/
 
 # assembled Hugging Face Space folder (built by deploy/hf/build_space.sh)
 deploy/hf/space/
+
+# Render API key for deploying from this Mac (never committed)
+.render-key
