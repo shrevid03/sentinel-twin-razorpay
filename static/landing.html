@@ -8,9 +8,11 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z' fill='%2340826D'/><g fill='%23E6F2EC'><circle cx='11' cy='12' r='2.2'/><circle cx='21' cy='11' r='2.2'/><circle cx='16' cy='19' r='2.6'/></g><path d='M11 12l5 7 5-8' stroke='%23E6F2EC' stroke-width='1.4' fill='none'/></svg>">
 <link rel="preload" href="/static/vendor/fonts/cormorant-garamond-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <script>/* the scroll story is for wide screens that allow motion; everything else gets the plain, fully visible page */
-if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");</script>
+if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion");
+/* lite mode: no 3D scenery (chosen in the header, or switched on automatically when a machine can't keep up) */
+try { if (localStorage.getItem("st-lite") === "1" || sessionStorage.getItem("st-lite-auto") === "1") document.documentElement.classList.add("lite"); } catch (e) {}</script>
 <link rel="stylesheet" href="/static/theme.css?v=3">
-<link rel="stylesheet" href="/static/landing.css?v=16">
+<link rel="stylesheet" href="/static/landing.css?v=17">
 </head>
 <body>
 <div class="glows" aria-hidden="true"><i class="g1"></i><i class="g2"></i><i class="g3"></i></div>
@@ -22,7 +24,7 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
 
 <header class="top">
   <a class="brand" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 4 6.5v8.2C4 22.3 9.1 28 16 30c6.9-2 12-7.7 12-15.3V6.5Z" fill="#40826D"/><path d="M11 12l5 7 5-8" stroke="#E6F2EC" stroke-width="1.4" fill="none"/><g fill="#E6F2EC"><circle cx="11" cy="12" r="2.2"/><circle cx="21" cy="11" r="2.2"/><circle cx="16" cy="19" r="2.6"/></g></svg><span class="spaced">Sentinel Twin</span></a>
-  <div class="right"><button class="sound-btn" data-sound-toggle type="button"></button><button class="sound-btn" data-sound-toggle="ambient" type="button"></button><span class="pill-tag warn"><i></i>Demo mode · Razorpay test-mode ready</span><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
+  <div class="right"><button class="sound-btn" data-sound-toggle type="button"></button><button class="sound-btn" data-sound-toggle="ambient" type="button"></button><span class="pill-tag warn"><i></i>Demo mode · Razorpay test-mode ready</span><button class="lite-btn" id="liteBtn" type="button" aria-pressed="false" title="Turn the 3D scenery off for slower laptops">Lite mode</button><a class="skip" href="/app?tour=1">Skip to the 60-second demo →</a><a class="btn magnetic" id="launch" href="/app">Open the live twin</a></div>
 </header>
 
 <!-- 1. HERO: a gothic window onto a moonlit, smoky sky; the camera pushes through it -->
@@ -59,6 +61,7 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
       <p class="sub spaced">agentic payments · fraud graph · replayable decisions</p>
       <p class="lede">An AI agent shops and pays on Razorpay. A digital twin of your business checks every order with a graph model, and stops the unsafe ones <b>before money moves</b>.</p>
       <div class="cta"><a class="btn big magnetic" href="/app">Open the live twin →</a><a class="btn ghost big magnetic" href="#story">Step inside</a></div>
+      <p class="hint">Scroll to walk through it, or jump straight to the <a href="/app?tour=1">60-second guided demo</a>.</p>
     </div>
     <div class="ordercard" id="orderCard">
       <p class="tilde">~ one order, seen up close ~</p>
@@ -273,9 +276,13 @@ if (matchMedia("(min-width: 861px)").matches && !matchMedia("(prefers-reduced-mo
 <script src="/static/vendor/lenis.min.js"></script>
 <script type="importmap">{"imports":{"three":"/static/vendor/three/three.module.min.js","postprocessing":"/static/vendor/postprocessing/index.js"}}</script>
 <script type="module">/* the 3D hero: wide screens with motion only; anything else (or any failure) keeps the 2D hero */
-if (document.documentElement.classList.contains("motion")) import("/static/js/scene3d.js?v=61").catch((e) => console.info("3D hero off:", e.message));</script>
+if (document.documentElement.classList.contains("motion") && !document.documentElement.classList.contains("lite")) import("/static/js/scene3d.js?v=62").catch((e) => console.info("3D hero off:", e.message));</script>
 <script src="/static/js/sound.js?v=1"></script>
 <script src="/static/smoke.js?v=4"></script>
 <script src="/static/landing.js?v=7"></script>
+<script>/* the Lite mode button: remembers the choice and reloads */
+(() => { const b = document.getElementById("liteBtn"), on = document.documentElement.classList.contains("lite"); if (!b) return;
+  b.setAttribute("aria-pressed", String(on)); b.textContent = on ? "Lite mode: on" : "Lite mode";
+  b.addEventListener("click", () => { try { if (on) { localStorage.removeItem("st-lite"); sessionStorage.removeItem("st-lite-auto"); } else localStorage.setItem("st-lite", "1"); } catch (e) {} location.reload(); }); })();</script>
 </body>
 </html>

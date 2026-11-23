@@ -319,3 +319,15 @@ html.has-3d #story .step { min-height: 118vh; }
 
 /* the clockwork tower: the replay needs room to glide in, turn back time, and step out */
 html.has-3d #replay .step { min-height: 130vh; }
+
+/* reviewer shortcuts: a quiet skip link, a Lite mode switch and a one-line hint under the hero */
+.top .skip { color: var(--glow); font-size: 14px; text-decoration: none; border-bottom: 1px solid rgba(95,191,159,.35); padding-bottom: 1px; white-space: nowrap; }
+.top .skip:hover { color: var(--moon); border-color: var(--moon); }
+.lite-btn { background: transparent; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 6px 12px; font: 500 13px var(--font-ui); cursor: pointer; white-space: nowrap; }
+.lite-btn:hover, .lite-btn[aria-pressed="true"] { color: var(--text); border-color: var(--glow); }
+.hero .hint { margin: 14px 0 0; color: #BFD3C8; font: italic 500 17px var(--font-display); text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+.hero .hint a { color: var(--glow); }
+@media (max-width: 1100px) { .top .pill-tag { display: none; } }
+@media (max-width: 760px) { .top .skip, .lite-btn { display: none; } }
+.lite-note { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 80; padding: 10px 16px; border-radius: 12px; background: rgba(8,22,18,.95);
+  border: 1px solid var(--line-strong); color: var(--text); font-size: 14px; }

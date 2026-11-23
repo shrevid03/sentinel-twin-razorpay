@@ -8,7 +8,7 @@
 <link rel="stylesheet" href="/static/theme.css?v=3">
 <link rel="stylesheet" href="/static/vendor/ag-grid.css">
 <link rel="stylesheet" href="/static/vendor/ag-theme-quartz.css">
-<link rel="stylesheet" href="/static/style.css?v=34">
+<link rel="stylesheet" href="/static/style.css?v=36">
 </head>
 <body>
 <div id="page-smoke" aria-hidden="true"><i></i><i></i><i></i></div>
@@ -19,19 +19,20 @@
     <path d="M18 2.5 5 7.4v9.2C5 25 10.6 31.3 18 33.5 25.4 31.3 31 25 31 16.6V7.4Z" fill="url(#lg-sh)"/>
     <g stroke="#fff" stroke-width="1.6" stroke-linecap="round" opacity=".9"><path d="M12.5 13.5 18 20l5.5-7.5M18 20v5.5M12.5 13.5h11"/></g>
     <g fill="#8FD9BF"><circle cx="12.5" cy="13.5" r="2.4"/><circle cx="23.5" cy="12.5" r="2.4"/><circle cx="18" cy="25.5" r="2"/></g><circle cx="18" cy="20" r="2.8" fill="#12302A"/></svg><div><b>Sentinel Twin</b><small>Risk layer for agent payments</small></div></a>
+  <button id="btn-tour" class="ghost" type="button" title="A one-minute walk through the key ideas, with real clicks">✦ Guided tour · 60 s</button>
   <nav class="tabs" id="tabs">
     <div class="navgroup">Shop</div>
-    <button data-tab="concierge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg><span>Concierge</span></button>
+    <button data-tab="concierge" title="Chat with the shopping agent; it pays with Razorpay inside your limits"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 11H6.2z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg><span>Concierge</span></button>
     <div class="navgroup">Investigate</div>
-    <button data-tab="command" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="17" r="2.6"/><path d="M7.8 8.4 10.6 15M16.4 7.6 13.4 15M8.2 7l7.6-.8"/></svg><span>Command center</span></button>
-    <button data-tab="investigator"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5"/></svg><span>Investigator</span></button>
+    <button data-tab="command" title="Live orders, decisions and the fraud graph at a glance" class="active"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="7" r="2.2"/><circle cx="18" cy="6" r="2.2"/><circle cx="12" cy="17" r="2.6"/><path d="M7.8 8.4 10.6 15M16.4 7.6 13.4 15M8.2 7l7.6-.8"/></svg><span>Command center</span></button>
+    <button data-tab="investigator" title="An AI analyst that builds a case for a person to approve"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="5.5"/><path d="m15 15 5 5"/></svg><span>Investigator</span></button>
     <div class="navgroup">Defend</div>
-    <button data-tab="drill"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.4 3 8 7 9.5 4-1.5 7-5.1 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>Defense drill</span></button>
-    <button data-tab="redteam"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2"/></svg><span>Red team</span></button>
-    <button data-tab="whatif"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h6M4 17h12"/><circle cx="17" cy="7" r="2"/><circle cx="13" cy="12" r="2"/><circle cx="19" cy="17" r="2"/></svg><span>What-if simulator</span></button>
+    <button data-tab="drill" title="Attack a copy of the twin, find a safer policy, prove it"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5.5c0 4.4 3 8 7 9.5 4-1.5 7-5.1 7-9.5V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg><span>Defense drill</span></button>
+    <button data-tab="redteam" title="A synthetic attacker that adapts to what gets caught"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1.2"/></svg><span>Red team</span></button>
+    <button data-tab="whatif" title="Try a policy on replayed traffic before using it live"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M4 12h6M4 17h12"/><circle cx="17" cy="7" r="2"/><circle cx="13" cy="12" r="2"/><circle cx="19" cy="17" r="2"/></svg><span>What-if simulator</span></button>
     <div class="navgroup">Audit</div>
-    <button data-tab="ledger"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Ledger</span></button>
-    <button data-tab="model"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 9 11l4 4 7-9"/><path d="M15 6h5v5"/></svg><span>GAT model</span></button>
+    <button data-tab="ledger" title="Every order, checkout and Razorpay call, hash-chained"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg><span>Ledger</span></button>
+    <button data-tab="model" title="How the graph model learns and how well it scores"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 9 11l4 4 7-9"/><path d="M15 6h5v5"/></svg><span>GAT model</span></button>
   </nav>
   <div class="side-foot badges">
     <span id="b-pay" class="badge">Razorpay …</span>
@@ -333,5 +334,6 @@
 <script src="/static/vendor/gsap.min.js"></script>
 <script src="/static/js/sound.js?v=1"></script>
 <script src="/static/ui.js?v=3"></script>
+<script src="/static/tour.js?v=2"></script>
 </body>
 </html>

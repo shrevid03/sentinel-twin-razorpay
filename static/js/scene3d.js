@@ -1127,9 +1127,19 @@ function setLevel(l) {
   godRays.blurPass.enabled = l > 0; dew.visible = l > 0; rain.visible = l > 0;
   resize();
 }
+let slowAtMin = 0, gaveUp = false;
+function goLite() {
+  gaveUp = true;    // a machine that can't keep up gets the plain (2D) page with the same text, never a broken one
+  running = false; canvas.style.display = "none"; document.documentElement.classList.remove("has-3d"); document.documentElement.classList.add("lite");
+  try { sessionStorage.setItem("st-lite-auto", "1"); } catch (e) { /* private mode */ }
+  const b = document.getElementById("liteBtn"); if (b) { b.textContent = "Lite mode: on"; b.setAttribute("aria-pressed", "true"); }
+  const n = document.createElement("div"); n.className = "lite-note"; n.setAttribute("role", "status"); n.textContent = "Switched to Lite mode for smoother scrolling. You can change it in the header.";
+  document.body.appendChild(n); setTimeout(() => n.remove(), 5000);
+  window.ScrollTrigger && window.ScrollTrigger.refresh();
+}
 const clock = new THREE.Clock();
 let running = true;
-document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) { clock.getDelta(); requestAnimationFrame(loop); } });
+document.addEventListener("visibilitychange", () => { running = !document.hidden && !gaveUp; if (running) { clock.getDelta(); requestAnimationFrame(loop); } });
 document.documentElement.classList.add("has-3d");
 requestAnimationFrame(() => window.ScrollTrigger && window.ScrollTrigger.refresh());
 const atmos = [fireflies, ...fogBanks];
@@ -1144,6 +1154,7 @@ function loop() {
   acc += dt; frames++;
   if (acc > 1.5) { const ft = acc / frames * 1000; acc = 0; frames = 0;
     if (ft > 24 && level > 0 && t - settledAt > 2) { setLevel(level - 1); settledAt = t; fast = 0; }
+    else if (ft > 40 && level === 0 && t - settledAt > 2 && ++slowAtMin >= 2) { goLite(); return; }   // even the lightest 3D is too slow here: switch to the plain page
     else if (ft < 17.5 && level < 2 && t - settledAt > 4 && ++fast >= 2) { setLevel(level + 1); settledAt = t; fast = 0; }  // recover when the machine is quiet again
     else if (ft >= 17.5) fast = 0;
     window.__st3d = { level, frameMs: +ft.toFixed(1), dpr, mode }; }
