@@ -203,17 +203,17 @@ window.renderFlow = (d) => {
 };
 
 /* Scenario: a clean new account joins a known ring through a shared UPI ID; rules vs GAT vs GAT + neighbours */
-async function runScenario() {
+async function runScenario(pre) {
   const btn = $("#btn-scn"), out = $("#scn-out");
   btn.disabled = true; btn.innerHTML = `<span class="spin"></span>Running…`;
   try {
-    const r = await api("/api/scenario/new-account", {});
+    const r = pre || await api("/api/scenario/new-account", {});
     if (r.error) { out.innerHTML = `<p class="muted">${esc(r.error)}</p>`; return; }
     const dec = (d) => `<span class="scn-dec ${esc(d)}">${esc(d)}</span>`;
     const col = (title, risk, d, reasons, note) => `<div class="scn-col"><h4>${title}</h4>${dec(d)} <span class="muted">risk ${Number(risk).toFixed(2)}</span>
       <ul>${reasons.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>${note ? `<p class="muted small">${note}</p>` : ""}</div>`;
     const ns = r.graph.neighbour_signal;
-    out.innerHTML = `<p><b>${esc(r.account.name)}</b> (${esc(r.account.id)}) · ${r.account.age_days} days old · KYC verified · ${esc(r.account.email_domain)} email · own phone and home IP · 2 normal past orders.
+    out.innerHTML = (r.source ? `<p class="small muted">Shown from the ${esc(r.source)}. <b>Run scenario</b> repeats it live (about a minute on the free server).</p>` : "") + `<p><b>${esc(r.account.name)}</b> (${esc(r.account.id)}) · ${r.account.age_days} days old · KYC verified · ${esc(r.account.email_domain)} email · own phone and home IP · 2 normal past orders.
         At signup it verified a phone number (<b>${esc(r.ring.shared_contact)}</b>) that ${r.ring.accounts_on_contact - 1} accounts in ${esc(r.ring.segment)} also use, ${r.ring.known_fraud_on_contact} of them already labelled fraud.
         Order: ${money(r.order.total)} at ${esc(r.order.merchant)}.</p>
       <div class="scn-grid">
@@ -238,7 +238,8 @@ async function runScenario() {
     out.innerHTML = `<p class="muted">Scenario failed: ${esc(String(e.message || e))}</p>`;
   } finally { btn.disabled = false; btn.textContent = "Run scenario"; }
 }
-$("#btn-scn").onclick = runScenario;
+$("#btn-scn").onclick = () => runScenario();
+window.runScenario = runScenario;
 
 /* Model red team: clean -> attacked -> hardened recall, plus bounded RED/BLUE rounds */
 $("#btn-mrt").onclick = async () => {

@@ -22,7 +22,9 @@
       after: "Spending limit checked in code (₹2,699 within ₹12,500 per order), risk approved, payment authorized, checked again before capture, then captured exactly once. \"Why? (receipt)\" shows every step." },
     { title: "A clean-looking account that belongs to a ring", tab: "drill", focus: "#scn-card", act: "Run it",
       text: "A new, KYC-verified account checks out a ₹9,999 keyboard. Rules see nothing wrong. Press Run it: the twin scores it three ways.",
-      run: async () => { $("#btn-scn").click(); await wait(() => $("#scn-out .scn-grid"), 180000); },
+      run: async () => { let pre = null; try { pre = await (await fetch("/api/scenario/new-account/latest")).json(); } catch {}
+        if (pre && pre.account) await window.runScenario(pre); else $("#btn-scn").click();
+        await wait(() => $("#scn-out .scn-grid"), 180000); },
       after: "Rules alone approve it (0.09). The GAT with rules still approves (0.08; the GAT alone scores 0.02): the account looks clean by itself. The combined engine adds the known-fraud-neighbour signal (its phone number is shared with three known-fraud accounts) and sends it to review (0.63). A second ring account that slips past checkout is held again before capture (0.61): no money captured." },
     { title: "The evidence, and a person decides", tab: "investigator", focus: "#ev-card", act: "Open the riskiest case",
       run: async () => { $("#btn-ev-top").click(); await wait(() => $("#ev-out h4"), 20000); },

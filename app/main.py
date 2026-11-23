@@ -373,6 +373,31 @@ def scenario_new_account():
     return new_account_joins_ring(twin, base=SCENARIO_BASE["t"])
 
 
+# On a slow free server the scenario takes about a minute, so it can be run once in the background right after the
+# server starts (SCENARIO_WARM=1); the guided tour then shows that real run at once, labelled as such. It is the same
+# seeded run every time, its decisions replay normally, and "Run scenario" still repeats it live.
+SCENARIO_CACHE: dict = {}
+
+
+def _warm_scenario():
+    try:
+        r = new_account_joins_ring(twin, base=SCENARIO_BASE["t"])
+        r["source"] = "run when this server started, on this seeded twin"
+        SCENARIO_CACHE["r"] = r
+    except Exception as e:  # noqa: BLE001 - the tour then runs it live
+        print("scenario warm-up failed:", type(e).__name__)
+
+
+if os.getenv("SCENARIO_WARM", "0") == "1":
+    threading.Thread(target=_warm_scenario, daemon=True).start()
+
+
+@app.get("/api/scenario/new-account/latest")
+def scenario_latest():
+    """The scenario run made when this server started (null until it is ready, or if warm-up is off)."""
+    return SCENARIO_CACHE.get("r")
+
+
 @app.get("/api/guard")
 def guard_stats():
     """Prompt-injection guard counters: blocked inputs, scrubbed tool outputs, blocked replies, refused tool calls."""
@@ -428,6 +453,7 @@ def reset():
         store.reset()
         twin, team = t, Team(t, razorpay, store=store, load_receipts=False)  # audit rows stay in the database
         SCENARIO_BASE["t"] = twin.fork(durable=True)
+        SCENARIO_CACHE.clear()
         LAST_DRILL.clear()
         twin._event("system", "Demo reset: fresh twin, default policy, empty queues", level="info")
     return {"ok": True, "seed": int(os.getenv("TWIN_SEED", "3")), "policy": twin.policy}
